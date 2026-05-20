@@ -2,6 +2,8 @@ import React, { useState, useRef, useEffect } from 'react';
 import { AGENTS } from './constants';
 import { MessageBubble } from './components/chat/MessageBubble';
 import { AgentWorking } from './components/chat/AgentWorking';
+import { Topbar } from './components/layout/Topbar';
+import { Sidebar } from './components/layout/Sidebar';
 
 function UsersModal({ onClose, reqHeaders }: { onClose: () => void, reqHeaders: any }) {
   const [usersList, setUsersList] = useState<any[]>([]);
@@ -1199,244 +1201,61 @@ function App() {
       {showBackupModal && <BackupModal onClose={() => setShowBackupModal(false)} reqHeaders={reqHeaders} />}
 
       {/* ── SIDEBAR ──────────────────────────────────────────────────────────────── */}
-      <div className={`${sidebarOpen ? 'w-72' : 'w-0'} shrink-0 bg-stratsight-dark text-[#E8F5E9] flex flex-col transition-all duration-300 overflow-hidden shadow-xl z-20`}>
-        <div className="w-72 flex flex-col h-full">
-          {/* Logo */}
-          <div className="p-5 border-b border-white/10 flex items-center gap-3">
-            <div className="w-8 h-8 rounded-full bg-stratsight-medium flex items-center justify-center font-bold text-white text-lg">⚡</div>
-            <div>
-              <div className="font-bold text-sm tracking-widest text-[#A5D6A7]">STRATSIGHT</div>
-              <div className="text-[10px] text-stratsight-gold italic uppercase tracking-wider">Strategic Foresight</div>
-            </div>
-          </div>
-
-          {/* Projeto Ativo */}
-          {projeto.nome && (
-            <div className="p-4 border-b border-white/10 bg-white/5 relative">
-              <div className="text-[10px] text-[#66BB6A] font-bold mb-1 tracking-wider">PROJETO ATIVO</div>
-              <div className="font-bold text-white text-sm truncate pr-6">{projeto.nome}</div>
-              <div className="text-xs text-[#A5D6A7] mt-1 flex items-center gap-2">
-                <span className="bg-stratsight-medium text-white px-2 py-0.5 rounded text-[10px] font-bold">{projeto.metodologia}</span>
-                <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${projeto.status === 'Ativo' ? 'bg-green-900 text-green-200' : projeto.status === 'Inativo' ? 'bg-red-900 text-red-200' : 'bg-blue-900 text-blue-200'}`}>
-                  {projeto.status ? projeto.status.toUpperCase() : 'EM PRODUÇÃO'}
-                </span>
-              </div>
-              <button onClick={() => setShowSettingsModal(true)} className="absolute top-4 right-4 text-gray-400 hover:text-white transition-colors" title="Configurações do Projeto">⚙️</button>
-            </div>
-          )}
-
-          {/* Ações — scrollable */}
-          <div className="flex-1 overflow-y-auto min-h-0 p-4 border-b border-white/10 flex flex-col gap-2">
-            <div className="text-[10px] text-[#66BB6A] font-bold mb-2 tracking-wider">AÇÕES</div>
-
-            {/* Nova Sessão — apenas analistas e admins */}
-            {user?.role !== 'cliente' && (
-              <button
-                onClick={() => {
-                  setScopeForm({ tema: '', horizonte: '', elaborador: '', cliente: '', questaoEstrategica: '', mudancaIdentificada: '' });
-                  setScopeFiles([]);
-                  setProjeto(p => ({ ...p, metodologia: 'MSEF' }));
-                  setShowNovaSessaoModal(true);
-                }}
-                className="text-left px-3 py-2 rounded-lg bg-white/5 hover:bg-white/10 text-sm transition-colors text-gray-200"
-              >
-                🔄 Nova Sessão
-              </button>
-            )}
-
-            {user?.role !== 'cliente' && (
-              <>
-                <button onClick={openPainel} className="w-full text-left px-3 py-2 rounded-lg bg-stratsight-gold/20 hover:bg-stratsight-gold/30 border border-stratsight-gold/30 text-stratsight-gold text-sm transition-colors mt-2">🖥️ Painel KRATOS</button>
-                <button onClick={gerarRelatorioKratos} className="w-full text-left px-3 py-2 rounded-lg bg-[#004D40]/50 hover:bg-[#004D40] border border-[#80CBC4]/30 text-[#80CBC4] text-sm transition-colors mt-2">🤖 Gerar Relatório Agora</button>
-              </>
-            )}
-
-            {user?.role === 'admin' && (
-              <>
-                <button onClick={() => setShowUsersModal(true)} className="w-full text-left px-3 py-2 rounded-lg bg-purple-900/40 hover:bg-purple-900/60 border border-purple-500/30 text-purple-200 text-sm transition-colors mt-2">
-                  👥 Gestão de Usuários
-                </button>
-                <button onClick={() => setShowBackupModal(true)} className="w-full text-left px-3 py-2 rounded-lg bg-yellow-900/40 hover:bg-yellow-900/60 border border-yellow-500/30 text-yellow-200 text-sm transition-colors mt-1">
-                  💾 Backup do Banco
-                </button>
-              </>
-            )}
-
-            {user?.role !== 'cliente' && projeto.nome && (
-              <button
-                onClick={() => {
-                  const url = `${window.location.origin}/api/v1/painel/project/${sessionId}?token=${token}`;
-                  navigator.clipboard.writeText(url).then(() => {
-                    alert('✅ Link do cliente copiado!\n\nCompartilhe este link com o cliente para acesso ao Painel de Monitoramento.');
-                  }).catch(() => {
-                    prompt('Copie o link abaixo:', url);
-                  });
-                }}
-                className="w-full text-left px-3 py-2 rounded-lg bg-blue-900/40 hover:bg-blue-900/60 border border-blue-500/30 text-blue-200 text-sm transition-colors mt-1"
-                title="Gera link permanente de acesso ao painel para o cliente"
-              >
-                🔗 Link do Cliente
-              </button>
-            )}
-
-            {/* Revisão Analítica ICD 203 — apenas analistas e admins */}
-            {user?.role !== 'cliente' && sessionId && (
-              <div className="mt-2 pt-2 border-t border-white/10">
-                <div className="text-[10px] text-[#80CBC4] font-bold mb-2 tracking-wider">RIGOR ANALÍTICO</div>
-                <button
-                  onClick={() => setShowReviewModal(true)}
-                  className="w-full text-left px-3 py-2 rounded-lg bg-[#004D40]/50 hover:bg-[#004D40] border border-[#80CBC4]/30 text-[#80CBC4] text-sm transition-colors"
-                >
-                  {analyticReview
-                    ? `🔍 Revisão: ${analyticReview.status === 'aprovado' ? '✅ Aprovado' : analyticReview.status === 'aprovado_com_ressalvas' ? '⚠️ Com Ressalvas' : analyticReview.status === 'requer_revisao' ? '🔴 Requer Revisão' : '⏳ Pendente'}`
-                    : '🔍 Revisar Qualidade (ICD 203)'}
-                </button>
-              </div>
-            )}
-
-            {/* Exportar Relatório — apenas analistas e admins */}
-            {user?.role !== 'cliente' && (
-              <div className="mt-2 pt-2 border-t border-white/10">
-                <div className="text-[10px] text-[#66BB6A] font-bold mb-2 tracking-wider">EXPORTAR RELATÓRIO</div>
-                <button onClick={() => gerarRelatorio('padrao')} disabled={exportingPdf} className="w-full text-left px-3 py-2 rounded-lg bg-white/5 hover:bg-white/10 text-sm transition-colors text-gray-200 mb-1 disabled:opacity-50">
-                  🖨️ Padrão — Relatório HERMES (PDF)
-                </button>
-                <button onClick={() => gerarRelatorio('estendido')} disabled={exportingPdf} className="w-full text-left px-3 py-2 rounded-lg bg-white/5 hover:bg-white/10 text-sm transition-colors text-gray-200 disabled:opacity-50">
-                  🖨️ Estendido — Todos os Agentes (PDF)
-                </button>
-              </div>
-            )}
-
-            {/* Histórico de Sessões */}
-            <div className="mt-2">
-              <button onClick={() => { setShowSessoes(s => !s); if (!showSessoes) carregarSessoes(); }} className="w-full px-3 py-2 bg-white/5 hover:bg-white/10 text-sm rounded-lg transition-colors text-left text-gray-200 flex justify-between items-center">
-                <span>{showSessoes ? '▲' : '▼'} Histórico de Análises</span>
-                {sessoes.length > 0 && <span className="bg-stratsight-dark text-[#A5D6A7] px-1.5 py-0.5 rounded text-[10px] font-bold">{sessoes.length}</span>}
-              </button>
-              {showSessoes && (
-                <div className="mt-2 max-h-64 overflow-y-auto pr-1 space-y-1">
-                  <input
-                    type="text"
-                    value={sessionSearch}
-                    onChange={e => setSessionSearch(e.target.value)}
-                    placeholder="🔍 Pesquisar análise..."
-                    className="w-full text-[11px] bg-white/10 text-white placeholder-gray-500 border border-white/10 rounded-lg px-3 py-1.5 mb-2 outline-none focus:border-stratsight-medium/50"
-                  />
-                  <div className="flex gap-2 px-2 py-1 mb-1 border-b border-white/10 pb-2">
-                    <label className="text-[9px] flex items-center gap-1 cursor-pointer text-[#90CAF9]"><input type="checkbox" checked={filterStatus.producao} onChange={e => setFilterStatus(f => ({...f, producao: e.target.checked}))} /> Produção</label>
-                    <label className="text-[9px] flex items-center gap-1 cursor-pointer text-[#66BB6A]"><input type="checkbox" checked={filterStatus.ativos} onChange={e => setFilterStatus(f => ({...f, ativos: e.target.checked}))} /> Ativos</label>
-                    <label className="text-[9px] flex items-center gap-1 cursor-pointer text-gray-400"><input type="checkbox" checked={filterStatus.inativos} onChange={e => setFilterStatus(f => ({...f, inativos: e.target.checked}))} /> Inativos</label>
-                  </div>
-                  {sessoes.length === 0 ? (
-                    <div className="text-xs text-gray-400 px-2 py-1">Nenhuma análise salva.</div>
-                  ) : (
-                    <>
-                      {filterStatus.producao && sessoes.filter(s => (s.status === 'Em produção' || !s.status) && (!sessionSearch || (s.name || '').toLowerCase().includes(sessionSearch.toLowerCase()))).length > 0 && (
-                        <div className="mb-2">
-                          <div className="text-[9px] text-[#90CAF9] font-bold px-2 py-1 uppercase">Em Produção</div>
-                          {sessoes.filter(s => (s.status === 'Em produção' || !s.status) && (!sessionSearch || (s.name || '').toLowerCase().includes(sessionSearch.toLowerCase()))).map(s => (
-                            <div key={s.id} onClick={() => carregarSessao(s.id)} className="p-2 bg-black/20 hover:bg-black/40 border border-white/5 rounded-lg cursor-pointer transition-colors group relative mb-1">
-                              <div className="text-xs font-bold text-white truncate pr-6">{s.name || '(sem título)'}</div>
-                              <div className="flex justify-between items-center mt-1">
-                                <span className="text-[9px] text-[#A5D6A7]">{s.methodology}</span>
-                                <span className="text-[9px] text-gray-500">{new Date(s.updatedAt).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })}</span>
-                              </div>
-                              <button onClick={(e) => deletarSessao(s.id, e)} className="absolute top-1 right-1 text-gray-500 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity p-1">✕</button>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                      {filterStatus.ativos && sessoes.filter(s => s.status === 'Ativo' && (!sessionSearch || (s.name || '').toLowerCase().includes(sessionSearch.toLowerCase()))).length > 0 && (
-                        <div className="mb-2">
-                          <div className="text-[9px] text-[#66BB6A] font-bold px-2 py-1 uppercase">Monitorados (Ativos)</div>
-                          {sessoes.filter(s => s.status === 'Ativo' && (!sessionSearch || (s.name || '').toLowerCase().includes(sessionSearch.toLowerCase()))).map(s => (
-                            <div key={s.id} onClick={() => carregarSessao(s.id)} className="p-2 bg-black/20 hover:bg-black/40 border border-white/5 rounded-lg cursor-pointer transition-colors group relative mb-1">
-                              <div className="text-xs font-bold text-white truncate pr-6">{s.name || '(sem título)'}</div>
-                              <div className="flex justify-between items-center mt-1">
-                                <span className="text-[9px] text-[#A5D6A7]">{s.methodology}</span>
-                                <span className="text-[9px] text-gray-500">{new Date(s.updatedAt).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })}</span>
-                              </div>
-                              <button onClick={(e) => deletarSessao(s.id, e)} className="absolute top-1 right-1 text-gray-500 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity p-1">✕</button>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                      {filterStatus.inativos && sessoes.filter(s => s.status === 'Inativo' && (!sessionSearch || (s.name || '').toLowerCase().includes(sessionSearch.toLowerCase()))).length > 0 && (
-                        <div>
-                          <div className="text-[9px] text-gray-500 font-bold px-2 py-1 uppercase">Arquivados (Inativos)</div>
-                          {sessoes.filter(s => s.status === 'Inativo' && (!sessionSearch || (s.name || '').toLowerCase().includes(sessionSearch.toLowerCase()))).map(s => (
-                            <div key={s.id} onClick={() => carregarSessao(s.id)} className="p-2 bg-black/10 hover:bg-black/30 border border-white/5 rounded-lg cursor-pointer transition-colors group relative opacity-70 mb-1">
-                              <div className="text-xs font-bold text-gray-300 truncate pr-6">{s.name || '(sem título)'}</div>
-                              <div className="flex justify-between items-center mt-1">
-                                <span className="text-[9px] text-[#A5D6A7]">{s.methodology}</span>
-                                <span className="text-[9px] text-gray-500">{new Date(s.updatedAt).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })}</span>
-                              </div>
-                              <button onClick={(e) => deletarSessao(s.id, e)} className="absolute top-1 right-1 text-gray-500 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity p-1">✕</button>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </>
-                  )}
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* Agentes */}
-          <div className="p-4 border-t border-white/10">
-            <div className="text-[10px] text-[#66BB6A] font-bold mb-3 tracking-wider">AGENTES MSEF</div>
-            {Object.entries(AGENTS).filter(([k]) => k !== 'ATHENA').map(([key, ag]) => (
-              <div key={key} className="flex items-center gap-3 mb-2">
-                <div className="w-2.5 h-2.5 rounded-full shadow-sm" style={{ backgroundColor: ag.hex }} />
-                <span className="text-xs font-bold text-[#81C784] w-20">{key}</span>
-                <span className="text-[10px] text-[#4CAF50]">{ag.label}</span>
-              </div>
-            ))}
-          </div>
-
-          {/* Perfil e Logout */}
-          <div className="p-4 border-t border-white/10 flex justify-between items-center bg-black/20">
-            <div className="flex items-center gap-3">
-              <div className="w-8 h-8 rounded-full bg-stratsight-medium flex items-center justify-center text-xs text-white font-bold shadow-inner">{user?.name?.slice(0,2).toUpperCase()}</div>
-              <div>
-                <div className="text-xs text-white font-bold truncate w-28">{user?.name}</div>
-                <div className="text-[9px] text-stratsight-gold uppercase tracking-wider">{user?.role}</div>
-              </div>
-            </div>
-            <button
-              onClick={() => {
-                localStorage.removeItem('olympus_token');
-                localStorage.removeItem('olympus_user');
-                setToken(null);
-                setUser(null);
-                setMessages([]);
-                setSessoes([]);
-              }}
-              className="text-xs font-bold text-red-400 hover:text-red-300 p-2 rounded hover:bg-red-400/10 transition-colors"
-            >
-              SAIR
-            </button>
-          </div>
-        </div>
-      </div>
+      <Sidebar
+        open={sidebarOpen}
+        user={user}
+        projeto={projeto}
+        sessoes={sessoes}
+        showSessoes={showSessoes}
+        sessionSearch={sessionSearch}
+        filterStatus={filterStatus}
+        analyticReview={analyticReview}
+        sessionId={sessionId}
+        exportingPdf={exportingPdf}
+        onNovaSessao={() => {
+          setScopeForm({ tema: '', horizonte: '', elaborador: '', cliente: '', questaoEstrategica: '', mudancaIdentificada: '' });
+          setScopeFiles([]);
+          setProjeto(p => ({ ...p, metodologia: 'MSEF' }));
+          setShowNovaSessaoModal(true);
+        }}
+        onOpenPainel={openPainel}
+        onGerarRelatorioKratos={gerarRelatorioKratos}
+        onShowUsers={() => setShowUsersModal(true)}
+        onShowBackup={() => setShowBackupModal(true)}
+        onCopyClientLink={() => {
+          const url = `${window.location.origin}/api/v1/painel/project/${sessionId}?token=${token}`;
+          navigator.clipboard.writeText(url).then(() => {
+            alert('✅ Link do cliente copiado!\n\nCompartilhe este link com o cliente para acesso ao Painel de Monitoramento.');
+          }).catch(() => { prompt('Copie o link abaixo:', url); });
+        }}
+        onShowReviewModal={() => setShowReviewModal(true)}
+        onGerarRelatorioPadrao={() => gerarRelatorio('padrao')}
+        onGerarRelatorioEstendido={() => gerarRelatorio('estendido')}
+        onShowSettings={() => setShowSettingsModal(true)}
+        onToggleSessoes={() => { setShowSessoes(s => !s); if (!showSessoes) carregarSessoes(); }}
+        onSessionSearchChange={v => setSessionSearch(v)}
+        onFilterChange={(key, value) => setFilterStatus(f => ({ ...f, [key]: value }))}
+        onCarregarSessao={carregarSessao}
+        onDeletarSessao={deletarSessao}
+        onLogout={() => {
+          localStorage.removeItem('olympus_token');
+          localStorage.removeItem('olympus_user');
+          setToken(null);
+          setUser(null);
+          setMessages([]);
+          setSessoes([]);
+        }}
+      />
 
       {/* ── CONTEÚDO PRINCIPAL ────────────────────────────────────────────────────── */}
       <div className="flex-1 flex flex-col min-w-0 relative">
-        <header className="bg-gradient-to-r from-stratsight-dark to-stratsight-medium p-4 text-white shadow-md flex items-center z-10">
-          <button onClick={() => setSidebarOpen(!sidebarOpen)} className="mr-4 hover:bg-white/20 p-1.5 rounded transition-colors" title="Alternar Barra Lateral">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
-          </button>
-          <div>
-            <div className="flex items-center gap-3">
-              <h1 className="text-xl font-bold tracking-widest">ATHENA v4.0</h1>
-              <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full tracking-wide ${mode === 'monitoring' ? 'bg-[#004D40] text-[#80CBC4]' : 'bg-white/20 text-white/90'}`}>
-                {mode === 'monitoring' ? 'KRATOS · ACOMPANHAMENTO' : 'PRODUÇÃO DE CENÁRIOS'}
-              </span>
-            </div>
-            <p className="text-xs text-stratsight-gold italic mt-0.5">Strategic Foresight · StratSight Brasil</p>
-          </div>
-        </header>
+        <Topbar
+          mode={mode}
+          projetoNome={projeto.nome}
+          progressAgent={progressAgent}
+          streamingText={streamingText}
+          onToggleSidebar={() => setSidebarOpen(s => !s)}
+        />
 
         <main className="flex-1 overflow-y-auto p-6 flex flex-col gap-6">
 
