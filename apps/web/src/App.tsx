@@ -1,5 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { AGENTS } from './constants';
+import { MessageBubble } from './components/chat/MessageBubble';
+import { AgentWorking } from './components/chat/AgentWorking';
 
 function UsersModal({ onClose, reqHeaders }: { onClose: () => void, reqHeaders: any }) {
   const [usersList, setUsersList] = useState<any[]>([]);
@@ -80,72 +82,7 @@ function UsersModal({ onClose, reqHeaders }: { onClose: () => void, reqHeaders: 
   );
 }
 
-function fmt(text: string) {
-  if (!text) return '';
-  const lines = text.split('\n');
-  const out: string[] = [];
-  let inCode = false, inTable = false, tableRows: string[] = [];
-
-  const flushTable = () => {
-    if (!tableRows.length) return;
-    let html = '<div class="overflow-x-auto my-4"><table class="min-w-full border-collapse border border-gray-200 text-sm">';
-    tableRows.forEach((row, i) => {
-      const isHeader = i === 0;
-      if (/^[\s|:-]+$/.test(row)) return;
-      const cells = row.split('|').filter((_, ci, arr) => ci > 0 && ci < arr.length - 1);
-      html += '<tr>';
-      cells.forEach(c => {
-        const tag = isHeader ? 'th' : 'td';
-        const style = isHeader
-          ? 'bg-stratsight-dark text-white px-4 py-2 text-left font-bold border border-[#2D5A3D]'
-          : 'px-4 py-2 border border-gray-200 align-top';
-        html += `<${tag} class="${style}">${inlineFmt(c.trim())}</${tag}>`;
-      });
-      html += '</tr>';
-    });
-    html += '</table></div>';
-    out.push(html);
-    tableRows = [];
-    inTable = false;
-  };
-
-  const inlineFmt = (t: string) => t
-    .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
-    .replace(/\*([^*]+)\*/g, '<em>$1</em>')
-    .replace(/`([^`]+)`/g, '<code class="bg-black/5 px-1.5 py-0.5 rounded text-[0.88em]">$1</code>');
-
-  lines.forEach(line => {
-    if (line.startsWith('```')) { inCode = !inCode; if (!inCode) out.push('</pre>'); else out.push('<pre class="bg-[#1a1a1a] text-[#e8e8e8] p-4 rounded-lg overflow-x-auto text-xs my-2">'); return; }
-    if (inCode) { out.push(line.replace(/</g,'&lt;').replace(/>/g,'&gt;') + '\n'); return; }
-    if (line.includes('|') && line.trim().startsWith('|')) {
-      if (!inTable) inTable = true;
-      tableRows.push(line);
-      return;
-    }
-    if (inTable) flushTable();
-    if (line.startsWith('#### ')) { out.push(`<h4 class="text-stratsight-dark mt-3 mb-1.5 text-sm font-bold">${inlineFmt(line.slice(5))}</h4>`); return; }
-    if (line.startsWith('### '))  { out.push(`<h3 class="text-stratsight-dark mt-3.5 mb-1.5 text-[15px] font-bold">${inlineFmt(line.slice(4))}</h3>`); return; }
-    if (line.startsWith('## '))   { out.push(`<h2 class="text-stratsight-dark mt-4 mb-2 text-base font-bold border-b border-stratsight-gold pb-1">${inlineFmt(line.slice(3))}</h2>`); return; }
-    if (line.startsWith('# '))    { out.push(`<h1 class="text-stratsight-dark mt-4.5 mb-2.5 text-lg font-bold">${inlineFmt(line.slice(2))}</h1>`); return; }
-    if (/^[-─═*]{3,}$/.test(line.trim())) { out.push('<hr class="border-t border-stratsight-gold my-3"/>'); return; }
-    if (line.match(/^(\s*[-*•]\s+)/)) {
-      const isIndented = (line.match(/^(\s*)/)?.[1]?.length || 0) > 0;
-      const txt = line.replace(/^\s*[-*•]\s+/, '');
-      out.push(`<div class="flex gap-2 my-1 ${isIndented ? 'ml-5' : ''}"><span class="text-stratsight-gold shrink-0">•</span><span>${inlineFmt(txt)}</span></div>`);
-      return;
-    }
-    if (line.match(/^\s*\d+\.\s+/)) {
-      const num = line.match(/^\s*(\d+)\./)?.[1] || '';
-      const txt = line.replace(/^\s*\d+\.\s+/, '');
-      out.push(`<div class="flex gap-2 my-1"><span class="text-stratsight-gold font-bold shrink-0 min-w-[20px]">${num}.</span><span>${inlineFmt(txt)}</span></div>`);
-      return;
-    }
-    if (line.trim() === '') { out.push('<div class="h-2"></div>'); return; }
-    out.push(`<p class="my-1 leading-relaxed">${inlineFmt(line)}</p>`);
-  });
-  if (inTable) flushTable();
-  return out.join('');
-}
+// fmt moved to src/lib/fmt.ts — imported above
 
 function BackupModal({ onClose, reqHeaders }: { onClose: () => void, reqHeaders: any }) {
   const [backups, setBackups] = useState<any[]>([]);
@@ -1541,70 +1478,26 @@ function App() {
           {/* ── MENSAGENS ────────────────────────────────────────────────────────── */}
           {messages.map((msg, idx) => {
             if (msg.role === 'user' && msg.content.startsWith('Iniciar')) return null;
-            const isUser = msg.role === 'user';
-            const agent = isUser ? null : getAgentInfo(msg.content);
-
+            const agent = msg.role === 'assistant' ? getAgentInfo(msg.content) : null;
             return (
-              <div key={idx} className={`flex flex-col ${isUser ? 'items-end' : 'items-start'} w-full`}>
-                {/* Bloco de Raciocínio */}
-                {!isUser && thinkingBlocks[idx] && (
-                  <div className="ml-14 mb-2 max-w-[85%]">
-                    <button onClick={() => setThinkingOpen(prev => ({ ...prev, [idx]: !prev[idx] }))} className="flex items-center gap-2 bg-purple-900/5 border border-purple-900/10 rounded-lg px-3 py-1.5 text-[11px] text-purple-800 font-bold hover:bg-purple-900/10 transition-colors">
-                      🧠 Raciocínio interno — {thinkingOpen[idx] ? '▲ ocultar' : '▼ expandir'}
-                    </button>
-                    {thinkingOpen[idx] && (
-                      <div className="mt-1 bg-[#F3E5F5] border border-[#CE93D8] rounded-b-xl rounded-tr-xl p-4 text-[12px] text-[#4A148C] whitespace-pre-wrap max-h-96 overflow-y-auto font-mono">
-                        {thinkingBlocks[idx]}
-                      </div>
-                    )}
-                  </div>
-                )}
-                <div className={`flex ${isUser ? 'justify-end' : 'justify-start'} w-full`}>
-                  {isUser ? (
-                    <div className="max-w-[75%] p-4 text-[15px] leading-relaxed bg-stratsight-dark text-white rounded-2xl rounded-tr-sm shadow-md">
-                      <div dangerouslySetInnerHTML={{ __html: fmt(msg.content) }} />
-                    </div>
-                  ) : (
-                    <div className="flex gap-3 max-w-[85%]">
-                      <div className={`w-10 h-10 shrink-0 rounded-full flex items-center justify-center text-white font-bold text-xs shadow-md ${agent?.color}`}>{agent?.name.slice(0,2)}</div>
-                      <div className="bg-white border-l-4 shadow-sm rounded-2xl rounded-tl-sm p-4 text-[15px] leading-relaxed" style={{ borderLeftColor: agent?.hex }}>
-                        <div className="text-xs font-bold tracking-wider mb-2 uppercase" style={{ color: agent?.hex }}>{agent?.name} · {agent?.label}</div>
-                        <div className="text-gray-800" dangerouslySetInnerHTML={{ __html: fmt(msg.content) }} />
-                        {/* Botões inline */}
-                        <div className="mt-3 pt-3 border-t border-gray-100 flex justify-between items-center">
-                          {user?.role !== 'cliente' ? (
-                            <button
-                              onClick={() => deletarMensagem(msg.id, idx)}
-                              className="text-[10px] uppercase font-bold tracking-wider text-gray-300 hover:text-red-500 transition-colors flex items-center gap-1"
-                              title="Remover esta mensagem"
-                            >
-                              🗑 Excluir
-                            </button>
-                          ) : <div />}
-                          <div className="flex gap-3">
-                            <button
-                              onClick={() => navigator.clipboard.writeText(msg.content).then(() => {}).catch(() => {})}
-                              className="text-[10px] uppercase font-bold tracking-wider text-gray-400 hover:text-gray-700 transition-colors flex items-center gap-1"
-                              title="Copiar texto"
-                            >
-                              📋 Copiar
-                            </button>
-                            <button onClick={() => downloadMarkdown(msg.content)} className="text-[10px] uppercase font-bold tracking-wider text-stratsight-medium hover:text-stratsight-dark transition-colors flex items-center gap-1">
-                              ⬇ Markdown
-                            </button>
-                            <button onClick={() => exportSingleDocx(msg.content)} className="text-[10px] uppercase font-bold tracking-wider text-stratsight-medium hover:text-stratsight-dark transition-colors flex items-center gap-1">
-                              ⬇ DOCX
-                            </button>
-                            <button onClick={() => exportSinglePdf(msg.content)} className="text-[10px] uppercase font-bold tracking-wider text-[#B71C1C] hover:text-red-900 transition-colors flex items-center gap-1">
-                              ⬇ PDF
-                            </button>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </div>
+              <MessageBubble
+                key={idx}
+                role={msg.role as 'user' | 'assistant'}
+                content={msg.content}
+                idx={idx}
+                agentName={agent?.name || 'ATHENA'}
+                agentLabel={agent?.label || 'Sistema'}
+                agentHex={agent?.hex || '#1B3A2D'}
+                thinkingContent={thinkingBlocks[idx]}
+                thinkingOpen={!!thinkingOpen[idx]}
+                onToggleThinking={() => setThinkingOpen(prev => ({ ...prev, [idx]: !prev[idx] }))}
+                userRole={user?.role}
+                onDelete={() => deletarMensagem(msg.id, idx)}
+                onCopy={() => navigator.clipboard.writeText(msg.content).catch(() => {})}
+                onExportMd={() => downloadMarkdown(msg.content)}
+                onExportDocx={() => exportSingleDocx(msg.content)}
+                onExportPdf={() => exportSinglePdf(msg.content)}
+              />
             );
           })}
 
@@ -1768,49 +1661,20 @@ function App() {
 
           {/* Streaming bubble — tokens chegando em tempo real */}
           {streamingText && (
-            <div className="flex justify-start">
-              <div className="flex gap-3 max-w-[85%]">
-                <div className="w-10 h-10 shrink-0 rounded-full flex items-center justify-center text-white font-bold text-xs shadow-md bg-stratsight-dark">HE</div>
-                <div className="bg-white border-l-4 border-stratsight-medium shadow-sm rounded-2xl rounded-tl-sm p-4 text-[15px] leading-relaxed">
-                  <div className="text-xs font-bold tracking-wider mb-2 uppercase text-stratsight-medium">HERMES · Orquestrador</div>
-                  <div className="text-gray-800" dangerouslySetInnerHTML={{ __html: fmt(streamingText) }} />
-                  <span className="inline-block w-0.5 h-4 bg-gray-400 animate-pulse align-middle ml-0.5" />
-                </div>
-              </div>
-            </div>
+            <MessageBubble
+              role="assistant"
+              content={streamingText}
+              idx={-1}
+              agentName="HERMES"
+              agentLabel="Orquestrador"
+              agentHex="#1B3A2D"
+              isStreaming
+            />
           )}
 
           {/* Loading — progresso dinâmico com etapas do raciocínio */}
           {loading && !streamingText && (
-            <div className="flex justify-start">
-              <div className="bg-white border-l-4 border-stratsight-medium shadow-sm rounded-2xl rounded-tl-sm p-4 min-w-[260px] max-w-[520px]">
-                {/* Linha principal: dots + agente */}
-                <div className="flex items-center gap-3 text-gray-500 italic text-[15px]">
-                  <div className="flex gap-1 shrink-0">
-                    <div className="w-2 h-2 rounded-full bg-stratsight-medium animate-bounce" />
-                    <div className="w-2 h-2 rounded-full bg-stratsight-medium animate-bounce" style={{ animationDelay: '0.2s' }} />
-                    <div className="w-2 h-2 rounded-full bg-stratsight-medium animate-bounce" style={{ animationDelay: '0.4s' }} />
-                  </div>
-                  {progressAgent
-                    ? <><span className="font-bold not-italic text-stratsight-dark">{progressAgent}</span>{' '}raciocinando...</>
-                    : 'HERMES raciocinando...'}
-                </div>
-                {/* Log de etapas — aparece conforme os steps chegam */}
-                {stepLog.length > 0 && (
-                  <div className="mt-2 space-y-1 border-t border-gray-100 pt-2">
-                    {stepLog.slice(-5).map((step, i) => (
-                      <div
-                        key={i}
-                        className="text-[11px] text-gray-400 font-mono truncate"
-                        style={{ opacity: 0.5 + (i / stepLog.slice(-5).length) * 0.5 }}
-                      >
-                        {step}
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </div>
+            <AgentWorking progressAgent={progressAgent} stepLog={stepLog} />
           )}
           <div ref={bottomRef} />
         </main>
