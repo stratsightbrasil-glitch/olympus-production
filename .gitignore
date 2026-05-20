@@ -1,0 +1,22 @@
+# Added by code-review-graph
+.code-review-graph/
+
+# Dependencies
+node_modules/
+
+# Environment — NEVER commit real secrets
+.env
+.env.local
+.env.*.local
+
+# Build artifacts
+dist/
+build/
+apps/web/dist/
+
+# Generated / temp
+test_output.html
+
+# Editor / OS
+.DS_Store
+*.log

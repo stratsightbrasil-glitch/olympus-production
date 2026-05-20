@@ -1,0 +1,118 @@
+/* ═══════════════════════════════════════════════
+   OLYMPUS Design System v5
+   StratSight Brasil · Maio 2026
+   ═══════════════════════════════════════════════ */
+
+:root {
+  /* Paleta principal */
+  --ink-900: #0D1612; --ink-800: #142218; --ink-700: #1B3A2D;
+  --ink-600: #22492E; --ink-500: #2D5C3A; --ink-400: #3D7A50;
+  --ink-300: #5A9E6F; --ink-200: #A3C9AE; --ink-100: #E0EDE5;
+  --ink-50:  #F2F7F4;
+
+  --gold-500: #B8913A; --gold-400: #C9A84C;
+  --gold-300: #D9BF73; --gold-100: #F5EDD8;
+
+  --paper:      #F8FAF9;
+  --surface:    #FFFFFF;
+  --border:     #D4E2DA;
+  --border-mid: #B0C9BC;
+  --text-pri:   #0D1612;
+  --text-sec:   #3D5A48;
+  --text-ter:   #6B8C7A;
+  --text-inv:   #E8F0EB;
+
+  /* Agentes */
+  --agent-hermes:    #1B3A2D;
+  --agent-scopus:    #1A4A7A;
+  --agent-klio:      #5A2D82;
+  --agent-pythia:    #7A1E3D;
+  --agent-mnemosyne: #7A3D1A;
+  --agent-themis:    #2D4A5A;
+  --agent-kratos:    #0D3A30;
+  --agent-athena:    #1B3A2D;
+
+  /* Tipografia */
+  --font-ui:      'DM Sans', system-ui, sans-serif;
+  --font-display: 'Fraunces', Georgia, serif;
+  --font-mono:    'DM Mono', 'Cascadia Code', monospace;
+
+  /* Layout */
+  --sidebar-w: 260px;
+  --topbar-h:  52px;
+  --panel-w:   260px;
+
+  /* Border radius */
+  --r-sm: 4px; --r-md: 8px; --r-lg: 12px;
+  --r-xl: 16px; --r-2xl: 24px;
+
+  /* Shadows */
+  --shadow-sm: 0 1px 3px rgba(13,22,18,.08);
+  --shadow-md: 0 4px 12px rgba(13,22,18,.10);
+  --shadow-lg: 0 8px 28px rgba(13,22,18,.14);
+
+  /* Transitions */
+  --t-fast: .12s ease;
+  --t-mid:  .2s ease;
+}
+
+/* Reset mínimo — coexiste com Tailwind preflight */
+*, *::before, *::after { box-sizing: border-box; }
+
+body {
+  font-family: var(--font-ui);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Scrollbar global — discreta */
+::-webkit-scrollbar { width: 4px; height: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: var(--border-mid); }
+
+/* Utilitários de tipografia */
+.font-display { font-family: var(--font-display); }
+.font-mono    { font-family: var(--font-mono); }
+
+/* Animações globais */
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; } 50% { opacity: 0.4; }
+}
+@keyframes blink {
+  0%, 100% { opacity: 1; } 50% { opacity: 0; }
+}
+@keyframes bounce-dot {
+  0%, 100% { transform: translateY(0); opacity: .5; }
+  50% { transform: translateY(-4px); opacity: 1; }
+}
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* Markdown nas bubbles */
+.msg-markdown h3 {
+  font-family: var(--font-display);
+  font-size: 15px; font-weight: 600;
+  color: var(--ink-700); margin: 14px 0 6px;
+  padding-bottom: 4px; border-bottom: 1px solid var(--border);
+}
+.msg-markdown h4 {
+  font-size: 11px; font-weight: 700; letter-spacing: 0.5px;
+  text-transform: uppercase; color: var(--text-sec); margin: 12px 0 4px;
+}
+.msg-markdown table {
+  width: 100%; border-collapse: collapse; font-size: 12.5px; margin: 10px 0;
+}
+.msg-markdown th {
+  background: var(--ink-700); color: #fff;
+  padding: 6px 10px; font-size: 11px; font-weight: 600;
+}
+.msg-markdown td {
+  padding: 6px 10px; border-bottom: 1px solid var(--border);
+}
+.msg-markdown tr:nth-child(even) td { background: var(--ink-50); }
+.msg-markdown code {
+  font-family: var(--font-mono); font-size: 12px;
+  background: var(--ink-50); padding: 1px 5px; border-radius: var(--r-sm);
+}
