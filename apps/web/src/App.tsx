@@ -4,6 +4,8 @@ import { MessageBubble } from './components/chat/MessageBubble';
 import { AgentWorking } from './components/chat/AgentWorking';
 import { Topbar } from './components/layout/Topbar';
 import { Sidebar } from './components/layout/Sidebar';
+import { InputZone } from './components/chat/InputZone';
+import { RightPanel } from './components/layout/RightPanel';
 
 function UsersModal({ onClose, reqHeaders }: { onClose: () => void, reqHeaders: any }) {
   const [usersList, setUsersList] = useState<any[]>([]);
@@ -208,7 +210,6 @@ function App() {
   const [attachedFiles, setAttachedFiles] = useState<{name: string, text: string, isImage?: boolean, dataUrl?: string}[]>([]);
   const [extracting, setExtracting] = useState(false);
   const [fileError, setFileError] = useState('');
-  const fileInputRef = useRef<HTMLInputElement>(null);
   const ACCEPTED_TYPES = '.txt,.md,.csv,.json,.rtf,.pdf,.doc,.docx,.xlsx,.xls,.png,.jpg,.jpeg,.webp';
 
   // ── Export ───────────────────────────────────────────────────────────────────
@@ -573,7 +574,6 @@ function App() {
       if (ok.length) setAttachedFiles(prev => [...prev, ...ok]);
     } catch (err: any) { setFileError(err.message); }
     setExtracting(false);
-    if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
   const openPainel = () => {
@@ -1257,6 +1257,7 @@ function App() {
           onToggleSidebar={() => setSidebarOpen(s => !s)}
         />
 
+        <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
         <main className="flex-1 overflow-y-auto p-6 flex flex-col gap-6">
 
           {/* ── PAINEL DE BOAS-VINDAS (estado vazio) ────────────────────────────── */}
@@ -1320,163 +1321,6 @@ function App() {
             );
           })}
 
-          {/* ── PAINEL DE INDICADORES KRATOS ─────────────────────────────────────── */}
-          {indicadores.length > 0 && (() => {
-            const verde    = indicadores.filter((i: any) => i.status === 'verde').length;
-            const amarelo  = indicadores.filter((i: any) => i.status === 'amarelo').length;
-            const vermelho = indicadores.filter((i: any) => i.status === 'vermelho').length;
-            const total    = indicadores.length;
-            const sorted   = [...indicadores].sort((a: any, b: any) => {
-              const o: Record<string, number> = { vermelho: 0, amarelo: 1, verde: 2 };
-              return (o[a.status] ?? 3) - (o[b.status] ?? 3);
-            });
-            return (
-              <div className="bg-white border border-gray-200 rounded-2xl shadow-sm p-4 mx-auto w-full max-w-2xl">
-                {/* cabeçalho */}
-                <div className="flex items-center justify-between mb-3">
-                  <div className="text-xs font-bold text-[#004D40] uppercase tracking-wider flex items-center gap-2">
-                    <span>📡</span> Monitoramento KRATOS
-                    <span className="text-[10px] font-normal text-gray-400 normal-case tracking-normal">
-                      {total} indicador{total !== 1 ? 'es' : ''}
-                    </span>
-                  </div>
-                  <button onClick={() => carregarIndicadores(sessionId)} className="text-[10px] text-gray-400 hover:text-gray-600 transition-colors">↻ Atualizar</button>
-                </div>
-
-                {/* barra de proporção */}
-                <div className="mb-3">
-                  <div className="flex h-2 rounded-full overflow-hidden gap-px mb-1.5">
-                    {verde    > 0 && <div className="bg-green-400"  style={{ width: `${(verde/total)*100}%` }} />}
-                    {amarelo  > 0 && <div className="bg-yellow-400" style={{ width: `${(amarelo/total)*100}%` }} />}
-                    {vermelho > 0 && <div className="bg-red-400"    style={{ width: `${(vermelho/total)*100}%` }} />}
-                  </div>
-                  <div className="flex gap-3 text-[10px]">
-                    {verde    > 0 && <span className="text-green-700  font-semibold">🟢 {verde} verde</span>}
-                    {amarelo  > 0 && <span className="text-yellow-700 font-semibold">🟡 {amarelo} amarelo</span>}
-                    {vermelho > 0 && <span className="text-red-700    font-semibold">🔴 {vermelho} vermelho</span>}
-                  </div>
-                </div>
-
-                {/* cards ordenados por severidade */}
-                <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-                  {sorted.map((ind: any, i: number) => {
-                    const sc =
-                      ind.status === 'vermelho' ? 'bg-red-50 border-red-300 text-red-800' :
-                      ind.status === 'amarelo'  ? 'bg-yellow-50 border-yellow-300 text-yellow-800' :
-                                                 'bg-green-50 border-green-300 text-green-800';
-                    const dot = ind.status === 'vermelho' ? '🔴' : ind.status === 'amarelo' ? '🟡' : '🟢';
-                    const checkedAt = ind.lastCheckedAt
-                      ? new Date(ind.lastCheckedAt).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
-                      : null;
-                    return (
-                      <div key={i} className={`border rounded-xl px-3 py-2.5 ${sc} text-xs`}>
-                        <div className="font-bold truncate flex items-center gap-1 mb-1">{dot} {ind.name}</div>
-                        {ind.lastValue != null && (
-                          <div className="font-mono text-[11px] font-semibold">
-                            {typeof ind.lastValue === 'number'
-                              ? ind.lastValue.toLocaleString('pt-BR', { maximumFractionDigits: 2 })
-                              : ind.lastValue}
-                          </div>
-                        )}
-                        {(ind.thresholdYellow || ind.thresholdRed) && (
-                          <div className="text-[10px] opacity-60 mt-0.5">
-                            {ind.thresholdYellow && `⚠ ${ind.thresholdYellow}`}
-                            {ind.thresholdYellow && ind.thresholdRed && ' · '}
-                            {ind.thresholdRed && `🔴 ${ind.thresholdRed}`}
-                          </div>
-                        )}
-                        {ind.source    && <div className="text-[10px] opacity-50 truncate mt-0.5">{ind.source}</div>}
-                        {checkedAt     && <div className="text-[9px]  opacity-40 mt-0.5">{checkedAt}</div>}
-                      </div>
-                    );
-                  })}
-                </div>
-
-                {/* alerta de vermelho */}
-                {vermelho > 0 && (
-                  <div className="mt-3 p-2 bg-red-50 border border-red-200 rounded-lg text-[11px] text-red-700 font-semibold flex items-center gap-1.5">
-                    ⚠ {vermelho} indicador{vermelho !== 1 ? 'es' : ''} em alerta — revisar análise KRATOS
-                  </div>
-                )}
-              </div>
-            );
-          })()}
-
-          {/* ── PAINEL WEAK SIGNALS ──────────────────────────────────────────────── */}
-          {weakSignals.length > 0 && (() => {
-            const clIcon: Record<string,string> = { confirmavel:'🟢', ambiguo:'🟡', ruido:'🔴' };
-            const srColor: Record<string,string> = {
-              monitorando:'bg-gray-50 border-gray-200', amplificando:'bg-orange-50 border-orange-300',
-              materializado:'bg-red-50 border-red-300', arquivado:'bg-gray-50 border-gray-200 opacity-50'
-            };
-            const sorted = [...weakSignals].sort((a,b) => {
-              const o: Record<string,number> = { amplificando:0, materializado:1, confirmavel:2, ambiguo:3, ruido:4 };
-              return (o[a.statusRadar]??5) - (o[b.statusRadar]??5);
-            });
-            return (
-              <div className="bg-white border border-gray-200 rounded-2xl shadow-sm p-4 mx-auto w-full max-w-2xl mt-3">
-                <div className="flex items-center justify-between mb-3">
-                  <div className="text-xs font-bold text-[#4527A0] uppercase tracking-wider flex items-center gap-2">
-                    <span>📡</span> Radar de Weak Signals
-                    {signalStats && (
-                      <span className="text-[10px] font-normal text-gray-400 normal-case tracking-normal">
-                        {signalStats.total} sinal{signalStats.total !== 1 ? 'is' : ''}
-                      </span>
-                    )}
-                  </div>
-                  <button onClick={() => carregarSinais(sessionId)} className="text-[10px] text-gray-400 hover:text-gray-600 transition-colors">↻ Atualizar</button>
-                </div>
-                {/* Estatísticas */}
-                {signalStats && (
-                  <div className="flex flex-wrap gap-2 mb-3 text-[10px]">
-                    {signalStats.confirmavel  > 0 && <span className="bg-green-100 text-green-800 font-semibold px-2 py-0.5 rounded-full">🟢 {signalStats.confirmavel} confirmável</span>}
-                    {signalStats.ambiguo      > 0 && <span className="bg-yellow-100 text-yellow-800 font-semibold px-2 py-0.5 rounded-full">🟡 {signalStats.ambiguo} ambíguo</span>}
-                    {signalStats.amplificando > 0 && <span className="bg-orange-100 text-orange-800 font-semibold px-2 py-0.5 rounded-full">🟠 {signalStats.amplificando} amplificando</span>}
-                    {signalStats.materializado> 0 && <span className="bg-red-100 text-red-800 font-semibold px-2 py-0.5 rounded-full">🔴 {signalStats.materializado} materializado</span>}
-                    {signalStats.ruido        > 0 && <span className="bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full">{signalStats.ruido} ruído</span>}
-                  </div>
-                )}
-                {/* Alerta de amplificação */}
-                {signalStats?.amplificando > 0 && (
-                  <div className="mb-3 p-2 bg-orange-50 border border-orange-300 rounded-lg text-[11px] text-orange-800 font-semibold flex items-center gap-1.5">
-                    ⚠️ {signalStats.amplificando} sinal{signalStats.amplificando !== 1 ? 'is' : ''} amplificando — revisar cenário de referência
-                  </div>
-                )}
-                {/* Cards */}
-                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                  {sorted.filter((s:any) => s.statusRadar !== 'arquivado').map((s: any, i: number) => (
-                    <div key={i} className={`border rounded-xl px-3 py-2.5 ${srColor[s.statusRadar] || 'bg-gray-50 border-gray-200'} text-xs`}>
-                      <div className="flex items-start justify-between gap-1 mb-1">
-                        <div className="font-bold leading-snug flex items-center gap-1">
-                          {clIcon[s.classificacao] || '⚪'} {s.titulo}
-                        </div>
-                        <span className="shrink-0 text-[9px] uppercase tracking-wide text-gray-400 font-semibold">{s.tipo?.replace('_',' ')}</span>
-                      </div>
-                      {s.potencialDisruptivo && (
-                        <div className="text-[10px] text-gray-600 leading-snug mb-1 line-clamp-2">{s.potencialDisruptivo}</div>
-                      )}
-                      {/* Sentinelas */}
-                      {(s.sentinela1Descricao || s.sentinela2Descricao) && (
-                        <div className="flex gap-1.5 mt-1.5">
-                          {s.sentinela1Descricao && (
-                            <span className={`text-[9px] px-1.5 py-0.5 rounded font-medium ${s.sentinela1Status === 'disparado' ? 'bg-red-100 text-red-700' : s.sentinela1Status === 'ativo' ? 'bg-orange-100 text-orange-700' : 'bg-gray-100 text-gray-500'}`}>
-                              S1 {s.sentinela1Status === 'disparado' ? '🔥' : s.sentinela1Status === 'ativo' ? '⚡' : '·'}
-                            </span>
-                          )}
-                          {s.sentinela2Descricao && (
-                            <span className={`text-[9px] px-1.5 py-0.5 rounded font-medium ${s.sentinela2Status === 'disparado' ? 'bg-red-100 text-red-700' : s.sentinela2Status === 'ativo' ? 'bg-orange-100 text-orange-700' : 'bg-gray-100 text-gray-500'}`}>
-                              S2 {s.sentinela2Status === 'disparado' ? '🔥' : s.sentinela2Status === 'ativo' ? '⚡' : '·'}
-                            </span>
-                          )}
-                        </div>
-                      )}
-                      {s.janelaAnos && <div className="text-[9px] text-gray-400 mt-1">⏱ {s.janelaAnos} anos · {s.clusterId || 'sem cluster'}</div>}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            );
-          })()}
 
           {/* Streaming bubble — tokens chegando em tempo real */}
           {streamingText && (
@@ -1498,60 +1342,32 @@ function App() {
           <div ref={bottomRef} />
         </main>
 
-        <footer className="p-4 bg-white border-t border-gray-200 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)] z-10">
-          {/* Clientes têm acesso somente leitura — sem input de chat */}
-          {user?.role === 'cliente' && (
-            <div className="max-w-4xl mx-auto text-center text-xs text-gray-400 py-2 border border-gray-100 rounded-xl bg-gray-50">
-              Modo leitura · Para solicitar análise, entre em contato com o analista responsável.
-            </div>
-          )}
-          {user?.role !== 'cliente' && messages.length > 0 && (
-            <div className="max-w-4xl mx-auto flex flex-wrap gap-2 mb-3">
-              {mode === 'production' && (
-                <>
-                  <button onClick={() => sendMessage('CONFIRMAR')} disabled={loading || extracting} className="px-4 py-1.5 bg-stratsight-light text-stratsight-dark border border-stratsight-medium/30 rounded-full text-[11px] font-bold hover:bg-stratsight-medium/20 transition-colors shadow-sm">▶ Avançar Fase (CONFIRMAR)</button>
-                  <button onClick={() => sendMessage('KRATOS')} disabled={loading || extracting} className="px-4 py-1.5 bg-[#004D40]/10 text-[#004D40] border border-[#004D40]/30 rounded-full text-[11px] font-bold hover:bg-[#004D40]/20 transition-colors shadow-sm">📡 Modo Monitoramento (KRATOS)</button>
-                </>
-              )}
-              {mode === 'monitoring' && (
-                <>
-                  <button onClick={() => sendMessage('NOVA SESSÃO')} disabled={loading || extracting} className="px-4 py-1.5 bg-[#004D40]/10 text-[#004D40] border border-[#004D40]/30 rounded-full text-[11px] font-bold hover:bg-[#004D40]/20 transition-colors shadow-sm">🔄 Nova Coleta (NOVA SESSÃO)</button>
-                  <button onClick={() => sendMessage('PRODUÇÃO')} disabled={loading || extracting} className="px-4 py-1.5 bg-stratsight-light text-stratsight-dark border border-stratsight-medium/30 rounded-full text-[11px] font-bold hover:bg-stratsight-medium/20 transition-colors shadow-sm">◀ Voltar à Produção</button>
-                </>
-              )}
-              <button onClick={() => gerarRelatorio('padrao')} disabled={loading || extracting} className="px-4 py-1.5 bg-gray-100 text-gray-700 border border-gray-300 rounded-full text-[11px] font-bold hover:bg-gray-200 transition-colors shadow-sm">📑 Gerar Relatório</button>
-            </div>
-          )}
-          {user?.role !== 'cliente' && (
-            <>
-              {attachedFiles.length > 0 && (
-                <div className="flex flex-wrap gap-2 mb-3">
-                  {attachedFiles.map((f, i) => (
-                    <div key={i} className="flex items-center gap-2 bg-stratsight-light border border-stratsight-medium/30 rounded-full px-3 py-1 text-xs text-stratsight-dark">
-                      <span>📎 {f.name}</span>
-                      <button onClick={() => removeFile(i)} className="text-stratsight-dark/60 hover:text-stratsight-dark font-bold ml-1">×</button>
-                    </div>
-                  ))}
-                </div>
-              )}
-              {extracting && <div className="text-xs text-stratsight-medium mb-2 font-bold animate-pulse">⏳ Extraindo dados com OCR/RAG...</div>}
-              {fileError && <div className="text-xs text-red-600 mb-2 bg-red-50 p-2 rounded border border-red-100">⚠️ {fileError}</div>}
-              <div className="max-w-4xl mx-auto flex gap-3">
-                <input ref={fileInputRef} type="file" accept={ACCEPTED_TYPES} multiple className="hidden" onChange={handleFileChange} />
-                <button onClick={() => fileInputRef.current?.click()} disabled={loading || extracting} title="Anexar documento" className={`w-12 h-[50px] rounded-xl border-2 flex items-center justify-center text-lg shrink-0 transition-colors ${attachedFiles.length > 0 ? 'bg-stratsight-light border-stratsight-medium text-stratsight-medium' : 'bg-gray-50 border-gray-200 text-gray-400 hover:border-stratsight-medium/50'} ${loading || extracting ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}>
-                  {extracting ? '⏳' : '📎'}
-                </button>
-                <input
-                  type="text" value={input} onChange={e => setInput(e.target.value)} onKeyDown={e => e.key === 'Enter' && sendMessage()}
-                  className="flex-1 border border-gray-300 rounded-xl px-4 py-3 focus:outline-none focus:border-stratsight-medium focus:ring-1 focus:ring-stratsight-medium bg-gray-50"
-                  placeholder={extracting ? 'Analisando arquivos...' : attachedFiles.length > 0 ? 'Adicione uma instrução ou envie os documentos...' : mode === 'monitoring' ? 'Responda ao KRATOS com atualizações de indicadores...' : 'Digite sua mensagem para o HERMES...'}
-                  disabled={loading || extracting}
-                />
-                <button onClick={sendMessage} disabled={loading || extracting || (!input.trim() && attachedFiles.length === 0)} className="bg-stratsight-dark text-white px-6 py-3 rounded-xl font-bold disabled:opacity-50 hover:bg-stratsight-medium transition-colors">Enviar</button>
-              </div>
-            </>
-          )}
-        </footer>
+        <RightPanel
+          indicadores={indicadores}
+          weakSignals={weakSignals}
+          signalStats={signalStats}
+          onRefreshIndicators={() => carregarIndicadores(sessionId)}
+          onRefreshSignals={() => carregarSinais(sessionId)}
+        />
+        </div>
+
+        <InputZone
+          userRole={user?.role}
+          mode={mode}
+          hasMessages={messages.length > 0}
+          input={input}
+          loading={loading}
+          extracting={extracting}
+          fileError={fileError}
+          attachedFiles={attachedFiles}
+          acceptedTypes={ACCEPTED_TYPES}
+          onInputChange={v => setInput(v)}
+          onSend={sendMessage}
+          onQuickSend={cmd => sendMessage(cmd)}
+          onRemoveFile={removeFile}
+          onFileChange={handleFileChange}
+          onGerarRelatorio={() => gerarRelatorio('padrao')}
+        />
       </div>
     </div>
 
