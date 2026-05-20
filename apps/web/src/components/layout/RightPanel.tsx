@@ -178,13 +178,13 @@ export function RightPanel({ indicadores, weakSignals, signalStats, onRefreshInd
             </div>
           )}
 
-          {signalStats?.amplificando > 0 && (
+          {(signalStats?.amplificando ?? 0) > 0 && (
             <div style={{
               marginBottom: 10, padding: '6px 10px',
               background: '#FFF3E0', border: '1px solid #FFCC80',
               borderRadius: 'var(--r-md)', fontSize: 10, color: '#E65100', fontWeight: 600,
             }}>
-              ⚠️ {signalStats.amplificando} sinal{signalStats.amplificando !== 1 ? 'is' : ''} amplificando
+              ⚠️ {signalStats?.amplificando} sinal{signalStats?.amplificando !== 1 ? 'is' : ''} amplificando
             </div>
           )}
 
