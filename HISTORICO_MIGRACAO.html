@@ -1,0 +1,1183 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OLYMPUS v4.0 — Histórico de Arquitetura</title>
+<style>
+  :root {
+    --dark:   #1B3A2D;
+    --medium: #2E7D52;
+    --light:  #E8F5E9;
+    --gold:   #C8A84B;
+    --red:    #C62828;
+    --blue:   #1565C0;
+    --bg:     #F5F7F6;
+    --border: #CCDDD4;
+    --text:   #1A1A1A;
+    --muted:  #5A6A62;
+    --code-bg:#1E2A23;
+    --code-fg:#A5D6A7;
+  }
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html { scroll-behavior: smooth; }
+  body {
+    font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.7;
+    font-size: 15px;
+  }
+
+  /* ── Header ────────────────────────────────────────────────────────────── */
+  header {
+    background: linear-gradient(135deg, var(--dark) 0%, #0D2318 100%);
+    color: #fff;
+    padding: 48px 40px 36px;
+    position: relative;
+    overflow: hidden;
+  }
+  header::before {
+    content: 'OLYMPUS';
+    position: absolute; right: 40px; top: 50%;
+    transform: translateY(-50%);
+    font-size: 120px; font-weight: 900;
+    opacity: 0.04; letter-spacing: -4px;
+    pointer-events: none;
+  }
+  .header-badge {
+    display: inline-block;
+    background: var(--gold);
+    color: #1A1A1A;
+    font-size: 10px; font-weight: 700;
+    letter-spacing: 2px; text-transform: uppercase;
+    padding: 3px 10px; border-radius: 3px;
+    margin-bottom: 14px;
+  }
+  header h1 {
+    font-size: 26px; font-weight: 800;
+    color: #fff; line-height: 1.2;
+    margin-bottom: 6px;
+  }
+  header .subtitle { color: #A5D6A7; font-size: 13px; }
+  header .meta { color: #66BB6A; font-size: 12px; margin-top: 6px; }
+  .confidential {
+    position: absolute; top: 16px; right: 20px;
+    color: var(--gold); font-size: 10px; font-weight: 700;
+    letter-spacing: 2px; border: 1px solid var(--gold);
+    padding: 3px 8px; border-radius: 3px;
+  }
+
+  /* ── Layout ─────────────────────────────────────────────────────────────── */
+  .layout { display: flex; min-height: calc(100vh - 160px); }
+
+  /* ── TOC sidebar ─────────────────────────────────────────────────────────── */
+  nav.toc {
+    width: 240px; min-width: 240px;
+    background: var(--dark);
+    padding: 24px 0;
+    position: sticky; top: 0; height: 100vh;
+    overflow-y: auto;
+  }
+  nav.toc h2 {
+    color: var(--gold); font-size: 10px; font-weight: 700;
+    letter-spacing: 2px; text-transform: uppercase;
+    padding: 0 20px 12px; border-bottom: 1px solid rgba(255,255,255,.1);
+    margin-bottom: 8px;
+  }
+  nav.toc a {
+    display: block; padding: 6px 20px;
+    color: #A5D6A7; text-decoration: none;
+    font-size: 12px; line-height: 1.4;
+    border-left: 2px solid transparent;
+    transition: all .15s;
+  }
+  nav.toc a:hover { color: #fff; background: rgba(255,255,255,.06); border-left-color: var(--gold); }
+  nav.toc a.sub { padding-left: 32px; color: #6A9A7A; font-size: 11px; }
+  nav.toc .divider { border-top: 1px solid rgba(255,255,255,.07); margin: 6px 0; }
+
+  /* ── Main content ────────────────────────────────────────────────────────── */
+  main { flex: 1; padding: 40px 48px; max-width: 900px; }
+
+  /* ── Sections ────────────────────────────────────────────────────────────── */
+  section { margin-bottom: 48px; }
+  .section-header {
+    display: flex; align-items: center; gap: 12px;
+    border-bottom: 2px solid var(--medium);
+    padding-bottom: 8px; margin-bottom: 20px;
+  }
+  .section-num {
+    background: var(--medium); color: #fff;
+    font-size: 11px; font-weight: 800;
+    width: 28px; height: 28px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+  }
+  .section-header h2 { font-size: 18px; color: var(--dark); font-weight: 700; }
+  h3 { font-size: 14px; font-weight: 700; color: var(--dark); margin: 24px 0 10px; padding-left: 10px; border-left: 3px solid var(--medium); }
+  h4 { font-size: 13px; font-weight: 700; color: var(--medium); margin: 16px 0 8px; }
+  p { margin-bottom: 10px; color: var(--text); }
+  li { margin-bottom: 4px; }
+  ul, ol { padding-left: 20px; margin-bottom: 12px; }
+
+  /* ── Callouts ────────────────────────────────────────────────────────────── */
+  .callout {
+    border-radius: 8px; padding: 14px 18px; margin: 16px 0;
+    font-size: 14px; line-height: 1.6;
+  }
+  .callout.info { background: #E3F2FD; border-left: 4px solid var(--blue); }
+  .callout.warn { background: #FFF8E1; border-left: 4px solid var(--gold); }
+  .callout.danger { background: #FFEBEE; border-left: 4px solid var(--red); }
+  .callout.success { background: var(--light); border-left: 4px solid var(--medium); }
+  .callout strong { display: block; margin-bottom: 4px; }
+
+  /* ── Tables ──────────────────────────────────────────────────────────────── */
+  .table-wrap { overflow-x: auto; margin: 14px 0 20px; border-radius: 8px; box-shadow: 0 1px 4px rgba(0,0,0,.08); }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  thead { background: var(--dark); color: #fff; }
+  thead th { padding: 10px 14px; text-align: left; font-weight: 600; font-size: 12px; letter-spacing: .5px; }
+  tbody tr { border-bottom: 1px solid var(--border); }
+  tbody tr:last-child { border-bottom: none; }
+  tbody tr:nth-child(even) { background: #F0F6F2; }
+  tbody tr:hover { background: #E4F0E8; }
+  td { padding: 9px 14px; vertical-align: top; }
+  td:first-child { font-weight: 500; }
+  td code { font-size: 11px; background: rgba(46,125,82,.1); padding: 1px 5px; border-radius: 3px; color: var(--dark); }
+
+  /* ── Code blocks ─────────────────────────────────────────────────────────── */
+  pre {
+    background: var(--code-bg); color: var(--code-fg);
+    border-radius: 8px; padding: 18px 20px;
+    font-family: 'Cascadia Code', 'Fira Code', 'Consolas', monospace;
+    font-size: 12.5px; line-height: 1.6; overflow-x: auto;
+    margin: 14px 0; border: 1px solid #2D4A38;
+  }
+  code {
+    font-family: 'Cascadia Code', 'Fira Code', 'Consolas', monospace;
+    font-size: 12.5px; background: rgba(46,125,82,.12);
+    padding: 1px 6px; border-radius: 4px; color: var(--dark);
+  }
+  pre code { background: none; padding: 0; color: inherit; font-size: inherit; border-radius: 0; }
+  .comment { color: #4A7A5A; }
+  .keyword { color: #80CBC4; }
+  .string  { color: #A5D6A7; }
+
+  /* ── Badges ──────────────────────────────────────────────────────────────── */
+  .badge {
+    display: inline-block; font-size: 10px; font-weight: 700;
+    padding: 2px 7px; border-radius: 10px; vertical-align: middle;
+    text-transform: uppercase; letter-spacing: .5px;
+  }
+  .badge-done   { background: #E8F5E9; color: #2E7D52; border: 1px solid #A5D6A7; }
+  .badge-pend   { background: #FFF8E1; color: #7D5A00; border: 1px solid #FFD54F; }
+  .badge-next   { background: #E3F2FD; color: #1565C0; border: 1px solid #90CAF9; }
+  .badge-future { background: #EDE7F6; color: #4527A0; border: 1px solid #B39DDB; }
+
+  /* ── Backlog grid ────────────────────────────────────────────────────────── */
+  .backlog-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 14px 0; }
+  .backlog-card {
+    background: #fff; border: 1px solid var(--border);
+    border-radius: 8px; padding: 12px 14px;
+    border-left: 4px solid var(--medium);
+    font-size: 13px;
+  }
+  .backlog-card.high   { border-left-color: var(--red); }
+  .backlog-card.medium { border-left-color: var(--gold); }
+  .backlog-card.low    { border-left-color: #90A4AE; }
+  .backlog-card.future { border-left-color: #CE93D8; }
+  .backlog-card .card-title { font-weight: 700; font-size: 13px; margin-bottom: 4px; }
+  .backlog-card .card-desc  { color: var(--muted); font-size: 12px; line-height: 1.4; }
+  .backlog-card .card-pri   { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .5px; margin-bottom: 6px; }
+  .backlog-card.high   .card-pri { color: var(--red); }
+  .backlog-card.medium .card-pri { color: #7D5A00; }
+  .backlog-card.low    .card-pri { color: #546E7A; }
+  .backlog-card.future .card-pri { color: #6A1B9A; }
+
+  /* ── Next steps ──────────────────────────────────────────────────────────── */
+  .next-list { list-style: none; padding: 0; margin: 0; }
+  .next-list li {
+    background: #fff; border: 1px solid var(--border);
+    border-radius: 8px; padding: 12px 16px; margin-bottom: 8px;
+    border-left: 4px solid var(--blue); font-size: 13px;
+    line-height: 1.5;
+  }
+  .next-list li strong { color: var(--dark); }
+
+  /* ── Bug entries ─────────────────────────────────────────────────────────── */
+  .bug-entry {
+    background: #fff; border: 1px solid var(--border);
+    border-radius: 8px; padding: 18px 20px; margin-bottom: 16px;
+  }
+  .bug-entry h4 { border-left: none; padding-left: 0; margin-top: 0; margin-bottom: 10px; color: var(--red); font-size: 13px; }
+  .bug-row { margin-bottom: 6px; font-size: 13px; }
+  .bug-label { font-weight: 700; color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .5px; display: block; margin-bottom: 2px; }
+
+  /* ── Rule cards ──────────────────────────────────────────────────────────── */
+  .rule-card {
+    background: #FFEBEE; border: 1px solid #FFCDD2;
+    border-left: 5px solid var(--red);
+    border-radius: 8px; padding: 16px 20px; margin-bottom: 14px;
+  }
+  .rule-card h4 { color: var(--red); margin: 0 0 10px; font-size: 13px; border: none; padding: 0; }
+
+  /* ── Done list ───────────────────────────────────────────────────────────── */
+  .done-list { list-style: none; padding: 0; columns: 2; gap: 10px; }
+  .done-list li {
+    break-inside: avoid;
+    background: var(--light); border: 1px solid #C8E6C9;
+    border-radius: 6px; padding: 8px 12px; margin-bottom: 6px;
+    font-size: 12px; display: flex; align-items: flex-start; gap: 7px;
+  }
+  .done-list li::before { content: '✅'; flex-shrink: 0; font-size: 11px; margin-top: 1px; }
+
+  /* ── Arch diagram ────────────────────────────────────────────────────────── */
+  .arch-box {
+    background: var(--code-bg); border-radius: 8px;
+    padding: 20px; font-family: 'Cascadia Code', monospace;
+    font-size: 13px; color: #A5D6A7; line-height: 1.8;
+    border: 1px solid #2D4A38; margin: 14px 0;
+  }
+  .arch-box .arch-root { color: var(--gold); font-weight: 700; }
+  .arch-box .arch-label { color: #80CBC4; }
+
+  /* ── Footer ──────────────────────────────────────────────────────────────── */
+  footer {
+    background: var(--dark); color: #4A7A5A;
+    text-align: center; padding: 20px;
+    font-size: 11px; letter-spacing: .5px;
+  }
+
+  @media (max-width: 800px) {
+    nav.toc { display: none; }
+    main { padding: 24px 20px; }
+    .backlog-grid { grid-template-columns: 1fr; }
+    .done-list { columns: 1; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <span class="confidential">⚠ CONFIDENCIAL</span>
+  <div class="header-badge">StratSight Brasil · Strategic Foresight</div>
+  <h1>OLYMPUS v4.0 — Histórico Consolidado de Arquitetura e Desenvolvimento</h1>
+  <div class="subtitle">IA Agêntica · Motor ATHENA · Motor KRATOS · Monorepo TypeScript</div>
+  <div class="meta">Última atualização: 19 de Maio de 2026 (Sprint 8 — TechniqueEngine · NATO AltA · ICD 203 · Step Streaming) &nbsp;·&nbsp; Versão viva — atualizado a cada sprint</div>
+</header>
+
+<div class="layout">
+
+<!-- ── TOC ──────────────────────────────────────────────────────────────────── -->
+<nav class="toc">
+  <h2>Índice</h2>
+  <a href="#s1">1. Contexto de Negócio</a>
+  <a href="#s2">2. Evolução Histórica</a>
+  <a href="#s2a" class="sub">2.1 Monolito (v1/v2)</a>
+  <a href="#s2b" class="sub">2.2 Monorepo (v4)</a>
+  <div class="divider"></div>
+  <a href="#s3">3. Arquitetura Atual</a>
+  <a href="#s3a" class="sub">3.1 Monorepo</a>
+  <a href="#s3b" class="sub">3.2 Stack</a>
+  <a href="#s3c" class="sub">3.3 Por que TypeScript</a>
+  <a href="#s3d" class="sub">3.4 Por que PostgreSQL</a>
+  <a href="#s3e" class="sub">3.5 Tabelas</a>
+  <div class="divider"></div>
+  <a href="#s4">4. Motor de IA</a>
+  <a href="#s4a" class="sub">4.1 Arquitetura</a>
+  <a href="#s4b" class="sub">4.2 Config Agent.ts</a>
+  <a href="#s4c" class="sub">4.3 Motor Dinâmico</a>
+  <a href="#s4d" class="sub">4.4 Guardrails</a>
+  <div class="divider"></div>
+  <a href="#s5">5. Infraestrutura Docker</a>
+  <a href="#s6">6. Frontend (App.tsx)</a>
+  <div class="divider"></div>
+  <a href="#s7">7. O Que Funcionou</a>
+  <a href="#s8">8. O Que Deu Errado</a>
+  <div class="divider"></div>
+  <a href="#s9">9. Regras Críticas</a>
+  <a href="#s10">10. Template Ferramentas</a>
+  <a href="#s11">11. Guia Operacional</a>
+  <a href="#s12">12. Backlog</a>
+  <div class="divider"></div>
+  <a href="#s13">13. Riscos</a>
+  <a href="#s14">14. Ativos Não Planejados</a>
+  <a href="#s15">15. Modelo de Custos</a>
+</nav>
+
+<!-- ── Main ─────────────────────────────────────────────────────────────────── -->
+<main>
+
+  <div class="callout info">
+    <strong>Memória técnica do projeto</strong>
+    Este documento registra a arquitetura, as justificativas de cada decisão, tudo o que funcionou, tudo o que falhou, e o estado atual do backlog. <strong>Deve ser lido antes de qualquer intervenção no código.</strong>
+  </div>
+
+  <!-- 1 -->
+  <section id="s1">
+    <div class="section-header">
+      <div class="section-num">1</div>
+      <h2>Contexto de Negócio</h2>
+    </div>
+
+    <p><strong>O que é o OLYMPUS:</strong> Plataforma integrada de planejamento estratégico e monitoramento contínuo. O motor <strong>ATHENA</strong> é o produto-âncora — especializado em <em>Strategic Foresight</em> (cenários prospectivos). O motor <strong>KRATOS</strong> cuida do monitoramento automático de indicadores.</p>
+
+    <div class="arch-box">
+      <span class="arch-root">OLYMPUS</span><br>
+      ├── <span class="arch-label">Motor ATHENA</span>   → produção de cenários · 9 agentes · 7 metodologias (MSEF · GRUMBACH · GODET · MACROPLAN · MPO · ASPLAN · FUTURES)<br>
+      ├── <span class="arch-label">Motor KRATOS</span>   → monitoramento contínuo · indicadores · alertas<br>
+      ├── <span class="arch-label">Painel Cliente</span> → acesso remoto · semáforo de cenário · histórico<br>
+      ├── <span class="arch-label">API OLYMPUS</span>    → integração com parceiros · webhooks n8n<br>
+      └── <span class="arch-label">Vault de Dados</span> → dados do cliente · dados abertos · offline
+    </div>
+
+    <h3>Premissas que guiam decisões técnicas</h3>
+    <ul>
+      <li>Operação <strong>solo</strong> — toda decisão deve minimizar complexidade operacional</li>
+      <li>Custo <strong>&lt; R$ 1.500/mês</strong> até o segundo contrato</li>
+      <li>Clientes de defesa e governo exigem: marca d'água CONFIDENCIAL, logs de auditoria, operação <strong>offline/air-gapped</strong></li>
+      <li>Produto-âncora: R$ 80K–250K por projeto de cenários</li>
+      <li>Recorrente: R$ 8K–25K/mês (monitoramento KRATOS)</li>
+      <li>Meta Ano 1: R$ 300K · <strong>Exit: aquisição por Big Tech em 8 anos</strong></li>
+      <li>O <strong>Playbook MSEF</strong> é o principal ativo de Propriedade Intelectual</li>
+    </ul>
+  </section>
+
+  <!-- 2 -->
+  <section id="s2">
+    <div class="section-header">
+      <div class="section-num">2</div>
+      <h2>Evolução Histórica da Arquitetura</h2>
+    </div>
+
+    <h3 id="s2a">2.1 Athena v1/v2 — O Monolito (Sprint 1 e 2)</h3>
+    <p><strong>Stack:</strong> React 18 JSX (<code>App.jsx</code> ~1.750 linhas) + Node.js Express 5 (<code>server.js</code> ~915 linhas)<br>
+    <strong>Persistência:</strong> <code>athena_sessions.json</code> · <strong>IA:</strong> Anthropic direto · <strong>Porta:</strong> 8080</p>
+
+    <p><strong>O que já funcionava:</strong> 7 agentes MSEF · 7 metodologias · 4 modos de visualização · Exportação .md/.docx/PDF · <code>projetoRef</code> · <code>sessionLock</code> · retry com backoff</p>
+
+    <h4>Bugs corrigidos nessa fase — não regredir</h4>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Bug</th><th>Fix aplicado</th></tr></thead>
+        <tbody>
+          <tr><td>Wildcard Express 5 causava conflito</td><td>Usar <code>/{*path}</code>, nunca <code>'*'</code></td></tr>
+          <tr><td>Rotas de sessão interceptadas pelo wildcard</td><td><code>/api/v1/sessions</code> ANTES do <code>express.static</code></td></tr>
+          <tr><td><code>vizMode</code> chegava na API Anthropic</td><td>Allowlist de campos no servidor</td></tr>
+          <tr><td><code>.docx</code> corrompido no Word</td><td>Removido <code>numbering reference</code> inválido</td></tr>
+          <tr><td>XSS no <code>/painel</code></td><td><code>escHtml()</code> em todos os valores; <code>safeStatus()</code> protege CSS class</td></tr>
+          <tr><td>Base64 decode aninhado silencioso</td><td><code>Buffer.from</code> executado uma vez; falha logada</td></tr>
+          <tr><td>Sessões corrompidas perdiam tudo</td><td>Backup <code>.corrupted.&lt;timestamp&gt;</code> antes de retornar <code>{}</code></td></tr>
+          <tr><td>Model hardcoded no frontend</td><td>Constante <code>ANTHROPIC_MODEL</code> no servidor, nunca enviada pelo cliente</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3 id="s2b">2.2 Athena v3 / OLYMPUS v4.0 — O Monorepo (Sprint 3+)</h3>
+    <p>Migração completa para arquitetura corporativa escalável motivada por: TypeScript estrito em todo o stack, PostgreSQL em vez de SQLite, Dockerização completa, Componentização do motor de IA para suportar múltiplos provedores.</p>
+  </section>
+
+  <!-- 3 -->
+  <section id="s3">
+    <div class="section-header">
+      <div class="section-num">3</div>
+      <h2>Arquitetura Atual (v4)</h2>
+    </div>
+
+    <h3 id="s3a">3.1 Estrutura do Monorepo</h3>
+    <pre>Olympus_v4/
+├── apps/
+│   ├── web/          → Frontend React 18 + Vite + TypeScript (Porta 80)
+│   └── api/          → Backend Hono + Node.js + TypeScript (Porta 3333)
+├── packages/
+│   ├── core/         → Motor de IA Multi-Agente (Agent.ts · Orchestrator.ts)
+│   ├── db/           → Drizzle ORM + Schemas PostgreSQL
+│   └── tools/        → Ferramentas externas (Tavily Search API)
+├── docker-compose.yml
+├── nginx.conf
+└── .env              → Variáveis de ambiente (nunca commitar)</pre>
+
+    <h3 id="s3b">3.2 Stack Tecnológica</h3>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Camada</th><th>Tecnologia</th><th>Justificativa</th></tr></thead>
+        <tbody>
+          <tr><td>Frontend</td><td>React 18 + Vite + TypeScript</td><td>Tipagem estrita, build rápido, hot reload</td></tr>
+          <tr><td>Backend</td><td>Hono + Node.js + TypeScript</td><td>Ultra-leve, I/O assíncrono, compatível com Edge</td></tr>
+          <tr><td>IA</td><td>Vercel AI SDK (<code>ai@6.0.168</code>) + <code>@ai-sdk/anthropic@3.0.71</code></td><td>Agnóstico de provedor, gerencia tool calling e multi-step</td></tr>
+          <tr><td>Banco</td><td>PostgreSQL + Drizzle ORM</td><td>Concorrência, multi-tenant, tipagem via schema</td></tr>
+          <tr><td>Busca Web</td><td>Tavily Search API</td><td>Resultados estruturados, ideal para RAG</td></tr>
+          <tr><td>SSE</td><td><code>streamSSE</code> do Hono + <code>fetch</code> ReadableStream</td><td>Progresso em tempo real — mostra agente ativo durante análise</td></tr>
+          <tr><td>Proxy</td><td>Nginx</td><td>Reverse proxy, serve estáticos, absorve timeouts</td></tr>
+          <tr><td>Container</td><td>Docker Compose (3 contêineres)</td><td>Deploy one-command, air-gapped, volumes persistentes</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3 id="s3c">3.3 Por que TypeScript e não Python</h3>
+    <p>Python é a língua franca para <em>treinar</em> modelos. TypeScript é superior para <em>construir produtos web</em> que orquestram LLMs comerciais:</p>
+    <ul>
+      <li><strong>Unificação absoluta:</strong> Frontend, backend e banco compartilham linguagem e tipagem</li>
+      <li><strong>Vercel AI SDK:</strong> Estado da arte em orquestração UI/IA — streaming, tool calling, multi-step</li>
+      <li><strong>I/O assíncrono:</strong> Node.js brilha em cargas orientadas a I/O (múltiplas buscas Tavily paralelas com 512MB RAM)</li>
+    </ul>
+    <p><strong>Dívida técnica:</strong> Para embeddings locais e RAG avançado, criar um microserviço Python isolado invocado sob demanda via HTTP pelo Orquestrador TypeScript.</p>
+
+    <h3 id="s3d">3.4 Por que PostgreSQL e não SQLite</h3>
+    <ul>
+      <li>Multi-usuário concorrente (múltiplos analistas simultâneos)</li>
+      <li>Fila assíncrona do KRONOS (cron jobs com cooldown)</li>
+      <li>Preparação para <code>pgvector</code> (embeddings/RAG no mesmo banco)</li>
+      <li>Deploy Docker simplificado (contêiner oficial PostgreSQL)</li>
+    </ul>
+
+    <h3 id="s3e">3.5 Tabelas Principais (Drizzle ORM)</h3>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Tabela</th><th>Descrição</th></tr></thead>
+        <tbody>
+          <tr><td><code>users</code></td><td>Usuários (id UUID, email único, role, 2FA)</td></tr>
+          <tr><td><code>projects</code></td><td>Projetos / sessões de análise</td></tr>
+          <tr><td><code>messages</code></td><td>Mensagens do chat (id UUID, role, content, agentName, createdAt)</td></tr>
+          <tr><td><code>agents</code></td><td>Definição dinâmica dos agentes (systemPrompt, toolsConfig)</td></tr>
+          <tr><td><code>methodologies</code></td><td>Metodologias disponíveis (agentsConfig como array JSON)</td></tr>
+          <tr><td><code>indicators</code></td><td>Indicadores monitorados pelo KRATOS</td></tr>
+          <tr><td><code>embeddings</code></td><td>Chunks de documentos indexados para RAG — projectId, chunkText, metadata JSONB, embedding <code>vector(512)</code> (Voyage AI)</td></tr>
+          <tr><td><code>tools</code></td><td>Ferramentas registradas no motor</td></tr>
+          <tr><td><code>techniques</code></td><td>Técnicas SAT disponíveis</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- 4 -->
+  <section id="s4">
+    <div class="section-header">
+      <div class="section-num">4</div>
+      <h2>Motor de IA Multi-Agente</h2>
+    </div>
+
+    <h3 id="s4a">4.1 Arquitetura do Motor</h3>
+    <p>O núcleo de IA vive em <code>packages/core/</code>:</p>
+    <ul>
+      <li><strong>Orchestrator.ts:</strong> Registra agentes, despacha execuções</li>
+      <li><strong>Agent.ts:</strong> Executa um agente individual via <code>generateText</code> do Vercel AI SDK</li>
+      <li><strong>types.ts:</strong> Contratos TypeScript (<code>AgentContext</code>, <code>Tool</code>)</li>
+    </ul>
+    <p>O HERMES (orquestrador) usa <code>consultar_agente</code> para delegar. Os especialistas (SCOPUS, KLIO, etc.) usam <code>web_search</code> via Tavily. A delegação é <strong>sempre sequencial</strong> — um agente por vez.</p>
+
+    <h3 id="s4b">4.2 Configuração Crítica do Agent.ts (sdk ai@6.0.168)</h3>
+    <pre><span class="keyword">import</span> { generateText, jsonSchema, tool, stepCountIs } <span class="keyword">from</span> <span class="string">"ai"</span>;
+
+<span class="comment">// Parâmetros corretos no SDK v6:</span>
+<span class="keyword">const</span> response = <span class="keyword">await</span> generateText({
+  model: anthropic(<span class="string">"claude-opus-4-7"</span>),
+  system: <span class="keyword">this</span>.systemPrompt,
+  messages,
+  tools: hasTools ? aiTools : <span class="keyword">undefined</span>,
+  stopWhen: stepCountIs(10),          <span class="comment">// ← NÃO é maxSteps</span>
+  prepareStep: hasTools
+    ? <span class="keyword">async</span> ({ stepNumber }) => ({
+        toolChoice: stepNumber === 0 ? <span class="string">"required"</span> : <span class="string">"auto"</span>,
+      })
+    : <span class="keyword">undefined</span>,
+  maxTokens: 32000,
+});
+
+<span class="comment">// Fix obrigatório para inputSchema (sem este, execute() nunca é chamado):</span>
+(myTool <span class="keyword">as any</span>).inputSchema = () => jsonSchema(rawSchema <span class="keyword">as any</span>);</pre>
+
+    <h3 id="s4c">4.3 Motor Dinâmico de Metodologias</h3>
+    <ul>
+      <li><strong>Auto-seed:</strong> <code>getOrSeedMethodology()</code> popula o banco com 7 agentes + MSEF na primeira requisição</li>
+      <li><strong>Orquestração dinâmica:</strong> <code>chat.ts</code> consulta a metodologia escolhida e instancia apenas os agentes vinculados em tempo de execução</li>
+      <li><strong>Atualização de prompts:</strong> Cada requisição atualiza os <code>systemPrompts</code> no banco — o código é sempre a fonte da verdade</li>
+      <li><strong>Engine Manager:</strong> Interface admin para instalar novos "Motores" (JSON com agentes e metodologias) sem novo deploy</li>
+      <li><strong>SSE:</strong> Rota <code>POST /api/v1/chat/stream</code> envia eventos de progresso — qual agente está trabalhando — antes da resposta final</li>
+    </ul>
+
+    <h3 id="s4d">4.4 Guardrails Anti-Alucinação</h3>
+    <p>Se o LLM tentar acionar um agente não registrado na metodologia ativa, a ferramenta <code>consultar_agente</code> intercepta, devolve mensagem de erro estruturada e instrui o modelo a corrigir autonomamente — sem crash.</p>
+  </section>
+
+  <!-- 5 -->
+  <section id="s5">
+    <div class="section-header">
+      <div class="section-num">5</div>
+      <h2>Infraestrutura Docker</h2>
+    </div>
+
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Contêiner</th><th>Imagem base</th><th>Porta</th><th>Função</th></tr></thead>
+        <tbody>
+          <tr><td><code>olympus_db</code></td><td>pgvector/pgvector:pg15</td><td>5432 (interno)</td><td>PostgreSQL + extensão pgvector</td></tr>
+          <tr><td><code>olympus_api</code></td><td>node:20-slim (Debian)</td><td>3333</td><td>Backend Hono compilado</td></tr>
+          <tr><td><code>olympus_web</code></td><td>node:20-alpine → nginx:alpine</td><td>80</td><td>Vite build servido pelo Nginx</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="callout warn">
+      <strong>⚠ node:20-slim e não Alpine na API</strong>
+      Alpine causa falhas silenciosas em dependências nativas (bcrypt, pg). Usar sempre node:20-slim (Debian) para o contêiner da API.
+    </div>
+
+    <h3>Timeouts Nginx críticos</h3>
+    <p>Análises completas levam ~97s. Sem os timeouts abaixo, o Nginx corta a conexão em 60s com HTTP 504:</p>
+    <pre>location /api/ {
+    proxy_pass http://api:3333/api/;
+    proxy_http_version 1.1;
+    proxy_read_timeout 300s;
+    proxy_connect_timeout 300s;
+    proxy_send_timeout 300s;
+}</pre>
+
+    <div class="callout info">
+      <strong>SSE e Nginx</strong>
+      A rota <code>/api/v1/chat/stream</code> usa SSE (Server-Sent Events). O <code>proxy_read_timeout 300s</code> já cobre o tempo da análise. Não é necessário configuração adicional para SSE no Nginx com Hono.
+    </div>
+
+    <h3>Volumes Persistentes</h3>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Volume</th><th>Conteúdo</th></tr></thead>
+        <tbody>
+          <tr><td><code>pgdata</code></td><td>Dados do PostgreSQL — nunca apagar sem querer</td></tr>
+          <tr><td><code>olympus_backups</code></td><td>Backups <code>.sql.gz</code> gerados pela rota <code>/api/v1/backup/generate</code></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- 6 -->
+  <section id="s6">
+    <div class="section-header">
+      <div class="section-num">6</div>
+      <h2>Frontend (App.tsx)</h2>
+    </div>
+
+    <h3>Funcionalidades Implementadas</h3>
+    <ul>
+      <li><strong>Autenticação completa:</strong> Login/Registro com JWT, 2FA (TOTP via speakeasy), Roles (admin, analista, cliente)</li>
+      <li><strong>Modal de Nova Sessão:</strong> 6 campos de escopo + upload de arquivos de contexto + seletor de metodologia (carrega do banco)</li>
+      <li><strong>Modos de análise:</strong> Etapa Completa · Passo a Passo · Raciocínio Estendido · Processo Completo</li>
+      <li><strong>SSE streaming:</strong> Indicador dinâmico mostra qual agente está trabalhando durante a análise ("<strong>SCOPUS</strong> está analisando...")</li>
+      <li><strong>Extended Thinking:</strong> Bloco colapsável com raciocínio interno do modelo</li>
+      <li><strong>Exportação por mensagem:</strong> ⬇ Markdown · ⬇ DOCX · ⬇ PDF em cada bubble</li>
+      <li><strong>Exportação sidebar:</strong> Relatório Padrão (busca "RELATÓRIO FINAL" do HERMES) · Relatório Estendido (todas as mensagens em PDF)</li>
+      <li><strong>Exclusão de mensagem:</strong> Remove do banco e da UI. Se for resposta do assistente, oferece reexecutar a fase com a mesma entrada</li>
+      <li><strong>BackupModal (admin):</strong> Lista, gera e baixa backups <code>.sql.gz</code> via endpoint autenticado</li>
+      <li><strong>Upload de arquivos:</strong> PDF, DOCX, TXT, XLSX/XLS, CSV, JSON, imagens (OCR)</li>
+      <li><strong>Interceptador JWT 401:</strong> Auto-logout automático quando o token expira</li>
+      <li><strong>Botão 🔗 Link do Cliente:</strong> Sidebar (visível para admin/analista quando há projeto ativo) — copia URL permanente <code>&lt;origin&gt;/api/v1/painel/project/&lt;id&gt;?token=&lt;jwt&gt;</code> para o clipboard</li>
+      <li><strong>Role <code>cliente</code> — modo leitura:</strong> Sem Nova Sessão, sem Painel KRATOS, sem Gerar Relatório, sem Exportar, sem botão Excluir. Banner "Modo leitura" no footer</li>
+    </ul>
+
+    <h3>Variáveis de Ambiente (.env)</h3>
+    <pre>ANTHROPIC_API_KEY=sk-ant-...        <span class="comment"># obrigatório</span>
+ANTHROPIC_MODEL=claude-opus-4-7     <span class="comment"># modelo em uso</span>
+TAVILY_API_KEY=tvly-...             <span class="comment"># obrigatório para KLIO/KRATOS</span>
+DATABASE_URL=postgres://postgres:postgres@olympus_db:5432/olympus
+JWT_SECRET=olympus_super_secret_key_2026
+ALLOWED_ORIGIN=http://localhost:80
+SMTP_HOST=...                       <span class="comment"># opcional — alertas por e-mail KRATOS</span>
+SMTP_PORT=587
+SMTP_USER=...
+SMTP_PASS=...
+VOYAGE_API_KEY=pa-...               <span class="comment"># RAG — Voyage AI voyage-3-lite 512 dims (dash.voyageai.com)</span>
+INLABS_EMAIL=...                    <span class="comment"># DOU — inlabs.in.gov.br (cadastro gratuito)</span>
+INLABS_PASSWORD=...
+ITU_EMAIL=...                       <span class="comment"># ITU DataHub — datahub.itu.int (cadastro gratuito)</span>
+ITU_PASSWORD=...</pre>
+    <div class="callout warn">
+      <strong>⚠ Regra crítica do .env</strong>
+      Cada variável em sua própria linha. <code>\n</code> literal concatena variáveis e envia chaves malformadas para as APIs.
+    </div>
+  </section>
+
+  <!-- 7 -->
+  <section id="s7">
+    <div class="section-header">
+      <div class="section-num">7</div>
+      <h2>O Que Foi Feito e Funcionou</h2>
+    </div>
+
+    <h3>Sprint 1–2 (Monolito)</h3>
+    <ul>
+      <li>Arquitetura inicial funcional com 7 agentes no master prompt</li>
+      <li><code>projetoRef</code> e <code>sessionLock</code> para closure stale e concorrência</li>
+      <li><code>sincronizarProjeto()</code> extrai Ficha de Escopo via parsing de tabela markdown</li>
+      <li>Retry com backoff escalonado para a API Anthropic</li>
+    </ul>
+
+    <h3>Sprint 3 — Migração OLYMPUS v4</h3>
+    <ul>
+      <li>Monorepo NPM Workspaces + PostgreSQL + Drizzle ORM</li>
+      <li>Dockerização completa (3 contêineres + Nginx)</li>
+      <li>Sistema de autenticação JWT com 2FA</li>
+      <li>Motor Dinâmico de Metodologias (auto-seed no primeiro acesso)</li>
+      <li>Guardrails anti-alucinação na ferramenta <code>consultar_agente</code></li>
+      <li>KRONOS: fila assíncrona com cooldown para monitoramento KRATOS</li>
+      <li>Módulo de backup corporativo (<code>pg_dump</code> → <code>.sql.gz</code>)</li>
+    </ul>
+
+    <h3>Resolução dos Bugs do SDK v6 (23–24 Abr 2026)</h3>
+    <ul>
+      <li>4 bugs sobrepostos identificados e corrigidos (ver seção 8)</li>
+      <li>Prompt HERMES reescrito com regra única e sem blocos contraditórios</li>
+      <li>Trimming do histórico: <code>.slice(-12)</code> previne context bloat</li>
+      <li><code>proxy_read_timeout 300s</code> no Nginx previne HTTP 504</li>
+    </ul>
+
+    <h3>Funcionalidades UX + SSE (24 Abr 2026)</h3>
+    <ul>
+      <li>Modal de Nova Sessão com 6 campos + upload + seletor de metodologia</li>
+      <li>SSE streaming: <code>POST /api/v1/chat/stream</code> + helper <code>callChatStream</code> no frontend</li>
+      <li>BackupModal: lista, gera e baixa backups com botão por linha</li>
+      <li>XLSX/XLS adicionados ao file picker (SheetJS já suportava no extract.ts)</li>
+      <li>Reiniciar fase: após excluir resposta do assistente, oferece reexecutar</li>
+      <li>Exportação inteligente: busca "RELATÓRIO FINAL PADRÃO" do HERMES</li>
+      <li>Exclusão de mensagem individual com confirmação + deleção no banco</li>
+    </ul>
+
+    <h3>Sprint 5 — Dados Abertos + RAG + Streaming (25 Abr 2026)</h3>
+    <ul>
+      <li><strong>buscar_dados_publicos</strong> com 51 indicadores em 9 fontes: BCB/SGS · IBGE · IPEA · Comex Stat · Banco Mundial · FMI/WEO · OMS/WHO · ONU Population · IBGE Países · ITU DataHub</li>
+      <li>DOU Seção 1 via INLABS (JWT com cache 6h) — parâmetro <code>termo_dou</code></li>
+      <li>IBGE Países: perfil + turistas + educação; tabela ISO3→ISO2 com 50+ países</li>
+      <li>ITU DataHub: 5 indicadores TIC com Bearer auth (cache 6h); credenciais em <code>ITU_EMAIL</code>/<code>ITU_PASSWORD</code></li>
+      <li>pgvector RAG: imagem <code>pgvector/pgvector:pg15</code>, tabela <code>embeddings vector(512)</code>, Voyage AI <code>voyage-3-lite</code>, auto-index no upload, rotas <code>/api/v1/embeddings/</code></li>
+      <li>Constraint de build identificada: <code>packages/tools</code> não pode importar <code>@olympus/db</code> → <code>ragTool</code> movido para <code>apps/api/src/tools/rag.ts</code></li>
+      <li>Token streaming real: <code>streamText</code> no <code>Agent.ts</code> quando <code>context.onToken</code> definido; SSE emite <code>{type:'token', text:delta}</code>; bolha HERMES com cursor piscante no frontend</li>
+    </ul>
+
+    <h3>Sprint 6 — Expansão Metodológica + Acesso Cliente (25 Abr 2026)</h3>
+    <ul>
+      <li>Prompts MSEF v2 completos para os 7 agentes: HERMES com fluxo de 7 etapas explícito + Relatório Final Padrão; SCOPUS com Ficha de Escopo completa (8 campos); KLIO com PESTEL + Matriz Impacto×Incerteza; PYTHIA com Etapas 3-4 (incertezas → eixos → Matriz 2×2 → Q1-Q4 com probabilidades %); MNEMOSYNE com 7 componentes por cenário (mín. 400 palavras); THEMIS com implicações × dimensão + tabela de alertas precoces; KRATOS com formato de Relatório de Acompanhamento padronizado e semáforo</li>
+      <li><code>TOOL_JSON_SCHEMAS</code> em <code>Agent.ts</code>: todos os 51 indicadores em <code>buscar_dados_publicos</code> + parâmetros <code>pais</code> (ISO3) e <code>termo_dou</code>; schema <code>buscar_documentos_internos</code> adicionado; enum fixo de <code>agent_name</code> removido do <code>consultar_agente</code> (suporta HERMES_GRUMBACH, HERMES_GODET)</li>
+      <li><code>HERMES_GRUMBACH</code> (4 fases: Conjuntura → Variáveis → Cenários Tendencial/Pessimista/Otimista → Estratégias) e <code>HERMES_GODET</code> (5 fases: MICMAC → MACTOR → Morfologia → Probabilidades SMIC → Opções Estratégicas) adicionados ao <code>seed.ts</code>; metodologias GRUMBACH e GODET apontam para os novos orquestradores</li>
+      <li>Rota <code>GET /api/v1/painel/project/:id</code> em <code>painel.ts</code>: HTML completo com Dashboard de Indicadores (7 colunas, limiares 🟡/🔴), Relatório Estratégico com markdown renderizado e botão imprimir, marca d'água CONFIDENCIAL; auth via <code>?token=</code> para URL compartilhável</li>
+      <li>Botão <code>🔗 Link do Cliente</code> na sidebar (admin/analista + projeto ativo): copia URL permanente com JWT embutido para o clipboard</li>
+      <li>Role <code>cliente</code> passa a ser somente-leitura: sem Nova Sessão, sem KRATOS, sem exportação, sem exclusão de mensagens; banner "Modo leitura" no footer</li>
+    </ul>
+  </section>
+
+  <!-- 8 -->
+  <section id="s8">
+    <div class="section-header">
+      <div class="section-num">8</div>
+      <h2>O Que Deu Errado (Para Não Repetir)</h2>
+    </div>
+
+    <div class="bug-entry">
+      <h4>8.1 — A Guerra de Instâncias Zod (Dual-Package Hazard)</h4>
+      <div class="bug-row"><span class="bug-label">Sintoma</span>Erro <code>tools.0.custom.input_schema.type: Field required</code> da API Anthropic</div>
+      <div class="bug-row"><span class="bug-label">Causa</span>Duas instâncias físicas do Zod no monorepo — <code>instanceof ZodObject</code> retornava <code>false</code></div>
+      <div class="bug-row"><span class="bug-label">Solução definitiva</span>Abandonar Zod completamente no Agent.ts. Schemas são objetos JavaScript puros embrulhados em <code>jsonSchema()</code> da Vercel</div>
+    </div>
+
+    <div class="bug-entry">
+      <h4>8.2 — Campo Errado: <code>parameters</code> vs <code>inputSchema</code></h4>
+      <div class="bug-row"><span class="bug-label">Sintoma</span>Tool calling não enviava <code>input_schema</code> para a Anthropic</div>
+      <div class="bug-row"><span class="bug-label">Causa</span>O adaptador <code>@ai-sdk/anthropic</code> lê <code>tool.inputSchema</code>, não <code>parameters</code></div>
+      <div class="bug-row"><span class="bug-label">Solução</span><code>(myTool as any).inputSchema = () => jsonSchema(rawSchema as any);</code></div>
+    </div>
+
+    <div class="bug-entry">
+      <h4>8.3 — <code>maxSteps</code> silenciosamente ignorado no SDK v6</h4>
+      <div class="bug-row"><span class="bug-label">Sintoma</span>Ferramenta era invocada mas não havia síntese — <code>response.text</code> vazio</div>
+      <div class="bug-row"><span class="bug-label">Causa</span>No <code>ai@6.0.168</code>, <code>maxSteps</code> foi removido. Default é <code>stepCountIs(1)</code></div>
+      <div class="bug-row"><span class="bug-label">Solução</span><code>stopWhen: stepCountIs(10)</code></div>
+    </div>
+
+    <div class="bug-entry">
+      <h4>8.4 — <code>toolChoice: 'required'</code> bloqueando a síntese</h4>
+      <div class="bug-row"><span class="bug-label">Sintoma</span><code>response.text</code> continuava vazio mesmo com loop correto</div>
+      <div class="bug-row"><span class="bug-label">Causa</span><code>toolChoice: 'required'</code> se aplica a todos os steps — impede síntese</div>
+      <div class="bug-row"><span class="bug-label">Solução</span><code>prepareStep: async ({stepNumber}) => ({ toolChoice: stepNumber === 0 ? "required" : "auto" })</code></div>
+    </div>
+
+    <div class="bug-entry">
+      <h4>8.5 — <code>inputSchema</code> com objeto bare (sem <code>validate</code>)</h4>
+      <div class="bug-row"><span class="bug-label">Sintoma</span><code>execute</code> nunca era invocado</div>
+      <div class="bug-row"><span class="bug-label">Causa</span>Objeto bare sem <code>validate()</code> — o SDK chama <code>asSchema()</code> e valida os args. Sem <code>validate</code>, falha silenciosamente</div>
+      <div class="bug-row"><span class="bug-label">Solução</span>Retornar <code>jsonSchema()</code> completo (com validate passthrough)</div>
+    </div>
+
+    <div class="bug-entry">
+      <h4>8.6 — Prompt HERMES com instruções contraditórias</h4>
+      <div class="bug-row"><span class="bug-label">Sintoma</span>HERMES ignorava a obrigação de usar ferramentas e respondia diretamente</div>
+      <div class="bug-row"><span class="bug-label">Causa</span>Bloco <code>[INICIALIZAÇÃO DA SESSÃO]</code> com "NÃO USE FERRAMENTAS" vinha depois da regra "SEMPRE invoque consultar_agente", sobrescrevendo-a</div>
+      <div class="bug-row"><span class="bug-label">Solução</span>Reescrever o prompt com regra única, sem exceções, sem blocos contraditórios</div>
+    </div>
+
+    <div class="bug-entry">
+      <h4>8.7 — Histórico ilimitado encolhendo respostas a cada turno</h4>
+      <div class="bug-row"><span class="bug-label">Sintoma</span>Respostas de 5.000 chars na primeira mensagem → 2.000 → 500 → "Análise concluída."</div>
+      <div class="bug-row"><span class="bug-label">Causa</span>Histórico completo enviado para a API — contexto disponível para síntese ficava mínimo</div>
+      <div class="bug-row"><span class="bug-label">Solução</span><code>.slice(0, -1).slice(-12)</code> — máximo de 12 mensagens</div>
+    </div>
+
+    <div class="bug-entry">
+      <h4>8.8 — CMD do Dockerfile rodando <code>tsx</code> em vez do <code>dist/</code></h4>
+      <div class="bug-row"><span class="bug-label">Sintoma</span>Após rebuild limpo, erros de schema voltavam</div>
+      <div class="bug-row"><span class="bug-label">Causa</span><code>CMD ["npx", "tsx", ...]</code> em produção — pacotes internos resolvidos pelo dist/ inconsistente</div>
+      <div class="bug-row"><span class="bug-label">Solução</span><code>CMD ["node", "apps/api/dist/index.js"]</code></div>
+    </div>
+
+    <div class="bug-entry">
+      <h4>8.9 — <code>.env</code> com variáveis concatenadas na mesma linha</h4>
+      <div class="bug-row"><span class="bug-label">Sintoma</span>TAVILY_API_KEY inválida — HTTP 403 no Tavily</div>
+      <div class="bug-row"><span class="bug-label">Causa</span>Variáveis separadas por <code>\n</code> literal ficavam na mesma linha do arquivo</div>
+      <div class="bug-row"><span class="bug-label">Diagnóstico</span><code>docker exec olympus_api sh -c "printenv | grep -i tavily"</code></div>
+    </div>
+
+    <div class="bug-entry">
+      <h4>8.10 — Nginx com timeout padrão de 60s</h4>
+      <div class="bug-row"><span class="bug-label">Sintoma</span>HTTP 504 em análises completas (~97s). API gerava resposta com sucesso, cliente recebia 504</div>
+      <div class="bug-row"><span class="bug-label">Solução</span><code>proxy_read_timeout 300s</code> no bloco <code>/api/</code> do nginx.conf</div>
+    </div>
+
+    <div class="bug-entry">
+      <h4>8.11 — <code>maxTokens</code> insuficiente truncando respostas</h4>
+      <div class="bug-row"><span class="bug-label">Sintoma</span>Agentes executavam buscas mas entregavam frases de desculpa</div>
+      <div class="bug-row"><span class="bug-label">Causa</span><code>maxTokens: 4096</code> não tinha espaço para a síntese final com contexto de busca</div>
+      <div class="bug-row"><span class="bug-label">Solução</span><code>maxTokens: 32000</code> para etapa e thinking; <code>16000</code> para passagem</div>
+    </div>
+  </section>
+
+  <!-- 9 -->
+  <section id="s9">
+    <div class="section-header">
+      <div class="section-num">9</div>
+      <h2>⛔ Regras Críticas — Nunca Violar</h2>
+    </div>
+
+    <div class="rule-card">
+      <h4>9.1 — Zod não entra no Agent.ts</h4>
+      <div class="table-wrap" style="margin-top:10px">
+        <table>
+          <thead><tr><th>Sugestão a recusar</th><th>Por que falha</th></tr></thead>
+          <tbody>
+            <tr><td><code>parameters: z.object({...})</code></td><td><code>instanceof</code> falha entre pacotes no monorepo</td></tr>
+            <tr><td><code>maxSteps: N</code></td><td>Ignorado silenciosamente no SDK v6 — usar <code>stopWhen: stepCountIs(N)</code></td></tr>
+            <tr><td><code>toolChoice: 'required'</code> sem <code>prepareStep</code></td><td>Bloqueia síntese em todos os steps</td></tr>
+            <tr><td><code>inputSchema: { type: "object", ... }</code> (JSON bare)</td><td><code>asSchema()</code> da Vercel rejeita JSON sem wrapper</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p style="margin-top:10px;font-size:13px">✅ <strong>Único padrão correto:</strong></p>
+      <pre style="margin-top:6px">parameters: jsonSchema(OBJETO_JS_PURO <span class="keyword">as any</span>)
+<span class="comment">// + após criar o tool():</span>
+(myTool <span class="keyword">as any</span>).inputSchema = () => jsonSchema(rawSchema <span class="keyword">as any</span>);</pre>
+    </div>
+
+    <div class="rule-card">
+      <h4>9.2 — Prompt do HERMES — regra de ouro</h4>
+      <p style="font-size:13px">Nunca adicionar blocos que isentem o HERMES de usar ferramentas. Qualquer instrução "neste caso não use ferramentas" conflita com a regra absoluta e o LLM seguirá a exceção. Se precisar de comportamento diferenciado por contexto, usar <code>prepareStep</code> no SDK — não o prompt.</p>
+    </div>
+
+    <div class="rule-card">
+      <h4>9.3 — CMD em produção sempre aponta para <code>dist/</code></h4>
+      <pre><span class="comment"># PRODUÇÃO (correto):</span>
+CMD ["node", "apps/api/dist/index.js"]
+
+<span class="comment"># DESENVOLVIMENTO (apenas local, nunca no Dockerfile):</span>
+CMD ["npx", "tsx", "apps/api/src/index.ts"]</pre>
+    </div>
+  </section>
+
+  <!-- 10 -->
+  <section id="s10">
+    <div class="section-header">
+      <div class="section-num">10</div>
+      <h2>Template Canônico para Novas Ferramentas</h2>
+    </div>
+
+    <div class="callout warn">
+      <strong>⚠ Regra de build do monorepo</strong>
+      O Dockerfile compila na ordem <code>core → tools → db → api</code>. Portanto, <code>packages/tools</code> <strong>não pode importar</strong> <code>@olympus/db</code>. Ferramentas que precisam de acesso ao banco (ex: <code>ragTool</code>) devem ficar em <code>apps/api/src/tools/</code>, onde <code>@olympus/db</code> já está compilado.
+    </div>
+
+    <h3>Passo 1 — Definir lógica em <code>packages/tools/src/</code> (sem DB) ou <code>apps/api/src/tools/</code> (com DB)</h3>
+    <pre><span class="keyword">export const</span> minhaFerramenta = {
+  name: <span class="string">"minha_ferramenta"</span>,
+  description: <span class="string">"Descrição clara do que a ferramenta faz."</span>,
+  execute: <span class="keyword">async</span> (args: { parametro: string }, context: any): Promise&lt;string&gt; => {
+    <span class="keyword">return</span> resultado;
+  },
+};</pre>
+
+    <h3>Passo 2 — Registrar schema puro em <code>packages/core/src/Agent.ts</code></h3>
+    <pre><span class="keyword">const</span> TOOL_JSON_SCHEMAS: Record&lt;string, object&gt; = {
+  minha_ferramenta: {
+    type: <span class="string">"object"</span>,
+    properties: {
+      parametro: { type: <span class="string">"string"</span>, description: <span class="string">"Descrição do parâmetro"</span> }
+    },
+    required: [<span class="string">"parametro"</span>]
+  }
+};</pre>
+
+    <h3>Passo 3 — Rebuild obrigatório após alterar <code>packages/core</code></h3>
+    <pre>docker compose build --no-cache api
+docker compose up -d</pre>
+  </section>
+
+  <!-- 11 -->
+  <section id="s11">
+    <div class="section-header">
+      <div class="section-num">11</div>
+      <h2>Guia Operacional</h2>
+    </div>
+
+    <h3>11.1 — Fluxo Normal de Rebuild</h3>
+    <pre><span class="comment"># Após alterar API ou packages/:</span>
+docker compose build --no-cache api
+docker compose up -d
+docker compose logs -f api
+
+<span class="comment"># Após alterar apenas o frontend:</span>
+docker compose build --no-cache web
+docker compose up -d</pre>
+
+    <h3>11.2 — Reset Nuclear</h3>
+    <pre><span class="comment"># 1. Zerar tudo</span>
+wsl --shutdown
+docker compose down -v --rmi all
+docker system prune -a -f --volumes
+
+<span class="comment"># 2. Reinstalar dependências</span>
+npm install
+
+<span class="comment"># 3. Build e subida completa</span>
+docker compose build --no-cache
+docker compose up -d
+
+<span class="comment"># 4. OBRIGATÓRIO após -v: criar extensão e aplicar schema</span>
+docker exec olympus_db psql -U postgres -d olympus -c "CREATE EXTENSION IF NOT EXISTS vector;"
+cd packages/db
+npx drizzle-kit push
+cd ../..
+
+<span class="comment"># 5. OPCIONAL — repovoar banco com agentes e metodologias</span>
+$env:DATABASE_URL = "postgres://postgres:postgres@localhost:5432/olympus"
+npx tsx apps/api/src/scripts/seed.ts
+
+<span class="comment"># 6. Verificar saúde</span>
+docker compose logs -f api</pre>
+
+    <h4>Armadilhas do reset nuclear</h4>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Erro</th><th>Causa</th><th>Solução</th></tr></thead>
+        <tbody>
+          <tr><td><code>relation "projects" does not exist</code></td><td>Schema não aplicado após <code>-v</code></td><td>Rodar passo 4</td></tr>
+          <tr><td><code>type "vector(512)" does not exist</code></td><td>Extensão pgvector não criada antes do push</td><td><code>docker exec olympus_db psql -U postgres -d olympus -c "CREATE EXTENSION IF NOT EXISTS vector;"</code></td></tr>
+          <tr><td><code>unknown command 'push'</code></td><td>drizzle-kit desatualizado</td><td>Atualizar para <code>^0.31.10</code> — comando é <code>push</code> (sem <code>:pg</code>)</td></tr>
+          <tr><td><code>ECONNREFUSED 172.x.x.x:5432</code> no startup</td><td>Race condition: API sobe antes do Postgres</td><td>Corrigido no <code>index.ts</code> com retry (10x, 3s)</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>11.3 — Limpeza Simples (sem apagar volume)</h3>
+    <pre><span class="comment"># Para a API, reconstrói e reinicia — banco intacto</span>
+docker compose stop api
+docker compose build --no-cache api
+docker compose up -d api
+docker compose logs -f api</pre>
+    <div class="callout info">
+      <strong>Atenção:</strong> <code>docker compose down</code> (sem <code>-v</code>) preserva volumes. <code>docker system prune -f</code> (sem <code>--volumes</code>) também preserva volumes. O banco só é perdido com <code>-v</code> ou <code>--volumes</code>.
+    </div>
+
+    <h3>11.4 — Configuração WSL2</h3>
+    <p>Criar <code>%USERPROFILE%\.wslconfig</code>:</p>
+    <pre>[wsl2]
+memory=8GB
+processors=4
+swap=2GB</pre>
+    <p>Se o Docker travar com <code>input/output error</code> durante o build: <code>wsl --shutdown</code> + <em>Clean/Purge data</em> nas configurações de Troubleshooting do Docker Desktop.</p>
+  </section>
+
+  <!-- 12 -->
+  <section id="s12">
+    <div class="section-header">
+      <div class="section-num">12</div>
+      <h2>Backlog Atualizado</h2>
+    </div>
+
+    <h3>✅ Concluído</h3>
+    <ul class="done-list">
+      <li>Web search via Tavily — KLIO e KRATOS com dados reais (A2)</li>
+      <li>Upload ampliado: PDF, DOCX, TXT, imagens (OCR), CSV, JSON, XLSX/XLS (A3)</li>
+      <li>Agentes reais com tool_use — consultar_agente + web_search via SDK (B1)</li>
+      <li>Monitoramento automático KRATOS — cron via KRONOS + fila com cooldown (B3)</li>
+      <li>Painel cliente com extração automática de cenário e indicadores (B4)</li>
+      <li>Autenticação JWT com roles + 2FA (TOTP) (B5)</li>
+      <li>Motor Dinâmico de Metodologias — agentes e prompts via banco de dados</li>
+      <li>Integração nativa por e-mail (Nodemailer) para alertas KRATOS</li>
+      <li>Módulo de Backup Corporativo (pg_dump → .sql.gz) + download autenticado</li>
+      <li>Exportação DOCX com markdown inline (bold, italic, code)</li>
+      <li>Exportação por mensagem individual (inline DOCX + PDF)</li>
+      <li>Relatório Padrão: localiza automaticamente o "RELATÓRIO FINAL PADRÃO" do HERMES</li>
+      <li>Exclusão de mensagem individual + opção de reexecutar fase</li>
+      <li>Histórico de análises com data e hora</li>
+      <li>Modal de Nova Sessão com 6 campos + upload de contexto + seletor de metodologia</li>
+      <li>Tela de boas-vindas no estado vazio</li>
+      <li>Login sempre obrigatório (sem auto-login por localStorage)</li>
+      <li>SSE streaming: rota /chat/stream + indicador de agente ativo em tempo real</li>
+      <li>BackupModal admin: lista, gera e baixa backups com botão por linha</li>
+      <li>Metodologia dinâmica: seletor na UI → salvo no banco → enviado ao chat</li>
+      <li>Varredura e limpeza: 36 arquivos mortos/debug removidos</li>
+      <li>Bug Agent.ts: assinatura com '.' em vez de '·' corrigida</li>
+      <li>chat.ts: metodologia hardcoded removida — usa body.metodologia dinamicamente</li>
+      <li>types.ts: union type fixo substituído por string livre (motor dinâmico)</li>
+      <li>backup.ts: verificação de role admin adicionada (falha de segurança)</li>
+      <li>index.ts: race condition startup DB→API corrigida com retry (10×, 3s)</li>
+      <li>chat.ts: refatorado — runAnalysis() compartilhado entre rota síncrona e SSE</li>
+    </ul>
+
+    <h3 style="margin-top:28px">✅ Sprint 5 + Pré-rebuild — Concluído (25 Abr 2026)</h3>
+    <ul class="done-list">
+      <li><strong>IPEA + DOU + Comex Stat:</strong> IPEA Data (5 séries OData), Comex Stat MDic (EXP/IMP/balança), DOU Seção 1 via INLABS (auth JWT com cache 6h)</li>
+      <li><strong>Internacionais — Banco Mundial:</strong> 11 indicadores (PIB, crescimento, inflação, conta corrente, dívida, IDE, desemprego, população, Gini, exportações, importações)</li>
+      <li><strong>Internacionais — FMI/WEO:</strong> 6 indicadores com previsões marcadas com * (crescimento, inflação, conta corrente, dívida, desemprego, saldo fiscal)</li>
+      <li><strong>Internacionais — OMS/WHO GHO:</strong> 4 indicadores (expectativa de vida, mortalidade infantil/materna, cobertura vacinas)</li>
+      <li><strong>Internacionais — ONU Population:</strong> 2 indicadores (população total, crescimento). Parâmetro <code>pais</code> ISO3 para todas as fontes</li>
+      <li><strong>IBGE Países:</strong> 3 indicadores — perfil do país, turistas internacionais (77818), gasto em educação (77819). ISO3→ISO2 (50+ países)</li>
+      <li><strong>ITU DataHub:</strong> 5 indicadores TIC — internet, celular, banda larga fixa/móvel, IDI. Bearer auth com cache 6h</li>
+      <li><strong>Total buscar_dados_publicos:</strong> 51 indicadores · 9 fontes. Constraint: tools com DB ficam em <code>apps/api/src/tools/</code></li>
+      <li><strong>pgvector RAG:</strong> imagem <code>pgvector/pgvector:pg15</code>, tabela <code>embeddings vector(512)</code>, tool <code>buscar_documentos_internos</code>, auto-index no upload, rotas <code>/api/v1/embeddings/</code></li>
+      <li><strong>Token streaming real:</strong> <code>streamText</code> no <code>Agent.ts</code>; SSE emite <code>{type:'token'}</code>; bolha HERMES com cursor piscante no frontend</li>
+      <li><strong>Dashboard KRATOS enriquecido:</strong> barra de proporção verde/amarelo/vermelho; cards ordenados por severidade; thresholds e <code>lastCheckedAt</code> exibidos; alerta com contagem exata</li>
+      <li><strong>API pública — Swagger UI:</strong> <code>GET /api/docs</code> com <code>@hono/swagger-ui</code>; spec OpenAPI 3.0.3 cobrindo todos os endpoints (Auth · Sessions · Chat · Indicators · Embeddings · Extract · Users · Engine · Backup)</li>
+      <li><strong>drizzle-kit</strong> <code>0.20.18</code> → <code>0.31.10</code> · <strong>drizzle-orm</strong> <code>0.30.10</code> → <code>0.45.2</code>; <code>dialect:"postgresql"</code>, comando <code>push</code> (sem <code>:pg</code>); workaround de schema removido</li>
+    </ul>
+
+    <h3 style="margin-top:28px">✅ Sprint 6 — Concluído (25 Abr 2026)</h3>
+    <ul class="done-list">
+      <li><strong>Prompts MSEF v2:</strong> todos os 7 agentes reescritos com entregáveis, regras de formatação e estrutura metodológica explícita por etapa</li>
+      <li><strong>TOOL_JSON_SCHEMAS completo:</strong> 51 indicadores em <code>buscar_dados_publicos</code> + <code>pais</code> + <code>termo_dou</code>; schema <code>buscar_documentos_internos</code>; enum fixo de <code>agent_name</code> removido</li>
+      <li><strong>HERMES_GRUMBACH:</strong> orquestrador 4 fases — Conjuntura · Variáveis · Cenários (Tendencial/Pessimista/Otimista) · Estratégias de Resposta</li>
+      <li><strong>HERMES_GODET:</strong> orquestrador 5 fases — MICMAC · MACTOR · Morfologia · Probabilidades SMIC · Opções Estratégicas</li>
+      <li><strong>Metodologias GRUMBACH e GODET</strong> no <code>seed.ts</code> com <code>agentsConfig</code> correto; todas as 7 metodologias revisadas</li>
+      <li><strong>Painel Cliente v2:</strong> rota <code>GET /api/v1/painel/project/:id</code> — HTML completo com dashboard de indicadores (7 colunas + limiares 🟡/🔴), relatório markdown, CONFIDENCIAL, auth via <code>?token=</code></li>
+      <li><strong>Botão 🔗 Link do Cliente:</strong> sidebar copia URL permanente com JWT embutido para o clipboard</li>
+      <li><strong>Role <code>cliente</code> — modo leitura:</strong> Nova Sessão, KRATOS, exportação e exclusão de mensagens desabilitados; banner no footer</li>
+    </ul>
+
+    <h3 style="margin-top:28px">✅ Sprint 7 — Railway Deploy + PoC Presencial (Maio 2026)</h3>
+    <ul class="done-list">
+      <li><strong>nginx.conf refatorado:</strong> <code>proxy_pass ${RAILWAY_API_URL}/api/</code> — URL injetada por envsubst no startup do container web; <code>proxy_buffering off</code> + <code>proxy_cache off</code> para SSE; headers <code>X-Real-IP</code>, <code>X-Forwarded-For</code>, <code>X-Forwarded-Proto</code></li>
+      <li><strong>Dockerfile.api:</strong> <code>node:20-slim</code> (Debian) + HEALTHCHECK nativo em <code>node -e</code> (sem curl; <code>--start-period=60s</code> para cold start)</li>
+      <li><strong>Dockerfile.web:</strong> CMD executa envsubst antes de nginx; fallback <code>RAILWAY_API_URL=http://api:3333</code> para Docker local sem variável definida</li>
+      <li><strong>docker-compose.yml reescrito:</strong> imagens explícitas (<code>olympus/api:latest</code>, <code>olympus/web:latest</code>) para <code>docker save</code>; postgres com healthcheck <code>pg_isready</code>; API com <code>depends_on: condition: service_healthy</code> — elimina race condition de startup</li>
+      <li><strong>railway.toml criado:</strong> <code>builder=DOCKERFILE</code>, <code>dockerfilePath=Dockerfile.api</code>, <code>healthcheckPath=/ping</code>, timeout 300s, restart <code>ON_FAILURE</code></li>
+      <li><strong>.env.railway.example criado:</strong> template comentado com as 13 variáveis; nota explícita que <code>DATABASE_URL</code> e <code>PORT</code> são injetados automaticamente pelo Railway</li>
+      <li><strong>RAILWAY_DEPLOY.md criado:</strong> guia 8 passos — Railway project → Postgres addon → pgvector → serviço API → serviço Web → CORS → seed → domínio próprio; tabela de variáveis; troubleshooting 7 cenários; custo estimado ~USD 12/mês</li>
+      <li><strong>scripts/poc-offline/build-offline.ps1:</strong> builder na máquina do analista — <code>docker compose build --no-cache</code> → <code>docker pull pgvector:pg15</code> → <code>docker save</code> das 3 imagens em único tar → copia arquivos de suporte para <code>dist-poc\</code></li>
+      <li><strong>scripts/poc-offline/docker-compose.offline.yml:</strong> Compose sem build, usa imagens pré-carregadas; <code>restart: unless-stopped</code>; <code>RAILWAY_API_URL=http://api:3333</code></li>
+      <li><strong>scripts/poc-offline/instalar.ps1:</strong> instalador Windows 6 etapas — verifica Docker + tar + .env; <code>docker load</code>; <code>docker compose up -d</code>; health check 20×3s em <code>http://localhost:3333/ping</code>; abre navegador automaticamente</li>
+      <li><strong>scripts/poc-offline/GUIA_POC.md:</strong> guia end-user — Docker Desktop único pré-requisito, 3 passos, troubleshooting, nota de privacidade (dados 100% locais)</li>
+      <li><strong>ARCHITECTURE.html criado:</strong> mapa visual completo — 11 seções, sidebar TOC, flow diagrams, agent cards, rotas com badges, schema cards, 9 regras críticas, env vars, comandos</li>
+      <li><strong>AGENT_CONTEXT.json criado:</strong> contexto machine-readable para o próximo agente — stack, 8 regras críticas com id/rule/reason/correct, 9 tabelas DB com schema, 3 metodologias + ferramentas, rotas, padrões addNewRoute/Tool/Agent, backlog, custos</li>
+    </ul>
+
+    <h3 style="margin-top:28px">✅ Sprint 8 — ICD 203 · TechniqueEngine · NATO AltA · Step Streaming (19 Mai 2026)</h3>
+    <ul class="done-list">
+      <li><strong>ICD 203 — Padrões Analíticos (3 tools):</strong> <code>declarar_julgamento</code> (grau probabilidade padronizado: remoto→quase certo + nível de confiança + indicadores de alteração + premissa linchpin), <code>registrar_hipotese_alternativa</code> (hipótese principal + alternativas c/ probabilidade, pontos fracos e indicadores de ativação + racional de rejeição), <code>avaliar_fonte</code> (URL + tipo + fidelidade ao documento + possibilidade NeD + credibilidade). Schemas JSON puros registrados em <code>Agent.ts</code> e <code>chat.ts</code>.</li>
+      <li><strong>HERMES_REVISOR + <code>analytic_reviews</code>:</strong> Agente dedicado a revisão de qualidade analítica (McMahon 2024). Tabela Drizzle: <code>status</code> (aprovado / aprovado_com_ressalvas / requer_revisao / nao_revisado), <code>atsCompliance</code> (JSONB com score por padrão ATS), <code>notasRevisor</code>, <code>declaracaoPropriedade</code>, <code>reviewerName</code>, <code>reviewedAt</code>. Rota <code>POST /api/v1/analytic-review</code>. Modal de Revisão Analítica (botão ⚖️ na barra de ferramentas).</li>
+      <li><strong>TechniqueEngine (<code>apps/api/src/tools/technique-engine.ts</code>):</strong> Motor de injeção dinâmica de técnicas SAT em prompts de agentes. <code>getTechniqueInstructions(names[])</code> busca na tabela <code>techniques</code> e retorna bloco de prompt estruturado. <code>getAltATechniquesForSeed()</code> exporta 12 objetos de técnica para seed. Constraint arquitetural: deve residir em <code>apps/api/src/tools/</code> (importa <code>@olympus/db</code>).</li>
+      <li><strong>NATO Alternative Analysis (AltA) — metodologia completa:</strong> Baseada na <em>NATO AltA Handbook</em> (2017, 137 páginas). 12 técnicas SAT no seed: Estruturação (Premissas-Chave, PMI, Qualidade da Informação, Cinco Porquês), Criativas (E-Se, Futuros Alternos, Pensamento de Fora para Dentro), Diagnóstico (SWOT, Adversário Substituto), Desafio (Advocacia do Diabo, Pré-Mortem, Time A/Time B). 5 agentes AltA: <code>HERMES_ALTA</code> (orquestrador 4 fases: Iniciação → Preparação → Aplicação → Encerramento), <code>SCOPUS</code>, <code>KLIO</code>, <code>PYTHIA</code>, <code>THEMIS</code>. Metodologia <code>'ALTA'</code> com categoria <code>'Análise Alternativa'</code>.</li>
+      <li><strong>Streaming de etapas do raciocínio:</strong> <code>onStep?: (msg: string) =&gt; void</code> em <code>AgentContext</code> (<code>types.ts</code>). <code>Agent.ts</code>: <code>onStepFinish</code> no <code>sharedParams</code> do Vercel AI SDK v6 — emite progresso após cada step: tool call (ícone + resumo de args) ou texto (<code>💭 Sintetizando resposta...</code>). <code>TOOL_ICONS</code> + <code>stepLabel()</code> para 10 ferramentas. SSE emite <code>{type:'step', text:msg}</code>. Frontend: <code>stepLog: string[]</code> (últimas 7), renderizado com opacidade progressiva (0.5→1.0). Usuário vê em tempo real: <code>🌐 Buscando: "..."</code>, <code>📊 Dados: selic, ipca</code>, <code>🤖 Consultando SCOPUS...</code>.</li>
+      <li><strong>JSX Fragment fix (<code>App.tsx</code>):</strong> <code>return (...)</code> do componente principal envolvia apenas <code>&lt;div className="flex h-screen..."&gt;</code>, enquanto o Modal de Revisão estava como sibling fora do div — erro TS1005. Corrigido envolvendo tudo em <code>&lt;&gt;...&lt;/&gt;</code> (React Fragment).</li>
+    </ul>
+    <div class="callout" style="background:#e8f5e9;border-color:#4caf50;margin-top:12px">
+      <strong>Arquivos modificados no Sprint 8:</strong>
+      <code>packages/core/src/types.ts</code> &nbsp;·&nbsp;
+      <code>packages/core/src/Agent.ts</code> &nbsp;·&nbsp;
+      <code>apps/api/src/tools/technique-engine.ts</code> <em>(novo)</em> &nbsp;·&nbsp;
+      <code>apps/api/src/routes/chat.ts</code> &nbsp;·&nbsp;
+      <code>apps/web/src/App.tsx</code>
+    </div>
+
+    <h3 style="margin-top:28px">⛔ BLOQUEADORES — Caminho Crítico para o Primeiro Contrato</h3>
+    <div class="callout danger">
+      <strong>Infraestrutura pronta. Próxima ação: executar o deploy e gerar o pacote USB.</strong>
+      Toda capacidade técnica está construída e testada localmente. Bloqueador #1: criar conta Railway e seguir <code>RAILWAY_DEPLOY.md</code> (8 passos). Bloqueador #2: rodar <code>build-offline.ps1</code> na máquina com Docker para gerar <code>dist-poc\olympus-poc.tar</code>.
+    </div>
+    <div class="backlog-grid">
+      <div class="backlog-card high">
+        <div class="card-pri">🟡 Bloqueador #1 — Infraestrutura pronta</div>
+        <div class="card-title">Deploy Railway (C2)</div>
+        <div class="card-desc">Todos os arquivos prontos: <code>railway.toml</code>, <code>Dockerfile.api</code> com healthcheck, <code>Dockerfile.web</code> com envsubst, <code>.env.railway.example</code>, <code>RAILWAY_DEPLOY.md</code>. Ação: criar conta Railway → seguir os 8 passos → testar <code>/ping</code> → athena.stratsight.com.br via CNAME.</div>
+      </div>
+      <div class="backlog-card high">
+        <div class="card-pri">🟡 Bloqueador #2 — Scripts prontos</div>
+        <div class="card-title">PoC Presencial (A4 adaptado)</div>
+        <div class="card-desc">Scripts completos: <code>build-offline.ps1</code>, <code>docker-compose.offline.yml</code>, <code>instalar.ps1</code>, <code>GUIA_POC.md</code>. Ação: rodar <code>.\scripts\poc-offline\build-offline.ps1</code> na máquina Windows com Docker para gerar <code>dist-poc\olympus-poc.tar</code>. Copiar para USB e testar em máquina limpa.</div>
+      </div>
+    </div>
+
+    <h4>Sequência das 8 semanas</h4>
+    <ul class="next-list">
+      <li><strong>Sem 1–2 · Deploy Railway:</strong> executar os 8 passos do <code>RAILWAY_DEPLOY.md</code> → URL pública respondendo + análise MSEF completa em produção.</li>
+      <li><strong>Sem 2–3 · PoC presencial:</strong> rodar <code>build-offline.ps1</code> → USB gerado → instalação testada em máquina limpa (&lt; 8 min).</li>
+      <li><strong>Sem 3–5 · Primeira PoC formal (CEEx ou CIE):</strong> relatório entregue + NPS ≥ 8 + autorização de referência.</li>
+      <li><strong>Sem 5–8 · Pipeline para primeiro contrato:</strong> 3+ alvos ativos + proposta R$ 60K–120K em negociação.</li>
+    </ul>
+
+    <h3 style="margin-top:28px">🔲 Pendente — Prioridade Média (pós-deploy)</h3>
+    <div class="backlog-grid">
+      <div class="backlog-card medium">
+        <div class="card-pri">Média · Mês 5–6</div>
+        <div class="card-title">FRED API + Legislativo</div>
+        <div class="card-desc"><code>buscar_dados_publicos</code> ampliada com FRED (Federal Funds Rate, GDP, CPI) + dados Câmara/Senado. Dois gaps mais solicitados por analistas de defesa e governo.</div>
+      </div>
+      <div class="backlog-card medium">
+        <div class="card-pri">Média · Mês 5–6</div>
+        <div class="card-title">Ollama Local (A5 antecipado)</div>
+        <div class="card-desc"><code>LLM_PROVIDER=ollama</code> + Llama 3.3 70B. Provider Factory já pronta — só configurar. Reduz custo Anthropic ~70% em tarefas simples. Demonstrável como "soberania de processamento".</div>
+      </div>
+      <div class="backlog-card medium">
+        <div class="card-pri">Média · Mês 6–7</div>
+        <div class="card-title">Playbook Automatizado (C3)</div>
+        <div class="card-desc">Rota <code>POST /playbook/gerar</code> + DOCX com metodologia + prompts + cases. Base técnica pronta (Motor Dinâmico). Com 2 projetos reais no banco, gera o Playbook v1.0 automaticamente.</div>
+      </div>
+      <div class="backlog-card medium">
+        <div class="card-pri">Média · Mês 6</div>
+        <div class="card-title">Dashboard Gráficos KRATOS</div>
+        <div class="card-desc">Chart.js inline no painel de indicadores — gráfico de linha 30 dias por indicador. Tabela <code>indicators</code> já existe. Torna o painel cliente vendável em demonstrações.</div>
+      </div>
+      <div class="backlog-card medium">
+        <div class="card-pri">Média · Mês 6</div>
+        <div class="card-title">VPN + Dados Proprietários (B2)</div>
+        <div class="card-desc">Acesso a dados internos do cliente via VPN. Depende de deploy Railway ativo. Prioridade a ser ativada após C2.</div>
+      </div>
+      <div class="backlog-card medium">
+        <div class="card-pri">Média · Mês 6</div>
+        <div class="card-title">Sliding Window por Tokens</div>
+        <div class="card-desc">Substituir <code>.slice(-12)</code> (arbitrário) por janela baseada em token count (tiktoken). Previne degradação em análises de 20+ turnos.</div>
+      </div>
+    </div>
+
+    <h3 style="margin-top:28px">🔮 Futuro (Fase D)</h3>
+    <div class="backlog-grid">
+      <div class="backlog-card future">
+        <div class="card-pri">Futuro</div>
+        <div class="card-title">Fase D — LLM Soberano</div>
+        <div class="card-desc">Fine-tuning com dados MSEF · air-gapped para defesa · ativo de PI para exit Big Tech. Provider Factory já prepara a transição.</div>
+      </div>
+      <div class="backlog-card future">
+        <div class="card-pri">Futuro</div>
+        <div class="card-title">Sabiá-3 / LLM Soberano BR</div>
+        <div class="card-desc">Troca de provedor via <code>LLM_PROVIDER</code> sem reescrever o motor. Argumento de soberania para clientes de defesa.</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 13 -->
+  <section id="s13">
+    <div class="section-header">
+      <div class="section-num">13</div>
+      <h2>Riscos Identificados (Avaliação v2.1)</h2>
+    </div>
+
+    <h3>13.1 Riscos Técnicos</h3>
+    <div class="bug-entry">
+      <h4 style="color:var(--gold)">Esgotamento do limite Tavily gratuito</h4>
+      <div class="bug-row"><span class="bug-label">Contexto</span>Plano free: 1.000 req/mês. KLIO + KRATOS consomem buscas por análise. Com 2 clientes em monitoramento diário, o limite é insuficiente.</div>
+      <div class="bug-row"><span class="bug-label">Mitigação</span>Migrar para Tavily Starter (~USD 29/mês) após primeiro contrato. Incluir R$ 150/mês no modelo de custo. Brave Search API como fallback de custo zero.</div>
+    </div>
+    <div class="bug-entry">
+      <h4 style="color:var(--gold)">Race condition DB→API no Railway (cold start)</h4>
+      <div class="bug-row"><span class="bug-label">Contexto</span>Retry 10×3s funciona em Docker local. No Railway cold start, comportamento pode diferir — logs podem mostrar falha na conexão inicial.</div>
+      <div class="bug-row"><span class="bug-label">Mitigação</span>Configurar health check no Railway. Testar startup script. Documentar logs esperados.</div>
+    </div>
+    <div class="bug-entry">
+      <h4 style="color:var(--gold)">Context bloat em análises longas</h4>
+      <div class="bug-row"><span class="bug-label">Contexto</span><code>.slice(-12)</code> é arbitrário. Análises de 20+ turnos podem ter qualidade degradada mesmo com o fix aplicado.</div>
+      <div class="bug-row"><span class="bug-label">Mitigação</span>Implementar sliding window baseada em token count (tiktoken). Monitorar qualidade com análises longas antes de implementar.</div>
+    </div>
+    <div class="bug-entry">
+      <h4 style="color:var(--gold)">Dependência Voyage AI (RAG)</h4>
+      <div class="bug-row"><span class="bug-label">Contexto</span>Plano gratuito pode ser descontinuado. Não estava no orçamento original.</div>
+      <div class="bug-row"><span class="bug-label">Mitigação</span>Embeddings locais com <code>nomic-embed</code> via Ollama como alternativa. Migração facilitada pela Provider Factory já implementada.</div>
+    </div>
+
+    <h3>13.2 Riscos Operacionais e Estratégicos</h3>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Risco</th><th>Contexto</th><th>Mitigação</th></tr></thead>
+        <tbody>
+          <tr><td><strong>Deploy ausente bloqueia KRATOS</strong></td><td>Cron jobs do KRONOS dependem de servidor 24/7. Monitoramento para quando o computador é desligado.</td><td>Deploy Railway é a ação mais crítica. Sem isso, produto de monitoramento recorrente não pode ser ofertado.</td></tr>
+          <tr><td><strong>Ausência de PoC presencial</strong></td><td>Ambiente governamental sem acesso externo é inviável com Docker de 3 contêineres.</td><td><code>docker save</code> → USB + script Windows. Fallback: <code>server.js</code> legado como modo standalone.</td></tr>
+          <tr><td><strong>Complexidade operacional</strong></td><td>Stack evoluiu de 2 arquivos para monorepo + 4 pacotes + Docker + pgvector + 5 APIs externas. Operação solo tem limite.</td><td><code>HISTORICO_MIGRACAO.md</code> é o principal ativo operacional. Contratar CIO técnico a partir do segundo contrato.</td></tr>
+          <tr><td><strong>Dependências externas não orçadas</strong></td><td>Voyage AI + INLABS + ITU DataHub adicionados sem revisão de custos. Risco de surpresas ao escalar.</td><td>Revisar modelo de custos a cada sprint (ver seção 15).</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- 14 -->
+  <section id="s14">
+    <div class="section-header">
+      <div class="section-num">14</div>
+      <h2>Ativos Não Planejados (Valor para Exit)</h2>
+    </div>
+
+    <p>A migração para v4.0 gerou capacidades que não estavam no Roadmap v2.0 e que representam saltos reais de valor para o produto e para o exit.</p>
+
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Ativo</th><th>O Que É</th><th>Impacto no Exit / Valuation</th></tr></thead>
+        <tbody>
+          <tr><td><strong>Motor Dinâmico de Metodologias</strong></td><td>Agentes e metodologias 100% via banco. Nova metodologia = upload de JSON, sem deploy.</td><td>Cria marketplace de metodologias. Parceiros publicam engines — modelo de receita adicional.</td></tr>
+          <tr><td><strong>RAG com pgvector + Voyage AI</strong></td><td>Documentos do cliente indexados semanticamente por <code>projectId</code>. Busca por similaridade vetorial.</td><td>Principal diferencial técnico para defesa. Dados proprietários "dentro" da plataforma — dado de lock-in e alto valor de retenção.</td></tr>
+          <tr><td><strong>Token Streaming SSE Real</strong></td><td><code>streamText</code> no Agent.ts + cursor piscante em tempo real na UI enquanto o modelo escreve.</td><td>Experiência enterprise em demonstrações ao vivo. Acelera fechamento de contratos.</td></tr>
+          <tr><td><strong>Provider Factory (Agent.ts)</strong></td><td><code>getModel()</code> lê <code>LLM_PROVIDER</code> do env. Trocar Anthropic por Ollama/Sabiá-3 sem alterar código dos agentes.</td><td>Prepara Fase D sem reescrita. Demonstrável para acquirers como "agnóstico de modelo" — maior múltiplo de valuation.</td></tr>
+          <tr><td><strong>Backup Corporativo pg_dump</strong></td><td>Rota admin-only que gera <code>.sql.gz</code> via pg_dump. BackupModal na UI.</td><td>Requisito de compliance ISO 27001 cumprido antecipadamente. Elimina objeção de segurança em clientes de defesa.</td></tr>
+          <tr><td><strong>Painel Admin (Engine Manager)</strong></td><td>Interface para instalar novos Motores (JSON + agentes) sem deploy. Gerenciamento de usuários e roles na UI.</td><td>Permite operação por pessoal não-técnico. Requisito para escalar além da operação solo.</td></tr>
+          <tr><td><strong>GRUMBACH + GODET operacionais</strong></td><td>Orquestradores dedicados para metodologias militares (4 fases) e francesas (5 fases MICMAC/MACTOR/SMIC). Prompts MSEF v2 completos.</td><td>Diferencial direto para clientes de defesa e governo. Amplia mercado endereçável além do setor privado.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- 15 -->
+  <section id="s15">
+    <div class="section-header">
+      <div class="section-num">15</div>
+      <h2>Modelo de Custos Atualizado (Abril 2026)</h2>
+    </div>
+
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Ferramenta / Serviço</th><th>Plano Atual</th><th>Custo pré-contrato</th><th>Custo pós-contrato</th><th>Status</th></tr></thead>
+        <tbody>
+          <tr><td>Claude API (Anthropic)</td><td>Pay-per-use</td><td>~R$ 100</td><td>~R$ 400 (2 clientes)</td><td><span class="badge badge-done">✅ Planejado</span></td></tr>
+          <tr><td>Tavily Search API</td><td>Free (1k req)</td><td>R$ 0</td><td>~R$ 150 (Starter)</td><td><span class="badge badge-pend">⚠️ Ampliar</span></td></tr>
+          <tr><td>Voyage AI (RAG embeddings)</td><td>Free tier</td><td>R$ 0</td><td>~R$ 50 (se escalar)</td><td><span class="badge badge-pend">⚠️ Monitorar</span></td></tr>
+          <tr><td><strong>Railway (deploy 24/7 + PostgreSQL)</strong></td><td>—</td><td>R$ 30 (a contratar)</td><td>~R$ 80 (Pro)</td><td><span class="badge badge-next">🔲 Ação imediata</span></td></tr>
+          <tr><td>Google Workspace</td><td>Business Starter</td><td>R$ 35</td><td>R$ 35</td><td><span class="badge badge-done">✅ Planejado</span></td></tr>
+          <tr><td>Contador terceirizado</td><td>Mensalidade</td><td>R$ 500</td><td>R$ 500</td><td><span class="badge badge-done">✅ Planejado</span></td></tr>
+          <tr><td>Demais (Notion, Canva, n8n)</td><td>Free/Pro</td><td>R$ 93</td><td>R$ 93</td><td><span class="badge badge-done">✅ Planejado</span></td></tr>
+          <tr style="font-weight:700;background:#E8F5E9"><td><strong>TOTAL</strong></td><td>—</td><td><strong>R$ 758/mês</strong></td><td><strong>~R$ 1.308/mês</strong></td><td><span class="badge badge-done">✅ &lt; R$ 1.500</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="callout success">
+      <strong>Margem de segurança:</strong> Custo pós-contrato estimado em R$ 1.308/mês — dentro da diretriz de R$ 1.500/mês. Margem de R$ 192/mês absorve variações de uso da API Anthropic sem violar a restrição operacional.
+    </div>
+  </section>
+
+</main>
+</div>
+
+<footer>
+  OLYMPUS v4.0 &nbsp;·&nbsp; StratSight Brasil &nbsp;·&nbsp; Maio 2026 &nbsp;·&nbsp; Confidencial &nbsp;·&nbsp; Este documento é memória viva — atualizar a cada sprint
+</footer>
+
+</body>
+</html>

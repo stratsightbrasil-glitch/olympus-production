@@ -1,0 +1,31 @@
+{
+  "name": "olympus-monorepo",
+  "version": "4.0.0",
+  "private": true,
+  "description": "Sistema Multi-Agente de Planejamento Estratégico",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "npm run dev --workspaces --if-present",
+    "build": "npm run build --workspaces --if-present",
+    "lint": "npm run lint --workspaces --if-present",
+    "db:generate": "npm run generate --workspace=@olympus/db",
+    "db:push": "npm run push --workspace=@olympus/db"
+  },
+  "dependencies": {
+    "zod": "^3.25.76",
+    "drizzle-orm": "^0.45.2"
+  },
+  "overrides": {
+    "zod": "^3.25.76",
+    "drizzle-orm": "^0.45.2"
+  },
+  "_comments": {
+    "zod": "Mínimo 3.25.0 exigido pela AI SDK para o subpath zod/v4. A Schema Factory no Orquestrador garante a conversão correta para JSON Schema sem conflitos de pacote."
+  },
+  "devDependencies": {
+    "typescript": "^5.4.5"
+  }
+}

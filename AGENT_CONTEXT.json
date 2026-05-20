@@ -1,0 +1,384 @@
+{
+  "project": "OLYMPUS v4.0",
+  "description": "Multi-agent strategic foresight platform. Monorepo TypeScript: Hono API + React frontend + PostgreSQL + pgvector. 9 AI agents (Claude claude-opus-4-7) running MSEF/GRUMBACH/GODET methodologies.",
+  "lastUpdated": "2026-04-26",
+  "workingDir": "D:/Pessoais/DEV/Olympus_v4",
+
+  "monorepo": {
+    "manager": "npm workspaces",
+    "packages": {
+      "@olympus/core": "packages/core/src/ — Agent.ts, Orchestrator.ts, types.ts",
+      "@olympus/db":   "packages/db/src/   — db.ts, schema.ts (9 Drizzle tables)",
+      "@olympus/tools":"packages/tools/src/ — tavily.ts, dados-publicos.ts, embed.ts",
+      "@olympus/api":  "apps/api/src/       — Hono routes, cron, mailer",
+      "@olympus/web":  "apps/web/src/       — React 18 + Vite + TypeScript"
+    },
+    "buildOrder": "core → tools → db → api",
+    "criticalConstraint": "packages/tools CANNOT import @olympus/db (compiles before db). Tools that need DB access go in apps/api/src/tools/"
+  },
+
+  "stack": {
+    "runtime":    "Node.js 20",
+    "framework":  "Hono 4.x (backend) + React 18 (frontend)",
+    "aiSdk":      "ai@6.0.168 (Vercel AI SDK) + @ai-sdk/anthropic@3.0.71",
+    "llm":        "claude-opus-4-7 (env: ANTHROPIC_MODEL)",
+    "database":   "PostgreSQL pg15 + pgvector + Drizzle ORM 0.45.2",
+    "embeddings": "Voyage AI voyage-3-lite, 512 dims",
+    "webSearch":  "Tavily Search API",
+    "auth":       "JWT HS256 + bcryptjs + speakeasy (2FA TOTP)",
+    "proxy":      "Nginx (SPA + /api/ proxy, proxy_read_timeout 300s)",
+    "containers": "Docker Compose — 3 services: olympus_db, olympus_api, olympus_web"
+  },
+
+  "criticalRules": [
+    {
+      "id": "NO_ZOD_IN_AGENT",
+      "rule": "NEVER use Zod in Agent.ts for tool schemas",
+      "reason": "Dual-package hazard in monorepo — instanceof ZodObject fails silently across package boundaries",
+      "correct": "Use plain JS objects in TOOL_JSON_SCHEMAS dict, wrapped with jsonSchema() from Vercel AI SDK",
+      "example": "parameters: jsonSchema(TOOL_JSON_SCHEMAS['web_search'] as any)"
+    },
+    {
+      "id": "INPUT_SCHEMA_FIX",
+      "rule": "After creating tool(), manually inject inputSchema",
+      "reason": "@ai-sdk/anthropic reads tool.inputSchema, not tool.parameters. Without this, execute() is never called",
+      "correct": "(myTool as any).inputSchema = () => jsonSchema(rawSchema as any);"
+    },
+    {
+      "id": "STOP_WHEN_NOT_MAX_STEPS",
+      "rule": "Use stopWhen: stepCountIs(N) — NEVER maxSteps",
+      "reason": "maxSteps was removed in ai@6.0.168. Default is stepCountIs(1) — only 1 step, no synthesis",
+      "correct": "import { stepCountIs } from 'ai'; stopWhen: stepCountIs(15)"
+    },
+    {
+      "id": "PREPARE_STEP_TOOL_CHOICE",
+      "rule": "Use prepareStep to set toolChoice 'required' only on step 0",
+      "reason": "toolChoice 'required' on all steps blocks synthesis — HERMES loops until limit with empty response.text",
+      "correct": "prepareStep: async ({ stepNumber }) => ({ toolChoice: stepNumber === 0 ? 'required' : 'auto' })"
+    },
+    {
+      "id": "CMD_DIST_IN_PRODUCTION",
+      "rule": "Dockerfile CMD must point to dist/, never tsx",
+      "correct": "CMD [\"node\", \"apps/api/dist/index.js\"]",
+      "wrong":   "CMD [\"npx\", \"tsx\", \"apps/api/src/index.ts\"]"
+    },
+    {
+      "id": "HERMES_PROMPT_NO_EXCEPTIONS",
+      "rule": "NEVER add blocks that exempt HERMES from using tools",
+      "reason": "LLM follows most recent instruction when conflict exists — exception overrides the absolute rule"
+    },
+    {
+      "id": "ENV_ONE_VAR_PER_LINE",
+      "rule": "Each .env variable must be on its own line",
+      "reason": "Literal \\n concatenates variables — API keys become malformed, causing HTTP 403"
+    },
+    {
+      "id": "HISTORY_TRUNCATION",
+      "rule": "Always truncate message history: messages.slice(0, -1).slice(-12)",
+      "reason": "Unlimited history causes context bloat — responses degrade from 5k chars to 500 chars over conversation"
+    }
+  ],
+
+  "database": {
+    "connection": {
+      "insideDocker":  "postgres://postgres:postgres@olympus_db:5432/olympus",
+      "outsideDocker": "postgres://postgres:postgres@localhost:5432/olympus"
+    },
+    "tables": {
+      "users": {
+        "pk": "id (uuid)",
+        "unique": ["email"],
+        "columns": ["name", "email", "passwordHash", "role", "twoFactorSecret", "isTwoFactorEnabled", "createdAt"],
+        "roles": ["admin", "analista", "cliente"]
+      },
+      "projects": {
+        "pk": "id (text, format: 'sess_12345')",
+        "columns": ["name", "client", "analyst", "horizon", "classification", "methodology", "techniquesConfig (jsonb)", "panelToken", "status", "kratosCron", "createdBy", "updatedBy", "deletedAt (soft delete)"],
+        "notes": "deletedAt enables soft deletes. panelToken stores JWT for client panel URL."
+      },
+      "messages": {
+        "pk": "id (uuid)",
+        "fk": "projectId → projects.id",
+        "columns": ["role ('user'|'assistant')", "content", "filesJson (jsonb)", "agentName", "metadata (jsonb)", "createdAt"]
+      },
+      "agents": {
+        "pk": "id (uuid)",
+        "unique": ["name"],
+        "columns": ["name", "role", "type ('orchestrator'|'expert')", "systemPrompt", "toolsConfig (jsonb array)", "techniquesConfig (jsonb)", "createdAt"],
+        "notes": "Managed via DB — prompts updated on each request via getOrSeedMethodology()"
+      },
+      "methodologies": {
+        "pk": "id (uuid)",
+        "unique": ["name"],
+        "columns": ["name", "description", "category", "isDefault", "agentsConfig (jsonb array)", "createdAt"],
+        "values": ["MSEF", "GRUMBACH", "GODET", "MACROPLAN", "MPO", "ASPLAN", "FUTURES"]
+      },
+      "embeddings": {
+        "pk": "id (uuid)",
+        "fk": "projectId → projects.id",
+        "columns": ["chunkText", "metadata (jsonb)", "embedding vector(512)", "createdAt"],
+        "notes": "pgvector extension required. Voyage AI voyage-3-lite, 512 dims."
+      },
+      "indicators": {
+        "pk": "id (uuid)",
+        "fk": "projectId → projects.id",
+        "columns": ["name", "source", "parametersJson (jsonb)", "lastValue", "lastCheckedAt", "status ('verde'|'amarelo'|'vermelho')", "createdAt"]
+      },
+      "tools": {
+        "pk": "id (uuid)",
+        "unique": ["name"],
+        "columns": ["name", "description", "schemaJson (jsonb)"]
+      },
+      "techniques": {
+        "pk": "id (uuid)",
+        "unique": ["name"],
+        "columns": ["name", "description", "instructions", "toolsConfig (jsonb)"]
+      }
+    },
+    "importPattern": "import { db, projects, messages, agents, methodologies, indicators, embeddings, users, tools } from '@olympus/db'; import { eq, asc, desc, and, isNull } from 'drizzle-orm';"
+  },
+
+  "agents": {
+    "MSEF": {
+      "orchestrator": "HERMES",
+      "agents": ["HERMES", "SCOPUS", "KLIO", "PYTHIA", "MNEMOSYNE", "THEMIS", "KRATOS"],
+      "stages": {
+        "1": "SCOPUS — Escopo (Ficha: Tema, Horizonte, QEC, Atores, Fronteiras, Premissas, Mudanças, Fontes)",
+        "2": "KLIO — Drivers/PESTEL + Matriz Impacto×Incerteza",
+        "3-4": "PYTHIA — Incertezas → 2 eixos críticos → Matriz 2×2 → Q1-Q4 (prob %)",
+        "5": "MNEMOSYNE — Narrativas (7 componentes, min 400 words, no 'irá'/'certamente')",
+        "6": "THEMIS — Implicações × dimensão + tabela alertas precoces 🟡/🔴",
+        "7": "KRATOS — Relatório de Acompanhamento + semáforo"
+      }
+    },
+    "GRUMBACH": {
+      "orchestrator": "HERMES_GRUMBACH",
+      "agents": ["HERMES_GRUMBACH", "SCOPUS", "KLIO", "PYTHIA", "THEMIS"],
+      "phases": {
+        "1": "SCOPUS — Análise de Conjuntura",
+        "2": "KLIO — Variáveis Estratégicas",
+        "3": "PYTHIA — Cenários (Tendencial/Pessimista/Otimista)",
+        "4": "THEMIS — Estratégias de Resposta"
+      }
+    },
+    "GODET": {
+      "orchestrator": "HERMES_GODET",
+      "agents": ["HERMES_GODET", "SCOPUS", "KLIO", "PYTHIA", "THEMIS"],
+      "phases": {
+        "1": "SCOPUS — MICMAC (Analyse Structurelle)",
+        "2": "KLIO — MACTOR (Jeux d'Acteurs)",
+        "3-4": "PYTHIA — Morfologia + Probabilidades SMIC",
+        "5": "THEMIS — Opções Estratégicas"
+      }
+    },
+    "toolsPerAgent": {
+      "HERMES":           ["consultar_agente"],
+      "HERMES_GRUMBACH":  ["consultar_agente"],
+      "HERMES_GODET":     ["consultar_agente"],
+      "SCOPUS":           ["web_search", "buscar_documentos_internos"],
+      "KLIO":             ["web_search", "buscar_dados_publicos", "buscar_documentos_internos"],
+      "PYTHIA":           ["web_search"],
+      "MNEMOSYNE":        ["web_search"],
+      "THEMIS":           ["web_search"],
+      "KRATOS":           ["web_search", "buscar_dados_publicos"]
+    }
+  },
+
+  "tools": {
+    "consultar_agente": {
+      "schema": { "type": "object", "properties": { "agent_name": { "type": "string" }, "query": { "type": "string" } }, "required": ["agent_name", "query"] },
+      "notes": "agent_name has NO enum — accepts any string to support HERMES_GRUMBACH, HERMES_GODET"
+    },
+    "web_search": {
+      "schema": { "type": "object", "properties": { "query": { "type": "string" } }, "required": ["query"] },
+      "implementation": "packages/tools/src/tavily.ts"
+    },
+    "buscar_dados_publicos": {
+      "schema": {
+        "type": "object",
+        "properties": {
+          "indicadores": { "type": "array", "items": { "type": "string" }, "maxItems": 5 },
+          "pais": { "type": "string", "description": "ISO3 country code, default BRA" },
+          "termo_dou": { "type": "string", "description": "DOU search term (triggers INLABS fetch)" }
+        },
+        "required": ["indicadores"]
+      },
+      "implementation": "packages/tools/src/dados-publicos.ts",
+      "totalIndicators": 51,
+      "sources": ["BCB/SGS", "IBGE", "IPEA", "Comex Stat", "DOU/INLABS", "World Bank", "IMF/WEO", "WHO GHO", "UN Population", "IBGE Países", "ITU DataHub"]
+    },
+    "buscar_documentos_internos": {
+      "schema": { "type": "object", "properties": { "query": { "type": "string" } }, "required": ["query"] },
+      "implementation": "apps/api/src/tools/rag.ts",
+      "notes": "Lives in apps/api (not packages/tools) because it imports @olympus/db"
+    }
+  },
+
+  "api": {
+    "port": 3333,
+    "baseUrl": "http://localhost:3333/api/v1",
+    "auth": {
+      "type": "JWT HS256",
+      "header": "Authorization: Bearer <token>",
+      "expiry": "24h",
+      "public": ["/api/v1/auth/login", "/api/v1/auth/register", "/api/v1/auth/setup-status", "/api/docs"]
+    },
+    "routes": {
+      "auth":        ["POST /auth/login", "POST /auth/register", "GET /auth/setup-status", "POST /auth/setup-2fa"],
+      "sessions":    ["GET /sessions", "POST /sessions", "GET /sessions/:id", "PATCH /sessions/:id", "DELETE /sessions/:id", "DELETE /sessions/:id/messages/:msgId"],
+      "chat":        ["POST /chat", "POST /chat/stream (SSE)"],
+      "extract":     ["POST /extract (multipart — PDF/DOCX/XLSX/IMG → text + embed)"],
+      "embeddings":  ["POST /embeddings/search", "GET /embeddings/:projectId/count", "DELETE /embeddings/:projectId"],
+      "export":      ["POST /export (PDF|DOCX|JSON)"],
+      "engine":      ["GET /engine/methodologies", "GET /engine/agents", "POST /engine/install"],
+      "indicators":  ["GET /indicators/project/:id", "POST /indicators", "PATCH /indicators/:id"],
+      "painel":      ["GET /painel/project/:id (auth via ?token= or Bearer — renders full HTML dashboard)"],
+      "backup":      ["GET /backup/list (admin)", "POST /backup/generate (admin)", "GET /backup/download/:filename (admin)"],
+      "users":       ["GET /users (admin)", "PATCH /users/:id (admin)"],
+      "docs":        ["GET /docs (Swagger UI)", "GET /docs/openapi.json"]
+    }
+  },
+
+  "docker": {
+    "services": {
+      "olympus_db": {
+        "image": "pgvector/pgvector:pg15",
+        "port": "5432 (internal)",
+        "memory": "512m",
+        "volume": "pgdata:/var/lib/postgresql/data",
+        "credentials": "postgres/postgres/olympus"
+      },
+      "olympus_api": {
+        "image": "node:20-slim (Debian — NOT Alpine)",
+        "port": "3333",
+        "memory": "1024m",
+        "nodeFlag": "--max-old-space-size=1024",
+        "cmd": "node apps/api/dist/index.js",
+        "volume": "olympus_backups:/app/backups"
+      },
+      "olympus_web": {
+        "image": "node:20-alpine (build) → nginx:alpine (serve)",
+        "port": "80",
+        "memory": "128m"
+      }
+    },
+    "volumes": ["pgdata", "olympus_backups"],
+    "network": "olympus_network (bridge)"
+  },
+
+  "patterns": {
+    "addNewRoute": [
+      "1. Create handler in apps/api/src/routes/myroute.ts",
+      "2. Register in apps/api/src/index.ts: app.route('/api/v1/myroute', myrouteRoute)",
+      "3. Add JWT guard if needed (already global for /api/v1/*)",
+      "4. Rebuild: docker compose build --no-cache api && docker compose up -d api"
+    ],
+    "addNewTool": [
+      "1. If tool needs DB: create in apps/api/src/tools/mytool.ts",
+      "1. If tool is standalone: create in packages/tools/src/mytool.ts",
+      "2. Add schema to TOOL_JSON_SCHEMAS in packages/core/src/Agent.ts",
+      "3. Add tool name to agent toolsConfig in seed.ts",
+      "4. Implement execute() in chat.ts tool handler",
+      "5. Rebuild with --no-cache (core changes require full rebuild)"
+    ],
+    "addNewAgent": [
+      "1. Add agent definition in apps/api/src/scripts/seed.ts (defaultAgents array)",
+      "2. Add or update methodology agentsConfig in defaultMethodologies",
+      "3. Run: npx tsx apps/api/src/scripts/seed.ts",
+      "4. No rebuild needed — agents/methodologies are DB-driven"
+    ],
+    "addNewIndicator": [
+      "1. Agent KRATOS detects indicators from analysis text",
+      "2. Or: POST /api/v1/indicators with { projectId, name, source, parametersJson }",
+      "3. KRONOS cron job calls KRATOS on schedule (kratosCron field in projects)"
+    ],
+    "dbQuery": "Always use Drizzle ORM. Import { db, table } from '@olympus/db'. Use eq(), and(), isNull() from 'drizzle-orm'.",
+    "roleCheck": "Check ctx.get('jwtPayload').role — 'admin' > 'analista' > 'cliente' (read-only)"
+  },
+
+  "environment": {
+    "required": {
+      "ANTHROPIC_API_KEY": "Claude API key",
+      "TAVILY_API_KEY": "Tavily web search (free: 1k req/month)",
+      "DATABASE_URL": "postgres://postgres:postgres@olympus_db:5432/olympus (inside Docker)",
+      "JWT_SECRET": "HS256 signing secret"
+    },
+    "optional": {
+      "ANTHROPIC_MODEL": "default: claude-opus-4-7",
+      "LLM_PROVIDER": "default: anthropic (supports: ollama)",
+      "VOYAGE_API_KEY": "Voyage AI for RAG embeddings",
+      "SMTP_HOST/PORT/USER/PASS": "Nodemailer for KRATOS email alerts",
+      "INLABS_EMAIL/PASSWORD": "DOU Seção 1 access (inlabs.in.gov.br)",
+      "ITU_EMAIL/PASSWORD": "ITU DataHub (datahub.itu.int)",
+      "ALLOWED_ORIGIN": "CORS origin (default: http://localhost:80)"
+    }
+  },
+
+  "knownIssues": [
+    {
+      "id": "CONTEXT_BLOAT",
+      "description": "Message history slice(-12) is arbitrary. Analyses with 20+ turns may degrade.",
+      "location": "apps/api/src/routes/chat.ts",
+      "fix": "Implement token-count sliding window (tiktoken) instead of message count"
+    },
+    {
+      "id": "TAVILY_FREE_LIMIT",
+      "description": "Free plan: 1000 req/month. With 2 clients in daily monitoring, limit is insufficient.",
+      "fix": "Upgrade to Tavily Starter (~USD 29/month) after first contract"
+    },
+    {
+      "id": "RAILWAY_RACE_CONDITION",
+      "description": "DB→API race condition is handled with retry (10x 3s) in index.ts. Railway cold start behavior untested.",
+      "fix": "Configure Railway health check. Test startup logs."
+    }
+  ],
+
+  "backlog": {
+    "blockers": [
+      { "id": "B1", "title": "Deploy Railway (C2)", "priority": "CRITICAL", "description": "athena.stratsight.com.br. KRATOS monitoring requires 24/7 server." },
+      { "id": "B2", "title": "PoC Presencial (A4 adaptado)", "priority": "CRITICAL", "description": "docker save → USB or standalone Node.js mode. < 5 min install." }
+    ],
+    "medium": [
+      { "id": "M1", "title": "FRED API + Legislativo", "description": "Federal Reserve data + Câmara/Senado. Most requested by defense/gov analysts." },
+      { "id": "M2", "title": "Ollama Local (A5)", "description": "LLM_PROVIDER=ollama + Llama 3.3 70B. Provider Factory ready — just configure." },
+      { "id": "M3", "title": "Playbook Automatizado (C3)", "description": "POST /playbook/gerar → DOCX. Motor Dinâmico already manages prompts/methodologies." },
+      { "id": "M4", "title": "Dashboard Gráficos KRATOS", "description": "Chart.js inline — line chart 30 days per indicator. indicators table already exists." },
+      { "id": "M5", "title": "VPN + dados proprietários (B2)", "description": "Depends on Railway deploy being active first." },
+      { "id": "M6", "title": "Sliding window por tokens", "description": "Replace .slice(-12) with tiktoken-based window in chat.ts." }
+    ],
+    "future": [
+      { "id": "F1", "title": "Fase D — LLM Soberano", "description": "Fine-tuning with MSEF data. Air-gapped for defense. PI asset for Big Tech exit." },
+      { "id": "F2", "title": "Sabiá-3 / LLM Soberano BR", "description": "Provider Factory already supports any provider via LLM_PROVIDER env." }
+    ]
+  },
+
+  "costs": {
+    "preContract": {
+      "total": "R$ 758/month",
+      "breakdown": {
+        "Claude API": "~R$ 100",
+        "Tavily": "R$ 0 (free)",
+        "Voyage AI": "R$ 0 (free)",
+        "Railway": "R$ 30 (to contract)",
+        "Google Workspace": "R$ 35",
+        "Accountant": "R$ 500",
+        "Other": "R$ 93"
+      }
+    },
+    "postContract": {
+      "total": "~R$ 1.308/month",
+      "limit": "R$ 1.500/month",
+      "margin": "R$ 192/month safety margin"
+    }
+  },
+
+  "commands": {
+    "fullRebuild": "docker compose build --no-cache && docker compose up -d",
+    "apiOnly": "docker compose build --no-cache api && docker compose up -d api",
+    "seed": "$env:DATABASE_URL='postgres://postgres:postgres@localhost:5432/olympus'; npx tsx apps/api/src/scripts/seed.ts",
+    "buildDbPackage": "npm run build --workspace=packages/db",
+    "logs": "docker compose logs -f api",
+    "drizzlePush": "cd packages/db && npx drizzle-kit push",
+    "pgvectorExtension": "docker exec olympus_db psql -U postgres -d olympus -c \"CREATE EXTENSION IF NOT EXISTS vector;\""
+  }
+}

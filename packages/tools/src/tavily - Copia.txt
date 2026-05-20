@@ -1,0 +1,49 @@
+import { Tool } from '@olympus/core';
+import { z } from 'zod';
+
+const schemaFactory = (zInstance: typeof z) => zInstance.object({
+  query: zInstance.string().describe('A string de busca exata (seja conciso, ex: "taxa selic atual banco central brasil" ou "notícias recentes inteligência artificial")')
+});
+
+export type TavilyArgs = z.infer<ReturnType<typeof schemaFactory>>;
+
+export const tavilySearchTool: Tool<TavilyArgs> = {
+  name: 'web_search',
+  description: 'Realiza uma busca na internet em tempo real para encontrar informações atualizadas, notícias recentes, dados macroeconômicos ou evidências para cenários prospectivos. Use esta ferramenta SEMPRE que o usuário perguntar sobre dados do presente ou quando precisar embasar os "Drivers" com fatos reais do ambiente.',
+  schema: schemaFactory as any, // Cast para evitar acoplamento no Orquestrador
+  
+  execute: async (args: TavilyArgs, context: any) => {
+    const apiKey = process.env.TAVILY_API_KEY;
+    if (!apiKey) {
+      return "Erro do Sistema: A variável TAVILY_API_KEY não foi configurada. Informe o usuário de que o sistema não está com acesso à internet no momento.";
+    }
+
+    console.log(`[Tavily] 🌐 Buscando na web por: "${args.query}"`);
+    
+    try {
+      const res = await fetch('https://api.tavily.com/search', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          api_key: apiKey,
+          query: args.query,
+          search_depth: 'advanced', // Usa o modo avançado para respostas profundas
+          include_answer: true,
+          max_results: 5
+        })
+      });
+
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      
+      let result = `[Resposta gerada pela Busca Web]\nResumo: ${data.answer || 'Sem resumo direto.'}\n\n[Fontes Encontradas]:\n`;
+      data.results?.forEach((r: any, i: number) => {
+        result += `${i + 1}. Título: ${r.title}\n   URL: ${r.url}\n   Conteúdo: ${r.content}\n\n`;
+      });
+      
+      return result;
+    } catch (error: any) {
+      return `Falha ao tentar acessar a internet: ${error.message}`;
+    }
+  }
+};

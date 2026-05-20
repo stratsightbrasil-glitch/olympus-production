@@ -1,0 +1,23 @@
+{
+  "name": "@olympus/db",
+  "version": "4.0.0",
+  "private": true,
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "generate": "drizzle-kit generate",
+    "push": "drizzle-kit push",
+    "build": "tsc"
+  },
+  "dependencies": {
+    "dotenv": "^16.4.5",
+    "postgres": "^3.4.4"
+  },
+  "peerDependencies": {
+    "drizzle-orm": "^0.45.2"
+  },
+  "devDependencies": {
+    "drizzle-kit": "^0.31.10",
+    "typescript": "^5.4.5"
+  }
+}

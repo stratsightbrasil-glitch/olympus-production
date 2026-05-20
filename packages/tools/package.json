@@ -1,0 +1,19 @@
+{
+  "name": "@olympus/tools",
+  "version": "4.0.0",
+  "private": true,
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "build": "tsc"
+  },
+  "dependencies": {
+    "@olympus/core": "*"
+  },
+  "peerDependencies": {
+    "zod": "^3.25.76"
+  },
+  "devDependencies": {
+    "typescript": "^5.4.5"
+  }
+}

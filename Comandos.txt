@@ -1,0 +1,40 @@
+# 1. Zerar tudo
+wsl --shutdown
+docker compose down -v --rmi all
+docker system prune -a -f --volumes
+
+# 2. Dependências
+npm install
+
+# 3. Build e subida completa
+docker compose build --no-cache
+docker compose up -d
+
+# 4. Schema no banco (após -v que apagou os volumes)
+docker exec olympus_db psql -U postgres -d olympus -c "CREATE EXTENSION IF NOT EXISTS vector;"
+cd packages\db
+npx drizzle-kit push
+cd ..\..
+
+# 5. Seed — prompts completos dos 7 agentes + 7 metodologias (roda do host, não do container)
+npx tsx apps/api/src/scripts/seed.ts
+
+# 6. Verificar saúde da API
+docker compose logs -f api
+
+LIMPAR MAS MANTER PGDATA
+
+# 1. Parar containers
+docker compose down
+
+# 2. Remover imagens antigas/dangling (NÃO toca volumes)
+docker image prune -a
+
+# 3. Remover build cache do BuildKit (maior consumidor de espaço)
+docker builder prune -a
+
+# 4. Remover containers parados e redes não usadas (NÃO toca volumes)
+docker system prune -f
+
+# 5. Verificar o que sobrou
+docker system df

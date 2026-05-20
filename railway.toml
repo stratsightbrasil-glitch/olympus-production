@@ -1,0 +1,17 @@
+# ── OLYMPUS v4 — Railway Configuration (API Service) ──────────────────────────
+# Este arquivo configura o serviço API no Railway.
+# O serviço Web é configurado separadamente no dashboard (ver RAILWAY_DEPLOY.md).
+
+[build]
+builder = "DOCKERFILE"
+dockerfilePath = "Dockerfile.api"
+
+[deploy]
+# Endpoint de health check — Railway aguarda este retornar 200 antes de marcar
+# o deploy como saudável e redirecionar o tráfego.
+healthcheckPath = "/ping"
+healthcheckTimeout = 300
+
+# Política de restart em falha (não em deployment bem-sucedido)
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 3

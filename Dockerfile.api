@@ -1,0 +1,37 @@
+# ── OLYMPUS v4 — API (Hono + Node.js) ─────────────────────────────────────────
+# Usa node:20-slim (Debian). NÃO usar Alpine — dependências nativas (bcrypt, pg)
+# falham silenciosamente em Alpine.
+FROM node:20-slim
+
+WORKDIR /app
+
+# Instala cliente PostgreSQL (necessário para pg_dump nos backups)
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends postgresql-client && \
+    rm -rf /var/lib/apt/lists/*
+
+# Copia todo o monorepo
+COPY . .
+
+# Instala dependências do monorepo
+RUN npm install
+
+# Resolve duplicatas do drizzle-orm entre workspaces
+RUN npm dedupe
+RUN rm -rf packages/db/node_modules/drizzle-orm
+
+# Compila todos os pacotes internos (ordem: core → tools → db → api)
+RUN npm run build \
+    --workspace=@olympus/core \
+    --workspace=@olympus/tools \
+    --workspace=@olympus/db \
+    --workspace=@olympus/api
+
+# Health check — Railway e Docker usam este endpoint para saber se a API está pronta
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+    CMD node -e "require('http').get('http://localhost:' + (process.env.PORT || 3333) + '/ping', r => process.exit(r.statusCode === 200 ? 0 : 1)).on('error', () => process.exit(1))"
+
+EXPOSE 3333
+
+# PRODUÇÃO: sempre apontar para o dist/ compilado — NUNCA usar tsx em produção
+CMD ["node", "apps/api/dist/index.js"]

@@ -1,0 +1,22 @@
+{
+  "name": "@olympus/core",
+  "version": "4.0.0",
+  "private": true,
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "build": "tsc"
+  },
+  "dependencies": {
+    "@ai-sdk/anthropic": "^3.0.71",
+    "@anthropic-ai/sdk": "^0.20.1",
+    "ai": "^6.0.168",
+    "dotenv": "^16.4.5"
+  },
+  "peerDependencies": {
+    "zod": "^3.25.76"
+  },
+  "devDependencies": {
+    "typescript": "^5.4.5"
+  }
+}
