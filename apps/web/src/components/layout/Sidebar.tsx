@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useRef, useEffect } from 'react';
 import { AGENTS } from '../../constants';
 
 interface Session {
@@ -78,6 +78,13 @@ export function Sidebar({
   const filter = (status: string) => sessoes.filter(s =>
     s.status === status && (!sessionSearch || (s.name || '').toLowerCase().includes(sessionSearch.toLowerCase()))
   );
+
+  const sessaoListRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (showSessoes && sessaoListRef.current) {
+      setTimeout(() => sessaoListRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' }), 50);
+    }
+  }, [showSessoes]);
 
   return (
     <div
@@ -243,7 +250,7 @@ export function Sidebar({
           )}
 
           {/* Histórico */}
-          <div style={{ marginTop: 8 }}>
+          <div style={{ marginTop: 8 }} ref={sessaoListRef}>
             <button
               onClick={onToggleSessoes}
               className="w-full px-3 py-2 bg-white/5 hover:bg-white/10 text-sm rounded-lg transition-colors text-left text-gray-200 flex justify-between items-center"
