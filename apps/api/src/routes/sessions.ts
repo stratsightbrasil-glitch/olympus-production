@@ -51,9 +51,9 @@ sessionsRoutes.patch('/:id', async (c) => {
     const existing = await db.query.projects.findFirst({ where: eq(projects.id, id) });
     if (existing) {
       if (jwtPayload.role !== 'admin' && existing.createdBy !== jwtPayload.name) return c.json({ error: 'Acesso negado' }, 403);
-      await db.update(projects).set({ name: body.name, status: body.status, kratosCron: body.kratosCron, methodology: body.methodology, updatedBy: jwtPayload.name, updatedAt: new Date() }).where(eq(projects.id, id));
+      await db.update(projects).set({ name: body.name, status: body.status, kratosCron: body.kratosCron, alertEmails: body.alertEmails ?? existing.alertEmails, methodology: body.methodology, updatedBy: jwtPayload.name, updatedAt: new Date() }).where(eq(projects.id, id));
     } else {
-      await db.insert(projects).values({ id: id, name: body.name || 'Novo Projeto', status: body.status || 'Em produção', kratosCron: body.kratosCron || '0 6 * * *', methodology: 'MSEF', createdBy: jwtPayload.name, updatedBy: jwtPayload.name });
+      await db.insert(projects).values({ id: id, name: body.name || 'Novo Projeto', status: body.status || 'Em produção', kratosCron: body.kratosCron || '0 6 * * *', alertEmails: body.alertEmails || '', methodology: 'MSEF', createdBy: jwtPayload.name, updatedBy: jwtPayload.name });
     }
     reloadCronJobs();
     return c.json({ ok: true });

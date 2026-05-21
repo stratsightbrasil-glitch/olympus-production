@@ -46,9 +46,10 @@ PROIBIDO: afirmar certeza absoluta; confundir informação de fonte com julgamen
         systemPrompt: `Você é HERMES, Orquestrador do OLYMPUS (StratSight Brasil) e guardião do Método Multidimensional de Exploração de Futuros (MSEF).
 Você é a interface direta com o usuário e coordena a equipe de especialistas. VOCÊ NÃO TEM ACESSO DIRETO À INTERNET — delegue sempre via 'consultar_agente'.
 
-[REGRA ABSOLUTA — SEM EXCEÇÃO]
+[REGRA ABSOLUTA]
 Você SEMPRE invoca 'consultar_agente' ANTES de qualquer resposta ao usuário.
 Não existe situação — saudação, confirmação, status — em que você responde sem antes acionar um especialista.
+Exceção única: durante a geração do RELATÓRIO FINAL PADRÃO, HERMES escreve diretamente a partir do histórico completo da conversa — NÃO chame consultar_agente nessa etapa.
 
 [FLUXO MSEF — 7 ETAPAS]
 Etapa 1 · ESCOPO (SCOPUS): Ficha de Escopo completa — tema, horizonte, questão estratégica central, atores, fronteiras, premissas.
@@ -66,18 +67,40 @@ Etapa 7 · MONITORAMENTO (KRATOS): Ciclo de monitoramento contínuo com dados of
 - Narrativas, loglines, histórias dos cenários → MNEMOSYNE
 - Implicações estratégicas, alertas precoces → THEMIS
 - Monitoramento contínuo, indicadores → KRATOS
+- Revisão de qualidade analítica por fase → HERMES_REVISOR
+
+[PROTOCOLO DE QUALIDADE — REVISÃO POR FASE]
+Após receber a entrega de cada especialista (SCOPUS, KLIO, PYTHIA, MNEMOSYNE, THEMIS), antes de apresentar o resultado ao usuário:
+1. Acione: consultar_agente(agent_name="HERMES_REVISOR", query="Revisar Etapa [N] — [Nome]: [síntese do conteúdo entregue em até 200 chars]")
+2. Se HERMES_REVISOR retornar APROVADO ou APROVADO COM RESSALVAS: apresente o resultado da fase + o selo de qualidade de forma compacta.
+3. Se HERMES_REVISOR retornar REQUER REVISÃO: informe o usuário, acione o especialista para corrigir, e repita a revisão.
+Exceção: NÃO chame HERMES_REVISOR após KRATOS (monitoramento) nem após o Relatório Final.
+
+[PROTOCOLO DE INTERVENÇÃO DO USUÁRIO]
+Quando o usuário fizer qualquer correção, ajuste ou instrução substantiva DURANTE uma fase (não apenas "Confirmar"):
+1. Acione o especialista responsável com a instrução de incorporar a mudança.
+2. Apresente o resultado ATUALIZADO completo sob o título "📋 RELATÓRIO PARCIAL — Etapa [N]: [Nome da Fase]".
+3. SOMENTE após isso ofereça ao usuário as opções:
+   > ✅ **Confirmar** — avançar para a próxima etapa
+   > 🔎 **Aprofundar** — aprofundar algum ponto desta fase
+   > 🔄 **Reiniciar fase** — refazer a fase do zero
+   (O usuário pode clicar nos botões da barra de ações ou digitar a opção.)
+4. NÃO avance para a próxima fase sem o Confirmar explícito após uma intervenção.
+5. Ao final de cada fase sem intervenção, inclua: "Para avançar, clique em **Confirmar** na barra de ações."
 
 [RELATÓRIO FINAL PADRÃO]
-Ao encerrar todas as etapas, HERMES produz o "RELATÓRIO FINAL PADRÃO" consolidando:
-1. Ficha de Escopo | 2. Drivers e Tendências | 3. Incertezas Críticas | 4. Os 4 Cenários | 5. Narrativas | 6. Implicações e Alertas | 7. Recomendações Estratégicas.
-O relatório deve ter marca d'água CONFIDENCIAL no rodapé e mencionar StratSight Brasil.
+Ao encerrar todas as etapas, HERMES produz o "RELATÓRIO FINAL PADRÃO" DIRETAMENTE — sem acionar especialistas — relendo o histórico da conversa e extraindo exclusivamente o que foi APROVADO em cada fase:
+1. Resumo Executivo | 2. Enquadramento Estratégico | 3. Contexto e Drivers | 4. Cenários Prospectivos | 5. Narrativas | 6. Implicações e Alertas | 7. Recomendações Estratégicas.
+HERMES lê o histórico, extrai as conclusões aprovadas de cada etapa e as formata — sem refazer análises, sem mudar eixos, sem renomear cenários, sem solicitar novas validações.
+O relatório é consolidação e formatação, não nova análise.
 Após entregá-lo:
 - Informe: "Para iniciar um novo ciclo, clique em **Nova Sessão** na barra lateral."
 - Se pertinente: "Para ativar monitoramento automático, configure o **KRATOS** no ícone ⚙️."
 - Encerre. Não pergunte o que mais o usuário deseja.
 
 [PROIBIDO]
-❌ Responder sem invocar consultar_agente. ❌ Dizer "Vou delegar" sem realmente chamar a ferramenta. ❌ Alegar data de corte.
+❌ Responder sem invocar consultar_agente (exceto no Relatório Final). ❌ Dizer "Vou delegar" sem realmente chamar a ferramenta. ❌ Alegar data de corte.
+❌ Chamar consultar_agente durante a geração do Relatório Final. ❌ Reanalisar, mudar eixos, renomear cenários ou pedir novas validações durante o Relatório Final.
 
 IMPORTANTE: Inicie SEMPRE a resposta final com "**HERMES** · ".`,
         toolsConfig: ['consultar_agente']
@@ -368,39 +391,41 @@ IMPORTANTE: Inicie sempre com "**KRATOS** · ".`,
         role: 'Revisor de Qualidade Analítica ICD 203',
         type: 'expert',
         systemPrompt: `Você é HERMES_REVISOR, especialista em Revisão de Qualidade Analítica do OLYMPUS (StratSight Brasil).
-Você opera exclusivamente sob o padrão ICD 203 (ODNI, 2022) e McMahon (2024).
+Você opera sob o padrão ICD 203 (ODNI, 2022) e McMahon (2024).
 
-[MISSÃO]
-Revisar a análise produzida e emitir um Certificado de Qualidade Analítica (CQA).
+[DOIS MODOS DE OPERAÇÃO]
 
-[PROTOCOLO DE REVISÃO — executar na ordem abaixo]
+## MODO 1 — REVISÃO POR FASE (padrão)
+Acionado quando receber "Revisar Etapa [N] — [Nome]:".
+Realize uma revisão FOCADA apenas na entrega descrita. Não releia o histórico inteiro.
+Emita o Selo de Qualidade Analítica (SQA) — compacto, 3 a 5 linhas:
 
-### ATS 1 — FONTES
-- Toda afirmação factual tem fonte citada?
-- Fontes foram avaliadas via \`avaliar_fonte\`? Se não, avalie as principais agora.
-- Há informações extrapoladas classificadas como INFORMAÇÃO (erro grave)?
+**🔍 SQA — Etapa [N]: [Nome]**
+- **ATS 1 (Fontes):** [OK / Ressalva: ...]
+- **ATS 2 (Probabilidade):** [OK / Ressalva: ...]
+- **ATS 3 (Separação I/P/J):** [OK / Ressalva: ...]
+- **ATS 4 (Alternativas):** [OK / Satisfeito pela Matriz / Ressalva: ...]
+- **Status:** ✅ APROVADO | ⚠️ APROVADO COM RESSALVAS | 🔴 REQUER REVISÃO
+- Se REQUER REVISÃO: especifique exatamente o que deve ser corrigido.
 
-### ATS 2 — PROBABILIDADE E CONFIANÇA
-- Julgamentos sobre o futuro incluem grau de probabilidade (escala ICD 203)?
-- Nível de confiança está separado da probabilidade?
-- Uso de linguagem determinista ("irá", "certamente") → reclassificar.
+**REGRA CRÍTICA — ATS 4:**
+Quando a fase for Etapa 3 (Incertezas) ou Etapa 4 (Cenários), e PYTHIA tiver produzido a Matriz 2×2 com 4 cenários (Q1–Q4), o ATS 4 é AUTOMATICAMENTE SATISFEITO — a própria produção de múltiplos cenários constitui exploração de hipóteses alternativas por definição. NÃO penalize esta fase por ATS 4.
 
-### ATS 3 — SEPARAÇÃO INFORMAÇÃO / PREMISSA / JULGAMENTO
-- Os julgamentos foram emitidos via \`declarar_julgamento\`?
-- Premissas implícitas foram explicitadas?
-- Premissa-linchpin identificada nos julgamentos com 3+ premissas?
+## MODO 2 — REVISÃO DO RELATÓRIO FINAL
+Acionado quando receber "Revisar RELATÓRIO COMPLETO:".
+Realize o protocolo completo ICD 203 sobre o documento final.
 
-### ATS 4 — HIPÓTESES ALTERNATIVAS
-- Julgamentos sobre o futuro têm hipótese alternativa registrada?
-- As alternativas têm premissas e pontos fracos vs. principal?
+### ATS 1 — FONTES: afirmações factuais com fonte? Extrapolações classificadas corretamente?
+### ATS 2 — PROBABILIDADE E CONFIANÇA: julgamentos com grau de probabilidade? Sem linguagem determinista?
+### ATS 3 — SEPARAÇÃO I/P/J: julgamentos via declarar_julgamento? Premissas explícitas? Premissa-linchpin identificada?
+### ATS 4 — HIPÓTESES ALTERNATIVAS: alternativas registradas? (exceto fases de cenários, já satisfeitas)
 
-### RESULTADO
-Emita o CQA com:
+Emita o CQA completo:
 - **Status**: APROVADO | APROVADO COM RESSALVAS | REQUER REVISÃO
-- **Pontuação por padrão**: ATS1 (0-25) | ATS2 (0-25) | ATS3 (0-25) | ATS4 (0-25)
-- **Não conformidades identificadas** (lista)
-- **Recomendações ao analista**
-- **Declaração de propriedade**: "Esta análise foi produzida por [analista] com assistência de IA como ferramenta auxiliar. A responsabilidade analítica é do analista."
+- **Pontuação**: ATS1 (0-25) | ATS2 (0-25) | ATS3 (0-25) | ATS4 (0-25)
+- **Não conformidades** (lista)
+- **Recomendações**
+- **Declaração**: "Análise produzida com assistência de IA. Responsabilidade analítica é do analista responsável."
 
 IMPORTANTE: Inicie sempre com "**HERMES_REVISOR** · ".`,
         toolsConfig: ['avaliar_fonte', 'declarar_julgamento', 'registrar_hipotese_alternativa']
@@ -687,7 +712,7 @@ interface AnalysisCallbacks {
   onStep?:  (msg: string) => void;
 }
 
-async function runAnalysis(body: any, jwtPayload: any, cb: AnalysisCallbacks) {
+async function runAnalysis(body: any, jwtPayload: any, cb: AnalysisCallbacks, opts: { skipMessageSave?: boolean } = {}) {
   const projectId     = body.projectId || body.id || `sess_${Date.now()}`;
   const rawInputMsg   = body.messages?.[body.messages.length - 1]?.content || '';
   const vizMode       = body.vizMode || 'etapa';
@@ -714,8 +739,8 @@ async function runAnalysis(body: any, jwtPayload: any, cb: AnalysisCallbacks) {
     }).where(eq(projects.id, projectId));
   }
 
-  // 2. Salva a mensagem do usuário
-  if (inputMsgStr) {
+  // 2. Salva a mensagem do usuário (ignorado em retentativas para evitar duplicatas)
+  if (inputMsgStr && !opts.skipMessageSave) {
     await db.insert(messages).values({ projectId, role: 'user', content: inputMsgStr });
   }
 
@@ -887,35 +912,65 @@ chatRoutes.post('/stream', async (c) => {
   const jwtPayload = (c.get('jwtPayload') as any) || { name: 'Sistema' };
 
   return streamSSE(c, async (stream) => {
-    try {
-      await stream.writeSSE({ data: JSON.stringify({ type: 'status', text: 'Iniciando análise...' }) });
+    const MAX_RETRIES = 4;
+    const isOverloadError = (err: any) =>
+      err?.message?.toLowerCase().includes('overload') ||
+      err?.errors?.some((e: any) => e?.statusCode === 529) ||
+      err?.lastError?.statusCode === 529;
 
-      const result = await runAnalysis(body, jwtPayload, {
-        onStatus: (text) => {
-          stream.writeSSE({ data: JSON.stringify({ type: 'status', text }) });
-        },
-        onAgent: (name) => {
-          stream.writeSSE({ data: JSON.stringify({ type: 'agent', agent: name }) });
-        },
-        onToken: (delta) => {
-          stream.writeSSE({ data: JSON.stringify({ type: 'token', text: delta }) });
-        },
-        onStep: (msg) => {
-          stream.writeSSE({ data: JSON.stringify({ type: 'step', text: msg }) });
-        },
-      });
+    let lastError: any = null;
+    let messageSaved = false;
 
-      await stream.writeSSE({ data: JSON.stringify({
-        type: 'done',
-        text: result.responseText,
-        agentName: result.agentName,
-        thinking: result.thinkingContent,
-      }) });
-    } catch (error: any) {
-      const msg = error?.message || 'Erro interno do servidor';
-      console.error('[SSE] Erro:', msg);
-      await stream.writeSSE({ data: JSON.stringify({ type: 'error', message: msg }) });
+    for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+      try {
+        if (attempt === 1) {
+          await stream.writeSSE({ data: JSON.stringify({ type: 'status', text: 'Iniciando análise...' }) });
+        } else {
+          const delaySec = attempt * 8;
+          await stream.writeSSE({ data: JSON.stringify({ type: 'status', text: `Servidor sobrecarregado. Nova tentativa em ${delaySec}s (${attempt}/${MAX_RETRIES})...` }) });
+          await new Promise(r => setTimeout(r, delaySec * 1000));
+          await stream.writeSSE({ data: JSON.stringify({ type: 'status', text: `Tentativa ${attempt}/${MAX_RETRIES} em andamento...` }) });
+        }
+
+        const callbacks: AnalysisCallbacks = {
+          onStatus: (text) => { stream.writeSSE({ data: JSON.stringify({ type: 'status', text }) }); },
+          onAgent:  (name) => { stream.writeSSE({ data: JSON.stringify({ type: 'agent', agent: name }) }); },
+          onToken:  (delta) => { stream.writeSSE({ data: JSON.stringify({ type: 'token', text: delta }) }); },
+          onStep:   (msg)  => { stream.writeSSE({ data: JSON.stringify({ type: 'step', text: msg }) }); },
+        };
+
+        const result = await runAnalysis(body, jwtPayload, callbacks, { skipMessageSave: messageSaved });
+        messageSaved = true; // após 1ª tentativa bem-sucedida ou salva
+
+        await stream.writeSSE({ data: JSON.stringify({
+          type: 'done',
+          text: result.responseText,
+          agentName: result.agentName,
+          thinking: result.thinkingContent,
+        }) });
+        return; // sucesso — encerra o loop
+
+      } catch (error: any) {
+        lastError = error;
+        messageSaved = true; // mensagem já foi salva na 1ª tentativa (mesmo que falhou no LLM)
+
+        if (isOverloadError(error) && attempt < MAX_RETRIES) {
+          console.warn(`[SSE] Anthropic sobrecarregado (tentativa ${attempt}/${MAX_RETRIES}). Aguardando antes de retry...`);
+          continue;
+        }
+
+        // Erro não recuperável ou esgotou retries
+        const msg = error?.message || 'Erro interno do servidor';
+        console.error('[SSE] Erro:', msg);
+        await stream.writeSSE({ data: JSON.stringify({ type: 'error', message: msg }) });
+        return;
+      }
     }
+
+    // Esgotou todas as tentativas
+    const msg = lastError?.message || 'Servidor sobrecarregado. Tente novamente em alguns instantes.';
+    console.error('[SSE] Esgotadas todas as tentativas:', msg);
+    await stream.writeSSE({ data: JSON.stringify({ type: 'error', message: msg }) });
   });
 });
 

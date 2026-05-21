@@ -1,6 +1,21 @@
 import { useState } from 'react';
 import { ThinkingBlock } from './ThinkingBlock';
 import { fmt } from '../../lib/fmt';
+import { AgentMark } from '../ui/AgentMark';
+import type { Agent } from '../ui/AgentMark/types';
+import { parseMatriz2x2 } from '../canvas/parsers/parseMatriz2x2';
+import { Matriz2x2 } from '../canvas/artifacts/Matriz2x2';
+import { parsePestel } from '../canvas/parsers/parsePestel';
+import { PestelScatter } from '../canvas/artifacts/PestelScatter';
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const DOMAIN_RENDERERS_ENABLED = (import.meta as any).env?.VITE_ENABLE_DOMAIN_RENDERERS !== 'false';
+
+// Agentes reconhecidos pelo sistema de identidade
+const KNOWN_AGENTS: Agent[] = ['HERMES','SCOPUS','KLIO','PYTHIA','MNEMOSYNE','THEMIS','KRATOS'];
+function isKnownAgent(name: string): name is Agent {
+  return KNOWN_AGENTS.includes(name as Agent);
+}
 
 interface MessageBubbleProps {
   role: 'user' | 'assistant';
@@ -43,6 +58,16 @@ export function MessageBubble({
   const agentVar = `var(--agent-${agentName.toLowerCase()})`;
   const now = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
 
+  // Domain renderer — Matriz 2×2 (PYTHIA)
+  const matriz2x2Data = !isUser && DOMAIN_RENDERERS_ENABLED && agentName === 'PYTHIA'
+    ? parseMatriz2x2(content)
+    : null;
+
+  // Domain renderer — PESTEL Scatter (KLIO)
+  const pestelData = !isUser && DOMAIN_RENDERERS_ENABLED && agentName === 'KLIO'
+    ? parsePestel(content)
+    : null;
+
   if (isUser) {
     return (
       <div className="flex justify-end w-full" style={{ animation: 'fade-in .15s ease' }}>
@@ -78,17 +103,23 @@ export function MessageBubble({
         onMouseEnter={() => setShowActions(true)}
         onMouseLeave={() => setShowActions(false)}
       >
-        {/* Avatar */}
-        <div style={{
-          width: 28, height: 28,
-          background: agentHex,
-          borderRadius: '8px',
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          fontFamily: "'DM Sans', system-ui, sans-serif",
-          fontSize: 10, fontWeight: 700, letterSpacing: '0.3px',
-          color: '#fff', flexShrink: 0, marginTop: 2,
-        }}>
-          {agentName.slice(0, 2)}
+        {/* Avatar — AgentMark ou fallback de 2 letras */}
+        <div style={{ flexShrink: 0, marginTop: 2 }}>
+          {isKnownAgent(agentName) ? (
+            <AgentMark name={agentName} scale="compact" size={28} />
+          ) : (
+            <div style={{
+              width: 28, height: 28,
+              background: agentHex,
+              borderRadius: '8px',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              fontFamily: "'DM Sans', system-ui, sans-serif",
+              fontSize: 10, fontWeight: 700, letterSpacing: '0.3px',
+              color: '#fff',
+            }}>
+              {agentName.slice(0, 2)}
+            </div>
+          )}
         </div>
 
         <div style={{ flex: 1, minWidth: 0 }}>
@@ -133,6 +164,14 @@ export function MessageBubble({
                 animation: 'blink .8s ease-in-out infinite',
                 verticalAlign: 'middle',
               }} />
+            )}
+            {/* Domain renderer — Matriz 2×2 */}
+            {!isStreaming && matriz2x2Data && (
+              <Matriz2x2 data={matriz2x2Data} rawMarkdown={content} />
+            )}
+            {/* Domain renderer — PESTEL Scatter */}
+            {!isStreaming && pestelData && (
+              <PestelScatter data={pestelData} rawMarkdown={content} />
             )}
           </div>
 

@@ -2,9 +2,9 @@ import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { AGENTS } from './constants';
 import { MessageBubble } from './components/chat/MessageBubble';
 import { AgentWorking } from './components/chat/AgentWorking';
-import { Topbar } from './components/layout/Topbar';
+import { CommandBar } from './components/layout/CommandBar';
 import { Sidebar } from './components/layout/Sidebar';
-import { InfoBar } from './components/layout/InfoBar';
+import { AgentMark } from './components/ui/AgentMark';
 import { InputZone } from './components/chat/InputZone';
 import { RightPanel } from './components/layout/RightPanel';
 
@@ -180,9 +180,10 @@ function App() {
   // ── Projeto / Sessão ─────────────────────────────────────────────────────────
   const [projeto, setProjeto] = useState({
     nome: '', metodologia: 'MSEF', status: 'Em produção', kratosCron: '0 6 * * *',
+    alertEmails: '',
     horizonte: '', elaborador: '', cliente: '', questaoEstrategica: '', mudancaIdentificada: ''
   });
-  const [vizMode, setVizMode] = useState('etapa');
+  const [vizMode, setVizMode] = useState('passos');
   const [mode, setMode] = useState('production');
   const [sessionId, setSessionId] = useState(() => `sess_${Date.now()}`);
   const [sessoes, setSessoes] = useState<any[]>([]);
@@ -197,7 +198,7 @@ function App() {
   // ── Formulário de Nova Sessão ────────────────────────────────────────────────
   const [scopeForm, setScopeForm] = useState({
     tema: '', horizonte: '', elaborador: '', cliente: '',
-    questaoEstrategica: '', mudancaIdentificada: ''
+    questaoEstrategica: '', mudancaIdentificada: '', instrucoes: ''
   });
   const [scopeFiles, setScopeFiles] = useState<{name: string, text: string}[]>([]);
   const [scopeExtracting, setScopeExtracting] = useState(false);
@@ -216,6 +217,7 @@ function App() {
   // ── Export ───────────────────────────────────────────────────────────────────
   const [exportingDocx, setExportingDocx] = useState(false);
   const [exportingPdf, setExportingPdf] = useState(false);
+  const [exportingEstimativa, setExportingEstimativa] = useState(false);
 
   // ── Sidebar filtro ───────────────────────────────────────────────────────────
   const [filterStatus, setFilterStatus] = useState({ producao: true, ativos: true, inativos: false });
@@ -332,6 +334,7 @@ function App() {
         metodologia: s.methodology || 'MSEF',
         status: s.status || 'Em produção',
         kratosCron: s.kratosCron || '0 6 * * *',
+        alertEmails: s.alertEmails || '',
         horizonte: s.horizon || '',
         elaborador: s.analyst || '',
         cliente: s.client || '',
@@ -384,14 +387,22 @@ function App() {
     }
   };
 
-  const dispararEmailTeste = async () => {
-    const destino = window.prompt("Digite o e-mail de destino para receber o alerta do KRATOS:", "seu_email@dominio.com");
-    if (!destino) return;
+  const enviarRelatorioKratos = async (overrideEmails?: string[]) => {
+    if (!sessionId) { alert('Nenhum projeto ativo.'); return; }
+    const destinos = overrideEmails || (projeto.alertEmails ? projeto.alertEmails.split(',').map(e => e.trim()).filter(Boolean) : []);
+    if (destinos.length === 0) {
+      const manual = window.prompt('Nenhum e-mail configurado neste projeto.\nDigite o(s) e-mail(s) de destino (separados por vírgula):');
+      if (!manual?.trim()) return;
+      destinos.push(...manual.split(',').map(e => e.trim()).filter(Boolean));
+    }
     try {
-      const res = await fetch(`/api/v1/test-email`, { method: 'POST', headers: reqHeaders, body: JSON.stringify({ to: destino, projectName: projeto.nome }) });
+      const res = await fetch(`/api/v1/kratos/${sessionId}/report`, {
+        method: 'POST', headers: reqHeaders,
+        body: JSON.stringify({ emails: destinos })
+      });
       const data = await res.json();
-      if (res.ok) alert(`E-mail de teste enviado com sucesso para ${destino}!`);
-      else alert(data.error || 'Erro ao disparar e-mail de teste. Verifique o terminal do Docker.');
+      if (res.ok && data.success) alert(`✅ Relatório KRATOS gerado e enviado para:\n${destinos.join('\n')}`);
+      else alert(data.error || data.message || 'Erro ao gerar relatório. Verifique o terminal do Docker.');
     } catch (e: any) { alert('Erro na requisição: ' + e.message); }
   };
 
@@ -400,7 +411,7 @@ function App() {
       const r = await fetch('/api/v1/sessions/' + sessionId, {
         method: 'PATCH',
         headers: reqHeaders,
-        body: JSON.stringify({ name: projeto.nome, status: projeto.status, kratosCron: projeto.kratosCron, methodology: projeto.metodologia })
+        body: JSON.stringify({ name: projeto.nome, status: projeto.status, kratosCron: projeto.kratosCron, alertEmails: projeto.alertEmails, methodology: projeto.metodologia })
       });
       if (r.ok) { setShowSettingsModal(false); carregarSessoes(); }
     } catch (e: any) { alert('Erro ao salvar configurações: ' + e.message); }
@@ -413,12 +424,27 @@ function App() {
 
   // ── MSEF step derivado das mensagens ──────────────────────────────────────────
   const MSEF_AGENT_ORDER = ['SCOPUS', 'KLIO', 'PYTHIA', 'MNEMOSYNE', 'THEMIS'];
+  // Padrões alternativos para sessões antigas (sem marcador "AGENTE ·")
+  const MSEF_FALLBACK_PATTERNS: Record<string, RegExp[]> = {
+    THEMIS:    [/implica[çc][oõ]es\s+estrat[eé]gicas/i, /THEMIS/i],
+    MNEMOSYNE: [/narrativa[s]?\s+de\s+cen[aá]rio/i, /MNEMOSYNE/i],
+    PYTHIA:    [/eixo[s]?\s+(de\s+)?incerteza/i, /matriz\s*2[x×]2/i, /PYTHIA/i],
+    KLIO:      [/driver[s]?\s+da\s+mudan[çc]a/i, /força[s]?\s+motrizes/i, /V[1-5]\s*[—–-]/i, /KLIO/i],
+    SCOPUS:    [/escopo\s+da\s+an[aá]lise/i, /SCOPUS/i],
+  };
   const currentMsefStep = useMemo(() => {
     for (let i = MSEF_AGENT_ORDER.length - 1; i >= 0; i--) {
       const agent = MSEF_AGENT_ORDER[i];
-      if (messages.some(m => m.role === 'assistant' && (m.content.includes(`${agent} ·`) || m.content.includes(`**${agent}**`)))) {
-        return i + 1;
-      }
+      const patterns = MSEF_FALLBACK_PATTERNS[agent] ?? [];
+      const found = messages.some(m => {
+        if (m.role !== 'assistant') return false;
+        const c = m.content;
+        // marcador padrão
+        if (c.includes(`${agent} ·`) || c.includes(`**${agent}**`)) return true;
+        // padrões de conteúdo para sessões sem marcador
+        return patterns.some(re => re.test(c));
+      });
+      if (found) return i + 1;
     }
     return messages.length > 0 ? 1 : 0;
   }, [messages]);
@@ -527,6 +553,10 @@ function App() {
       ).join('\n\n');
     }
 
+    const instrucaoExtra = scopeForm.instrucoes?.trim()
+      ? `\n\nInstruções adicionais do usuário: ${scopeForm.instrucoes.trim()}`
+      : '';
+
     const nome = scopeForm.tema || 'Nova Análise';
     const newSessionId = `sess_${Date.now()}`;
 
@@ -537,8 +567,8 @@ function App() {
     setThinkingOpen({});
 
     const initMsg = campos.length > 0
-      ? `Iniciar\n\nDados de escopo fornecidos pelo usuário:\n${campos.map(c => `- ${c}`).join('\n')}${fileContext}\n\nNão solicite essas informações novamente. Confirme o recebimento, apresente as etapas da metodologia e pergunte por onde iniciamos.`
-      : `Iniciar`;
+      ? `Iniciar\n\nDados de escopo fornecidos pelo usuário:\n${campos.map(c => `- ${c}`).join('\n')}${fileContext}${instrucaoExtra}\n\nNão solicite essas informações novamente. Confirme o recebimento, apresente as etapas da metodologia e pergunte por onde iniciamos.`
+      : `Iniciar${instrucaoExtra}`;
 
     const newMessages = [{ role: 'user', content: initMsg }];
     setMessages(newMessages);
@@ -879,97 +909,246 @@ function App() {
     } catch (e: any) { alert('Erro ao gerar PDF: ' + e.message); }
   };
 
+  // ── Estimativa EB — SIEx/EB (EB70-MT-10.401) ────────────────────────────────
+  const exportEstimativa = async () => {
+    if (messages.length === 0) return alert('Nenhuma análise disponível para formalizar como Estimativa.');
+    setExportingEstimativa(true);
+    try {
+      const res = await fetch('/api/v1/export/estimativa', {
+        method: 'POST',
+        headers: reqHeaders,
+        body: JSON.stringify({ projeto, messages }),
+      });
+      if (!res.ok) throw new Error('Erro ao gerar Estimativa');
+      const html = await res.text();
+      const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      window.open(url, '_blank');
+      setTimeout(() => URL.revokeObjectURL(url), 30000);
+    } catch (e: any) { alert('Erro ao gerar Estimativa EB: ' + (e as any).message); }
+    setExportingEstimativa(false);
+  };
+
   // ── TELA DE LOGIN ─────────────────────────────────────────────────────────────
   if (!token) {
     return (
-      <div className="flex h-screen items-center justify-center bg-stratsight-dark font-sans">
-        <div className="bg-white p-8 rounded-2xl shadow-2xl w-full max-w-sm relative overflow-hidden">
-          <div className="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-stratsight-gold to-stratsight-medium"></div>
-          <div className="flex justify-center mb-6 mt-2">
-            <div className="w-16 h-16 rounded-full bg-stratsight-medium flex items-center justify-center text-white text-3xl font-bold shadow-inner">⚡</div>
-          </div>
-          <h2 className="text-center text-2xl font-bold text-stratsight-dark tracking-widest mb-1">OLYMPUS v4.0</h2>
-          <p className="text-center text-xs text-stratsight-medium mb-6 uppercase tracking-wider">{authMode === 'login' ? 'Acesso Restrito' : 'Cadastro de Usuário'}</p>
+      <div style={{
+        background: '#0D1612', minHeight: '100vh',
+        display: 'flex', flexDirection: 'column',
+        fontFamily: "'DM Sans', system-ui, sans-serif",
+      }}>
 
-          {isFirstRun && authMode === 'register' && (
-            <div className="mb-4 bg-purple-50 border border-purple-200 text-purple-800 text-xs p-3 rounded-xl text-center shadow-inner">
-              <strong>Sistema não configurado.</strong><br/>
-              O primeiro usuário a se cadastrar receberá automaticamente o perfil de <strong>Administrador</strong>.
+        {/* Selo de classificação */}
+        <div style={{
+          textAlign: 'center', padding: '9px 16px',
+          fontFamily: "'DM Mono', 'Cascadia Code', monospace",
+          fontSize: 9.5, letterSpacing: '2px', fontWeight: 700,
+          color: '#E65100', background: 'rgba(230,81,0,.08)',
+          borderBottom: '1px solid rgba(230,81,0,.18)',
+          textTransform: 'uppercase' as const,
+        }}>
+          ⬢ CONFIDENCIAL — SISTEMA DE ACESSO RESTRITO
+        </div>
+
+        {/* Área central */}
+        <div style={{
+          flex: 1, display: 'flex', alignItems: 'center',
+          justifyContent: 'center', padding: '32px 40px', gap: 64,
+          flexWrap: 'wrap' as const,
+        }}>
+
+          {/* Coluna esquerda — Branding + Engine cards */}
+          <div style={{ maxWidth: 460, flex: 1, minWidth: 280 }}>
+            <div style={{
+              fontFamily: "'Fraunces', Georgia, serif",
+              fontSize: 64, fontWeight: 700, color: '#fff',
+              letterSpacing: '-1px', lineHeight: 1,
+            }}>OLYMPUS</div>
+            <div style={{
+              fontFamily: "'DM Mono', 'Cascadia Code', monospace",
+              fontSize: 11, color: '#C9A84C',
+              letterSpacing: '2.5px', marginTop: 10,
+              textTransform: 'uppercase' as const,
+            }}>
+              StratSight BR · Strategic Foresight
             </div>
-          )}
+            <div style={{ fontSize: 13, color: '#6B8C7A', lineHeight: 1.6, marginTop: 12, maxWidth: 380 }}>
+              Plataforma de inteligência prospectiva para análise e monitoramento estratégico de cenários futuros.
+            </div>
 
-          <form onSubmit={async (e) => {
-            e.preventDefault();
-            try {
-              if (setup2FA) {
-                const res = await fetch('/api/v1/auth/2fa/enable', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ userId: setup2FA.userId, token: totpToken }) });
-                if (!res.ok) { const txt = await res.text(); try { alert(JSON.parse(txt).error); } catch { alert('Erro 2FA: ' + txt.slice(0, 100)); } return; }
-                alert('2FA configurado com sucesso! Faça login.');
-                setSetup2FA(null); setAuthMode('login'); setTotpToken(''); setAuthForm({...authForm, password: ''});
-                return;
-              }
+            {/* Engine cards */}
+            <div style={{ display: 'flex', gap: 12, marginTop: 36 }}>
+              {([
+                { agent: 'HERMES' as const, label: 'ATHENA', sub: 'Motor de Produção', detail: '7 metodologias · MSEF ativo' },
+                { agent: 'KRATOS' as const, label: 'KRATOS', sub: 'Monitoramento Contínuo', detail: 'Varredura periódica · Alertas' },
+              ]).map(card => (
+                <div key={card.label} style={{
+                  flex: 1, background: 'rgba(255,255,255,.05)',
+                  border: '1px solid rgba(255,255,255,.1)',
+                  borderRadius: 12, padding: '18px 16px',
+                }}>
+                  <AgentMark name={card.agent} scale="compact" size={28} />
+                  <div style={{
+                    fontWeight: 700, color: '#fff', marginTop: 10,
+                    fontSize: 12, letterSpacing: '1.2px',
+                    fontFamily: "'DM Sans', sans-serif",
+                  }}>{card.label}</div>
+                  <div style={{ fontSize: 11, color: '#6B8C7A', marginTop: 4 }}>{card.sub}</div>
+                  <div style={{ fontSize: 10, color: '#5A9E6F', marginTop: 3 }}>{card.detail}</div>
+                </div>
+              ))}
+            </div>
+          </div>
 
-              if (authMode === 'login') {
-                const res = await fetch('/api/v1/auth/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({...authForm, token: requires2FA ? totpToken : undefined}) });
-                if (!res.ok) { const txt = await res.text(); try { alert(JSON.parse(txt).error || 'Erro na autenticação'); } catch { alert('Falha no Servidor (500/502). O Backend pode estar offline.\n\nDetalhes: ' + txt.slice(0, 100)); } return; }
-                const data = await res.json();
-                if (data.requires2FA) { setRequires2FA(true); return; }
-                // Armazena token para persistência de sessão do servidor (mas sempre requer login manual)
-                localStorage.setItem('olympus_token', data.token);
-                localStorage.setItem('olympus_user', JSON.stringify(data.user));
-                setToken(data.token);
-                setUser(data.user);
-              } else {
-                const res = await fetch('/api/v1/auth/register', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(authForm) });
-                if (!res.ok) { const txt = await res.text(); try { alert(JSON.parse(txt).error || 'Erro no cadastro'); } catch { alert('Falha no Servidor (500/502). O Backend pode estar offline.\n\nDetalhes: ' + txt.slice(0, 100)); } return; }
-                const data = await res.json();
-                setIsFirstRun(false);
-                if (window.confirm('Cadastro realizado! Deseja configurar a Autenticação em Duas Etapas (2FA) agora para maior segurança?')) {
-                  const res2fa = await fetch('/api/v1/auth/2fa/generate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ userId: data.user.id }) });
-                  if (!res2fa.ok) { alert('Erro ao gerar QR Code'); return; }
-                  const data2fa = await res2fa.json();
-                  setSetup2FA({ qrCodeUrl: data2fa.qrCodeUrl, userId: data.user.id });
-                } else {
-                  alert('Faça login para continuar.'); setAuthMode('login'); setAuthForm({...authForm, password: ''});
-                }
-              }
-            } catch (err: any) { alert('Erro Crítico de Conexão: ' + err.message); }
-          }} className="space-y-4">
-            {setup2FA ? (
-              <div className="flex flex-col items-center text-center">
-                <p className="text-sm text-gray-600 mb-4">Escaneie o QR Code abaixo com seu app autenticador e insira o código gerado.</p>
-                <img src={setup2FA.qrCodeUrl} alt="QR Code 2FA" className="w-48 h-48 mb-4 border p-2 rounded-xl" />
-                <input type="text" placeholder="Código de 6 dígitos" required value={totpToken} onChange={e => setTotpToken(e.target.value)} className="w-full border-2 border-gray-200 rounded-xl px-4 py-3 outline-none focus:border-stratsight-medium transition-colors text-center tracking-widest text-lg font-mono" maxLength={6} />
-                <button type="submit" className="w-full bg-stratsight-dark text-white font-bold py-3.5 rounded-xl hover:bg-stratsight-medium transition-colors shadow-lg shadow-green-900/20 mt-4">Confirmar 2FA</button>
-                <button type="button" onClick={() => { setSetup2FA(null); setAuthMode('login'); setAuthForm({...authForm, password: ''}); }} className="mt-3 text-xs text-gray-500 hover:text-stratsight-medium font-bold transition-colors">Pular por enquanto</button>
+          {/* Coluna direita — Formulário */}
+          <div style={{ width: 360, flexShrink: 0, minWidth: 300 }}>
+            <div style={{
+              background: 'rgba(255,255,255,.04)',
+              border: '1px solid rgba(255,255,255,.1)',
+              borderRadius: 16, padding: '32px',
+              position: 'relative' as const, overflow: 'hidden',
+            }}>
+              {/* Faixa top */}
+              <div style={{
+                position: 'absolute' as const, top: 0, left: 0, right: 0, height: 3,
+                background: 'linear-gradient(90deg, #C9A84C 0%, #5A9E6F 100%)',
+              }} />
+
+              {/* Header do card */}
+              <div style={{ marginBottom: 24 }}>
+                <div style={{
+                  fontFamily: "'DM Mono', monospace", fontSize: 9.5,
+                  letterSpacing: '2px', color: '#6B8C7A',
+                  textTransform: 'uppercase' as const, marginBottom: 6,
+                }}>
+                  {authMode === 'login' ? 'Autenticação · Acesso Restrito' : 'Cadastro de Usuário'}
+                </div>
+                <div style={{
+                  fontFamily: "'Fraunces', Georgia, serif",
+                  fontSize: 22, fontWeight: 700, color: '#fff',
+                }}>
+                  {authMode === 'login' ? 'Entrar no sistema' : 'Novo usuário'}
+                </div>
               </div>
-            ) : requires2FA ? (
-              <div className="flex flex-col items-center text-center">
-                <p className="text-sm text-gray-600 mb-4">Esta conta está protegida por 2FA. Insira o código do seu aplicativo.</p>
-                <input type="text" placeholder="Código de 6 dígitos" required value={totpToken} onChange={e => setTotpToken(e.target.value)} className="w-full border-2 border-gray-200 rounded-xl px-4 py-3 outline-none focus:border-stratsight-medium transition-colors text-center tracking-widest text-lg font-mono" maxLength={6} />
-                <button type="submit" className="w-full bg-stratsight-dark text-white font-bold py-3.5 rounded-xl hover:bg-stratsight-medium transition-colors shadow-lg shadow-green-900/20 mt-4">Verificar e Entrar</button>
-                <button type="button" onClick={() => { setRequires2FA(false); setTotpToken(''); }} className="mt-3 text-xs text-gray-500 hover:text-stratsight-medium font-bold transition-colors">Voltar</button>
-              </div>
-            ) : (
-              <>
-                {authMode === 'register' && <input type="text" placeholder="Nome Completo" required value={authForm.name} onChange={e => setAuthForm({...authForm, name: e.target.value})} className="w-full border-2 border-gray-200 rounded-xl px-4 py-3 outline-none focus:border-stratsight-medium transition-colors" />}
-                <input type="email" placeholder="E-mail corporativo" required value={authForm.email} onChange={e => setAuthForm({...authForm, email: e.target.value})} className="w-full border-2 border-gray-200 rounded-xl px-4 py-3 outline-none focus:border-stratsight-medium transition-colors" />
-                <div className="relative">
-                  <input type={showPassword ? "text" : "password"} placeholder="Senha" required value={authForm.password} onChange={e => setAuthForm({...authForm, password: e.target.value})} className="w-full border-2 border-gray-200 rounded-xl px-4 py-3 outline-none focus:border-stratsight-medium transition-colors pr-10" />
-                  <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-3.5 text-gray-400 hover:text-stratsight-medium focus:outline-none">
-                    {showPassword ? "🙈" : "👁️"}
+
+              {isFirstRun && authMode === 'register' && (
+                <div style={{
+                  marginBottom: 16,
+                  background: 'rgba(167,139,250,.1)',
+                  border: '1px solid rgba(167,139,250,.3)',
+                  color: '#c4b5fd', fontSize: 12,
+                  padding: '12px', borderRadius: 8, textAlign: 'center' as const,
+                }}>
+                  <strong>Sistema não configurado.</strong><br/>
+                  O primeiro usuário receberá automaticamente o perfil de <strong>Administrador</strong>.
+                </div>
+              )}
+
+              <form onSubmit={async (e) => {
+                e.preventDefault();
+                try {
+                  if (setup2FA) {
+                    const res = await fetch('/api/v1/auth/2fa/enable', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ userId: setup2FA.userId, token: totpToken }) });
+                    if (!res.ok) { const txt = await res.text(); try { alert(JSON.parse(txt).error); } catch { alert('Erro 2FA: ' + txt.slice(0, 100)); } return; }
+                    alert('2FA configurado com sucesso! Faça login.');
+                    setSetup2FA(null); setAuthMode('login'); setTotpToken(''); setAuthForm({...authForm, password: ''});
+                    return;
+                  }
+
+                  if (authMode === 'login') {
+                    const res = await fetch('/api/v1/auth/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({...authForm, token: requires2FA ? totpToken : undefined}) });
+                    if (!res.ok) { const txt = await res.text(); try { alert(JSON.parse(txt).error || 'Erro na autenticação'); } catch { alert('Falha no Servidor (500/502). O Backend pode estar offline.\n\nDetalhes: ' + txt.slice(0, 100)); } return; }
+                    const data = await res.json();
+                    if (data.requires2FA) { setRequires2FA(true); return; }
+                    localStorage.setItem('olympus_token', data.token);
+                    localStorage.setItem('olympus_user', JSON.stringify(data.user));
+                    setToken(data.token);
+                    setUser(data.user);
+                  } else {
+                    const res = await fetch('/api/v1/auth/register', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(authForm) });
+                    if (!res.ok) { const txt = await res.text(); try { alert(JSON.parse(txt).error || 'Erro no cadastro'); } catch { alert('Falha no Servidor (500/502). O Backend pode estar offline.\n\nDetalhes: ' + txt.slice(0, 100)); } return; }
+                    const data = await res.json();
+                    setIsFirstRun(false);
+                    if (window.confirm('Cadastro realizado! Deseja configurar a Autenticação em Duas Etapas (2FA) agora para maior segurança?')) {
+                      const res2fa = await fetch('/api/v1/auth/2fa/generate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ userId: data.user.id }) });
+                      if (!res2fa.ok) { alert('Erro ao gerar QR Code'); return; }
+                      const data2fa = await res2fa.json();
+                      setSetup2FA({ qrCodeUrl: data2fa.qrCodeUrl, userId: data.user.id });
+                    } else {
+                      alert('Faça login para continuar.'); setAuthMode('login'); setAuthForm({...authForm, password: ''});
+                    }
+                  }
+                } catch (err: any) { alert('Erro Crítico de Conexão: ' + err.message); }
+              }} className="space-y-4">
+                {setup2FA ? (
+                  <div className="flex flex-col items-center text-center">
+                    <p className="text-sm mb-4" style={{ color: '#A3C9AE' }}>Escaneie o QR Code abaixo com seu app autenticador e insira o código gerado.</p>
+                    <img src={setup2FA.qrCodeUrl} alt="QR Code 2FA" className="w-48 h-48 mb-4 border p-2 rounded-xl" style={{ background: '#fff' }} />
+                    <input type="text" placeholder="Código de 6 dígitos" required value={totpToken} onChange={e => setTotpToken(e.target.value)} className="w-full border-2 border-gray-200 rounded-xl px-4 py-3 outline-none focus:border-stratsight-medium transition-colors text-center tracking-widest text-lg font-mono" maxLength={6} />
+                    <button type="submit" className="w-full bg-stratsight-dark text-white font-bold py-3.5 rounded-xl hover:bg-stratsight-medium transition-colors shadow-lg shadow-green-900/20 mt-4">Confirmar 2FA</button>
+                    <button type="button" onClick={() => { setSetup2FA(null); setAuthMode('login'); setAuthForm({...authForm, password: ''}); }} style={{ marginTop: 12, background: 'none', border: 'none', color: '#6B8C7A', fontSize: 12, cursor: 'pointer' }}>Pular por enquanto</button>
+                  </div>
+                ) : requires2FA ? (
+                  <div className="flex flex-col items-center text-center">
+                    <p className="text-sm mb-4" style={{ color: '#A3C9AE' }}>Esta conta está protegida por 2FA. Insira o código do seu aplicativo.</p>
+                    <input type="text" placeholder="Código de 6 dígitos" required value={totpToken} onChange={e => setTotpToken(e.target.value)} className="w-full border-2 border-gray-200 rounded-xl px-4 py-3 outline-none focus:border-stratsight-medium transition-colors text-center tracking-widest text-lg font-mono" maxLength={6} />
+                    <button type="submit" className="w-full bg-stratsight-dark text-white font-bold py-3.5 rounded-xl hover:bg-stratsight-medium transition-colors shadow-lg shadow-green-900/20 mt-4">Verificar e Entrar</button>
+                    <button type="button" onClick={() => { setRequires2FA(false); setTotpToken(''); }} style={{ marginTop: 12, background: 'none', border: 'none', color: '#6B8C7A', fontSize: 12, cursor: 'pointer' }}>Voltar</button>
+                  </div>
+                ) : (
+                  <>
+                    {authMode === 'register' && <input type="text" placeholder="Nome Completo" required value={authForm.name} onChange={e => setAuthForm({...authForm, name: e.target.value})} className="w-full border-2 border-gray-200 rounded-xl px-4 py-3 outline-none focus:border-stratsight-medium transition-colors" />}
+                    <input type="email" placeholder="E-mail corporativo" required value={authForm.email} onChange={e => setAuthForm({...authForm, email: e.target.value})} className="w-full border-2 border-gray-200 rounded-xl px-4 py-3 outline-none focus:border-stratsight-medium transition-colors" />
+                    <div className="relative">
+                      <input type={showPassword ? 'text' : 'password'} placeholder="Senha" required value={authForm.password} onChange={e => setAuthForm({...authForm, password: e.target.value})} className="w-full border-2 border-gray-200 rounded-xl px-4 py-3 outline-none focus:border-stratsight-medium transition-colors pr-10" />
+                      <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-3.5 text-gray-400 hover:text-stratsight-medium focus:outline-none">
+                        {showPassword ? '🙈' : '👁️'}
+                      </button>
+                    </div>
+                    <button type="submit" className="w-full bg-stratsight-dark text-white font-bold py-3.5 rounded-xl hover:bg-stratsight-medium transition-colors shadow-lg shadow-green-900/20">
+                      {authMode === 'login' ? 'Autenticar →' : 'Cadastrar'}
+                    </button>
+                  </>
+                )}
+              </form>
+
+              {!setup2FA && !requires2FA && !isFirstRun && (
+                <div style={{ marginTop: 20, textAlign: 'center' as const }}>
+                  <button
+                    onClick={() => setAuthMode(authMode === 'login' ? 'register' : 'login')}
+                    style={{ background: 'none', border: 'none', color: '#6B8C7A', fontSize: 12, cursor: 'pointer' }}
+                    onMouseEnter={e => (e.currentTarget.style.color = '#A3C9AE')}
+                    onMouseLeave={e => (e.currentTarget.style.color = '#6B8C7A')}
+                  >
+                    {authMode === 'login' ? 'Não tem conta? Cadastre-se' : 'Já tem conta? Faça login'}
                   </button>
                 </div>
-                <button type="submit" className="w-full bg-stratsight-dark text-white font-bold py-3.5 rounded-xl hover:bg-stratsight-medium transition-colors shadow-lg shadow-green-900/20">{authMode === 'login' ? 'Entrar no Sistema' : 'Cadastrar'}</button>
-              </>
-            )}
-          </form>
-          {!setup2FA && !requires2FA && !isFirstRun && (
-            <div className="mt-6 text-center">
-              <button onClick={() => setAuthMode(authMode === 'login' ? 'register' : 'login')} className="text-xs text-gray-500 hover:text-stratsight-medium font-bold transition-colors">{authMode === 'login' ? 'Não tem conta? Cadastre-se' : 'Já tem conta? Faça login'}</button>
+              )}
+
+              {authMode === 'login' && !setup2FA && !requires2FA && (
+                <div style={{
+                  marginTop: 16, textAlign: 'center' as const,
+                  fontFamily: "'DM Mono', monospace", fontSize: 9.5,
+                  color: '#3D6B50', letterSpacing: '0.5px',
+                }}>
+                  Protegido por autenticação JWT · 2FA disponível
+                </div>
+              )}
             </div>
-          )}
+          </div>
         </div>
+
+        {/* Footer */}
+        <div style={{
+          display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+          padding: '10px 24px', borderTop: '1px solid rgba(255,255,255,.06)',
+          fontFamily: "'DM Mono', 'Cascadia Code', monospace",
+          fontSize: 10, color: '#3D6B50', letterSpacing: '0.5px',
+        }}>
+          <span>v1.0</span>
+          <span>© {new Date().getFullYear()} OLYMPUS StratSight BR — Uso Restrito</span>
+        </div>
+
       </div>
     );
   }
@@ -1063,6 +1242,20 @@ function App() {
                     className="w-full border-2 border-gray-200 rounded-xl px-4 py-2.5 focus:border-stratsight-medium outline-none transition-colors text-sm resize-none"
                     placeholder="Ex: Aceleração do uso de IA em sistemas autônomos de combate por potências rivais"
                   />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-stratsight-dark uppercase mb-1.5 tracking-wide">
+                    7. Instruções Livres para a IA <span className="text-stratsight-medium normal-case font-normal">(opcional)</span>
+                  </label>
+                  <textarea
+                    value={scopeForm.instrucoes}
+                    onChange={e => setScopeForm(f => ({...f, instrucoes: e.target.value}))}
+                    rows={3}
+                    className="w-full border-2 border-gray-200 rounded-xl px-4 py-2.5 focus:border-stratsight-medium outline-none transition-colors text-sm resize-none"
+                    placeholder="Ex: Foco especial no impacto para o setor de defesa. Não abordar aspectos tributários. Usar linguagem técnica."
+                  />
+                  <p className="text-[10px] text-gray-400 mt-1">Instruções de direcionamento, restrições ou preferências de formato que a IA deve seguir ao longo de toda a análise.</p>
                 </div>
               </div>
 
@@ -1196,11 +1389,22 @@ function App() {
                 </select>
                 <p className="text-[10px] text-gray-500 mt-1">O agente acordará automaticamente nestes horários para varrer a internet.</p>
               </div>
+              <div>
+                <label className="block text-xs font-bold text-stratsight-dark uppercase mb-2">E-mails de Alerta KRATOS</label>
+                <input
+                  type="text"
+                  value={projeto.alertEmails}
+                  onChange={e => setProjeto({...projeto, alertEmails: e.target.value})}
+                  placeholder="email1@dominio.com, email2@dominio.com"
+                  className="w-full border-2 border-gray-200 rounded-xl px-4 py-3 focus:border-stratsight-medium outline-none text-sm"
+                />
+                <p className="text-[10px] text-gray-500 mt-1">Destinatários dos relatórios automáticos e sob demanda. Separe múltiplos e-mails por vírgula.</p>
+              </div>
             </div>
             <div className="mt-6 p-4 bg-blue-50 border border-blue-100 rounded-xl">
-              <h3 className="text-xs font-bold text-blue-900 uppercase mb-2">Teste de E-mail (KRATOS)</h3>
-              <p className="text-[10px] text-blue-700 mb-3">Dispara um e-mail de simulação para verificar as credenciais SMTP no .env.</p>
-              <button onClick={dispararEmailTeste} className="w-full py-2 bg-white text-blue-800 border border-blue-200 font-bold rounded-lg hover:bg-blue-100 transition-colors text-xs shadow-sm">⚡ Disparar E-mail de Teste</button>
+              <h3 className="text-xs font-bold text-blue-900 uppercase mb-2">Relatório KRATOS por E-mail</h3>
+              <p className="text-[10px] text-blue-700 mb-3">Gera o relatório de monitoramento agora e envia imediatamente para os e-mails configurados acima.</p>
+              <button onClick={() => enviarRelatorioKratos()} className="w-full py-2 bg-blue-700 text-white font-bold rounded-lg hover:bg-blue-800 transition-colors text-xs shadow-sm">📊 Gerar e Enviar Relatório Agora</button>
             </div>
             <div className="mt-8 flex gap-3">
               <button onClick={() => setShowSettingsModal(false)} className="flex-1 py-3 text-stratsight-medium border-2 border-gray-200 font-bold rounded-xl hover:bg-gray-50 transition-colors">Cancelar</button>
@@ -1231,7 +1435,7 @@ function App() {
         onModeChange={m => setMode(m)}
         onVizModeChange={v => setVizMode(v)}
         onNovaSessao={() => {
-          setScopeForm({ tema: '', horizonte: '', elaborador: '', cliente: '', questaoEstrategica: '', mudancaIdentificada: '' });
+          setScopeForm({ tema: '', horizonte: '', elaborador: '', cliente: '', questaoEstrategica: '', mudancaIdentificada: '', instrucoes: '' });
           setScopeFiles([]);
           setProjeto(p => ({ ...p, metodologia: 'MSEF' }));
           setShowNovaSessaoModal(true);
@@ -1267,7 +1471,7 @@ function App() {
 
       {/* ── CONTEÚDO PRINCIPAL ────────────────────────────────────────────────────── */}
       <div className="flex-1 flex flex-col min-w-0 relative">
-        <Topbar
+        <CommandBar
           mode={mode}
           projetoNome={projeto.nome}
           progressAgent={progressAgent}
@@ -1276,7 +1480,7 @@ function App() {
           user={user}
           onToggleSidebar={() => setSidebarOpen(s => !s)}
           onNovaSessao={() => {
-            setScopeForm({ tema: '', horizonte: '', elaborador: '', cliente: '', questaoEstrategica: '', mudancaIdentificada: '' });
+            setScopeForm({ tema: '', horizonte: '', elaborador: '', cliente: '', questaoEstrategica: '', mudancaIdentificada: '', instrucoes: '' });
             setScopeFiles([]);
             setProjeto(p => ({ ...p, metodologia: 'MSEF' }));
             setShowNovaSessaoModal(true);
@@ -1288,9 +1492,6 @@ function App() {
               alert('✅ Link do cliente copiado!\n\nCompartilhe este link com o cliente para acesso ao Painel de Monitoramento.');
             }).catch(() => { prompt('Copie o link abaixo:', url); });
           }}
-        />
-        <InfoBar
-          projetoNome={projeto.nome}
           cliente={projeto.cliente}
           horizonte={projeto.horizonte}
           questaoEstrategica={projeto.questaoEstrategica}
@@ -1303,7 +1504,7 @@ function App() {
           {messages.length === 0 && !loading && (
             <div className="flex-1 flex flex-col items-center justify-center py-16 text-center">
               <div className="w-20 h-20 rounded-full bg-stratsight-dark/10 border-2 border-stratsight-medium/20 flex items-center justify-center text-4xl mb-6 shadow-inner">⚡</div>
-              <h2 className="text-xl font-bold text-stratsight-dark mb-3 tracking-wide">OLYMPUS v4.0</h2>
+              <h2 className="text-xl font-bold text-stratsight-dark mb-3 tracking-wide">OLYMPUS v1.0</h2>
               <p className="text-stratsight-medium text-sm max-w-md leading-relaxed mb-8">
                 {user?.role === 'cliente'
                   ? <>Bem-vindo ao painel de acompanhamento.<br/>Selecione um projeto no <strong>Histórico</strong> para visualizar os cenários e indicadores.</>
@@ -1320,7 +1521,7 @@ function App() {
                 {user?.role !== 'cliente' && (
                   <button
                     onClick={() => {
-                      setScopeForm({ tema: '', horizonte: '', elaborador: '', cliente: '', questaoEstrategica: '', mudancaIdentificada: '' });
+                      setScopeForm({ tema: '', horizonte: '', elaborador: '', cliente: '', questaoEstrategica: '', mudancaIdentificada: '', instrucoes: '' });
                       setScopeFiles([]);
                       setProjeto(p => ({ ...p, metodologia: 'MSEF' }));
                       setShowNovaSessaoModal(true);
@@ -1401,12 +1602,14 @@ function App() {
           fileError={fileError}
           attachedFiles={attachedFiles}
           acceptedTypes={ACCEPTED_TYPES}
+          metodologia={projeto.metodologia}
           onInputChange={v => setInput(v)}
           onSend={sendMessage}
           onQuickSend={cmd => sendMessage(cmd)}
           onRemoveFile={removeFile}
           onFileChange={handleFileChange}
           onGerarRelatorio={() => gerarRelatorio('padrao')}
+          onExportEstimativa={exportEstimativa}
         />
       </div>
     </div>

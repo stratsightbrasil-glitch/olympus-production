@@ -1,12 +1,18 @@
-import React, { useRef, useEffect } from 'react';
+import React, { useRef, useEffect, useState } from 'react';
+import { AgentMark } from '../ui/AgentMark';
+import type { Agent } from '../ui/AgentMark/types';
 
-const MSEF_STEPS = [
-  { num: 1, agent: 'SCOPUS',    label: 'Escopo',             hex: '#1A4A7A' },
-  { num: 2, agent: 'KLIO',      label: 'Drivers + Sinais',   hex: '#5A2D82' },
-  { num: 3, agent: 'PYTHIA',    label: 'Incertezas · Eixos', hex: '#B71C1C' },
-  { num: 4, agent: 'MNEMOSYNE', label: 'Narrativas',         hex: '#E65100' },
-  { num: 5, agent: 'THEMIS',    label: 'Implicações',        hex: '#2D4A5A' },
+// ─── Dados MSEF ──────────────────────────────────────────────────────────────
+
+const MSEF_STEPS: { num: number; agent: Agent; label: string }[] = [
+  { num: 1, agent: 'SCOPUS',    label: 'Escopo'      },
+  { num: 2, agent: 'KLIO',      label: 'Drivers'     },
+  { num: 3, agent: 'PYTHIA',    label: 'Eixos'       },
+  { num: 4, agent: 'MNEMOSYNE', label: 'Narrativas'  },
+  { num: 5, agent: 'THEMIS',    label: 'Implicações' },
 ];
+
+// ─── Tipos ────────────────────────────────────────────────────────────────────
 
 interface Session {
   id: string;
@@ -30,7 +36,7 @@ interface SidebarProps {
   showSessoes: boolean;
   sessionSearch: string;
   filterStatus: FilterStatus;
-  analyticReview: any;
+  analyticReview: Record<string, string> | null;
   sessionId: string;
   exportingPdf: boolean;
   currentMsefStep: number;
@@ -56,42 +62,94 @@ interface SidebarProps {
   onLogout: () => void;
 }
 
-function SessionCard({ s, onClick, onDelete }: { s: Session; onClick: () => void; onDelete: (e: React.MouseEvent) => void }) {
+// ─── Ação contextual do CTA gold ─────────────────────────────────────────────
+
+function getCtaAction(
+  projeto: SidebarProps['projeto'],
+  currentMsefStep: number,
+  callbacks: Pick<SidebarProps, 'onNovaSessao' | 'onGerarRelatorioPadrao'>,
+): { label: string; hint: string; onClick: (() => void) | undefined } {
+  if (!projeto.nome) {
+    return { label: 'Iniciar nova análise', hint: 'Configure o escopo do projeto.', onClick: callbacks.onNovaSessao };
+  }
+  if (currentMsefStep === 0) {
+    return { label: 'Iniciar análise', hint: 'Pronto para o primeiro agente.', onClick: callbacks.onNovaSessao };
+  }
+  if (currentMsefStep < 5) {
+    const next = MSEF_STEPS[currentMsefStep]; // próxima etapa (0-indexed)
+    return {
+      label: `Avançar para ${next?.label ?? `Etapa ${currentMsefStep + 1}`}`,
+      hint: `Aguardando conclusão da etapa ${currentMsefStep}.`,
+      onClick: undefined, // avança automaticamente quando o agente terminar
+    };
+  }
+  return { label: 'Gerar relatório', hint: 'Análise concluída — exporte o PDF.', onClick: callbacks.onGerarRelatorioPadrao };
+}
+
+// ─── SessionCard interno ──────────────────────────────────────────────────────
+
+function SessionCard({ s, onClick, onDelete }: {
+  s: Session;
+  onClick: () => void;
+  onDelete: (e: React.MouseEvent) => void;
+}) {
   return (
     <div
       onClick={onClick}
-      className="p-2 bg-black/20 hover:bg-black/40 border border-white/5 rounded-lg cursor-pointer transition-colors group relative mb-1"
+      style={{
+        padding: '7px 10px',
+        background: 'rgba(0,0,0,.25)',
+        border: '1px solid rgba(255,255,255,.06)',
+        borderRadius: 5,
+        cursor: 'pointer',
+        position: 'relative',
+        marginBottom: 4,
+        transition: 'background .12s',
+      }}
+      onMouseEnter={e => (e.currentTarget.style.background = 'rgba(0,0,0,.4)')}
+      onMouseLeave={e => (e.currentTarget.style.background = 'rgba(0,0,0,.25)')}
     >
-      <div className="text-xs font-bold text-white truncate pr-6">{s.name || '(sem título)'}</div>
-      <div className="flex justify-between items-center mt-1">
-        <span style={{ fontSize: 9, color: 'var(--ink-200)' }}>{s.methodology}</span>
-        <span style={{ fontSize: 9, color: 'var(--text-ter)' }}>
+      <div style={{ fontSize: 11.5, fontWeight: 700, color: '#fff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', paddingRight: 20 }}>
+        {s.name || '(sem título)'}
+      </div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 2 }}>
+        <span style={{ fontSize: 9, color: '#A3C9AE', fontFamily: "'DM Mono',monospace" }}>{s.methodology}</span>
+        <span style={{ fontSize: 9, color: '#6B8C7A', fontFamily: "'DM Mono',monospace" }}>
           {new Date(s.updatedAt).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })}
         </span>
       </div>
       <button
         onClick={onDelete}
-        className="absolute top-1 right-1 text-gray-500 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity p-1"
+        style={{
+          position: 'absolute', top: 6, right: 6,
+          background: 'none', border: 'none',
+          color: 'rgba(255,255,255,.3)', cursor: 'pointer',
+          fontSize: 11, padding: '1px 3px', borderRadius: 3,
+          lineHeight: 1, opacity: 0, transition: 'opacity .12s',
+        }}
+        onMouseEnter={e => { e.currentTarget.style.color = '#ef9a9a'; e.currentTarget.style.opacity = '1'; }}
+        onMouseLeave={e => { e.currentTarget.style.color = 'rgba(255,255,255,.3)'; e.currentTarget.style.opacity = '0'; }}
+        title="Remover"
       >
-        ✕
+        ×
       </button>
     </div>
   );
 }
 
+// ─── Sidebar principal ────────────────────────────────────────────────────────
+
 export function Sidebar({
   open, user, projeto, sessoes, showSessoes, sessionSearch, filterStatus,
   analyticReview, sessionId, exportingPdf,
-  currentMsefStep, mode, vizMode, onModeChange, onVizModeChange,
-  onNovaSessao, onOpenPainel, onGerarRelatorioKratos, onShowUsers, onShowBackup,
+  currentMsefStep,
+  onNovaSessao, onShowUsers, onShowBackup,
   onCopyClientLink, onShowReviewModal, onGerarRelatorioPadrao, onGerarRelatorioEstendido,
   onShowSettings, onToggleSessoes, onSessionSearchChange, onFilterChange,
   onCarregarSessao, onDeletarSessao, onLogout,
+  // props mantidas por compatibilidade (não usados na nova UI):
+  // mode, vizMode, onModeChange, onVizModeChange, onOpenPainel, onGerarRelatorioKratos
 }: SidebarProps) {
-  const filter = (status: string) => sessoes.filter(s =>
-    s.status === status && (!sessionSearch || (s.name || '').toLowerCase().includes(sessionSearch.toLowerCase()))
-  );
-
   const sessaoListRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (showSessoes && sessaoListRef.current) {
@@ -100,417 +158,360 @@ export function Sidebar({
   }, [showSessoes]);
 
   const isMSEF = projeto.metodologia === 'MSEF';
+  const isAdmin = user?.role === 'admin';
+  const isCliente = user?.role === 'cliente';
+
+  const cta = getCtaAction(projeto, currentMsefStep, { onNovaSessao, onGerarRelatorioPadrao });
+
+  // Badge de status do projeto
+  const STATUS_MAP: Record<string, { label: string; bg: string; color: string }> = {
+    'Em produção': { label: 'EM PRODUÇÃO',    bg: '#FFF3E0', color: '#E65100' },
+    'Ativo':       { label: 'ATIVO · KRATOS', bg: '#E8F5E9', color: '#2E7D32' },
+    'Inativo':     { label: 'INATIVO',        bg: 'rgba(255,255,255,.08)', color: '#6B8C7A' },
+  };
+  const statusStyle = STATUS_MAP[projeto.status] ?? STATUS_MAP['Em produção'];
+
+  // Filtro de sessões
+  const filterSessoes = (status: string) => sessoes.filter(s =>
+    s.status === status &&
+    (!sessionSearch || (s.name || '').toLowerCase().includes(sessionSearch.toLowerCase()))
+  );
+
+  // ── Estilos reutilizáveis ─────────────────────────────────────────────────
+  const tierLabel: React.CSSProperties = {
+    fontFamily: "'DM Mono','Cascadia Code',monospace",
+    fontSize: 9, letterSpacing: '1.5px', color: '#A3C9AE',
+    fontWeight: 700, marginBottom: 4, textTransform: 'uppercase' as const,
+  };
+
+  const outlineBtn: React.CSSProperties = {
+    width: '100%', textAlign: 'left' as const,
+    padding: '8px 10px',
+    border: '1px solid rgba(255,255,255,.10)',
+    borderRadius: 5,
+    fontSize: 12, color: '#A3C9AE',
+    background: 'none', cursor: 'pointer',
+    display: 'flex', alignItems: 'center', gap: 6,
+    transition: 'border-color .12s, background .12s',
+    fontFamily: "'DM Sans',system-ui,sans-serif",
+  };
 
   return (
-    <div
-      style={{
-        width: open ? 'var(--sidebar-w)' : 0,
-        background: 'var(--ink-800)',
-        color: 'var(--text-inv)',
-        flexShrink: 0,
-        display: 'flex',
-        flexDirection: 'column',
-        transition: 'width .3s ease',
-        overflow: 'hidden',
-        boxShadow: 'var(--shadow-lg)',
-        zIndex: 20,
-      }}
-    >
+    <div style={{
+      width: open ? 'var(--sidebar-w)' : 0,
+      background: '#142218',
+      color: '#A3C9AE',
+      flexShrink: 0,
+      display: 'flex',
+      flexDirection: 'column',
+      transition: 'width .3s ease',
+      overflow: 'hidden',
+      boxShadow: 'var(--shadow-lg)',
+      zIndex: 20,
+    }}>
       <div style={{ width: 'var(--sidebar-w)', display: 'flex', flexDirection: 'column', height: '100%' }}>
 
-        {/* ── Logo ─────────────────────────────────────────────────── */}
+        {/* ── BRAND ROW ───────────────────────────────────────────────────── */}
         <div style={{
-          padding: '14px 16px',
-          borderBottom: '1px solid rgba(255,255,255,.08)',
-          display: 'flex',
-          alignItems: 'center',
-          gap: 10,
+          display: 'flex', alignItems: 'center', gap: 10,
+          padding: '14px 16px 14px',
+          borderBottom: '1px solid rgba(255,255,255,.06)',
         }}>
           <div style={{
-            width: 30, height: 30,
-            borderRadius: 'var(--r-md)',
-            background: 'var(--ink-500)',
+            width: 28, height: 28, borderRadius: 8,
+            background: 'linear-gradient(135deg,#C9A84C 0%,#D9BF73 100%)',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
-            fontWeight: 700, color: '#fff', fontSize: 15,
-            flexShrink: 0,
+            fontFamily: "'Fraunces',Georgia,serif",
+            fontSize: 15, fontWeight: 700, color: '#142218', flexShrink: 0,
           }}>
             Ω
           </div>
           <div>
-            <div style={{ fontFamily: 'var(--font-ui)', fontWeight: 700, fontSize: 12, letterSpacing: '0.1em', color: 'var(--ink-200)' }}>
-              STRATSIGHT
-            </div>
-            <div style={{ fontFamily: 'var(--font-mono)', fontSize: 8, color: 'var(--gold-400)', letterSpacing: '0.08em', textTransform: 'uppercase' }}>
-              Strategic Foresight
-            </div>
+            <div style={{ fontFamily: "'Fraunces',Georgia,serif", fontWeight: 700, fontSize: 15, letterSpacing: '1px', color: '#fff', lineHeight: 1 }}>OLYMPUS</div>
+            <div style={{ fontFamily: "'DM Mono','Cascadia Code',monospace", fontSize: 9, letterSpacing: '1.4px', color: '#D9BF73', marginTop: 1, fontWeight: 600 }}>v5.0 · STRATSIGHT BR</div>
           </div>
         </div>
 
-        {/* ── Projeto Ativo ─────────────────────────────────────────── */}
+        {/* ── PROJETO ATIVO ───────────────────────────────────────────────── */}
         {projeto.nome && (
           <div style={{
-            padding: '10px 14px',
-            borderBottom: '1px solid rgba(255,255,255,.08)',
-            background: 'rgba(255,255,255,.04)',
+            background: '#1B3A2D',
+            borderRadius: 8, margin: '10px 12px 0',
+            padding: '12px 12px',
             position: 'relative',
           }}>
-            <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: '1.2px', color: '#3D7A50', textTransform: 'uppercase', marginBottom: 3}}>
-              Projeto Ativo
+            <div style={{ fontFamily: "'DM Mono','Cascadia Code',monospace", fontSize: 9, letterSpacing: '1.5px', color: '#D9BF73', fontWeight: 700 }}>
+              PROJETO ATIVO
             </div>
-            <div style={{ fontWeight: 700, fontSize: 12, color: '#fff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', paddingRight: 22 }}>
+            <div style={{ fontFamily: "'Fraunces',Georgia,serif", fontWeight: 600, fontSize: 14, color: '#fff', marginTop: 4, lineHeight: 1.2 }}>
               {projeto.nome}
             </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginTop: 4 }}>
-              <span style={{
-                background: 'var(--ink-500)', color: '#fff',
-                padding: '1px 6px', borderRadius: 4,
-                fontSize: 8, fontWeight: 700, fontFamily: 'var(--font-mono)',
-              }}>
-                {projeto.metodologia}
-              </span>
-              <span style={{
-                padding: '1px 6px', borderRadius: 4, fontSize: 8, fontWeight: 700,
-                background: projeto.status === 'Ativo' ? 'rgba(0,100,0,.5)' : projeto.status === 'Inativo' ? 'rgba(100,0,0,.5)' : 'rgba(0,50,100,.5)',
-                color: projeto.status === 'Ativo' ? '#a5d6a7' : projeto.status === 'Inativo' ? '#ef9a9a' : '#90caf9',
-              }}>
-                {(projeto.status || 'EM PRODUÇÃO').toUpperCase()}
+            <div style={{ marginTop: 8, fontFamily: "'DM Mono','Cascadia Code',monospace", fontSize: 9.5, color: '#A3C9AE', letterSpacing: '.5px' }}>
+              {isMSEF ? `MSEF · ETAPA ${Math.max(1, currentMsefStep)} · ` : ''}
+              <span style={{ background: statusStyle.bg, color: statusStyle.color, padding: '1px 5px', borderRadius: 2, fontWeight: 700, letterSpacing: '1px', fontSize: 9 }}>
+                {statusStyle.label}
               </span>
             </div>
             <button
               onClick={onShowSettings}
-              style={{
-                position: 'absolute', top: 10, right: 10,
-                background: 'none', border: 'none',
-                color: 'rgba(255,255,255,.35)', cursor: 'pointer', fontSize: 13,
-              }}
-              onMouseEnter={e => (e.currentTarget.style.color = '#fff')}
-              onMouseLeave={e => (e.currentTarget.style.color = 'rgba(255,255,255,.35)')}
+              style={{ position: 'absolute', top: 8, right: 8, background: 'none', border: 'none', color: 'rgba(255,255,255,.25)', cursor: 'pointer', fontSize: 12, padding: 2, borderRadius: 3 }}
+              onMouseEnter={e => (e.currentTarget.style.color = 'rgba(255,255,255,.8)')}
+              onMouseLeave={e => (e.currentTarget.style.color = 'rgba(255,255,255,.25)')}
               title="Configurações"
             >
-              ⚙️
+              ⚙
             </button>
           </div>
         )}
 
-        {/* ── Área rolável ───────────────────────────────────────────── */}
-        <div className="flex-1 overflow-y-auto min-h-0" style={{ padding: '10px 12px' }}>
+        {/* ── ÁREA ROLÁVEL ────────────────────────────────────────────────── */}
+        <div style={{ flex: 1, overflowY: 'auto', minHeight: 0, padding: '12px 12px' }}>
 
-          {/* PROGRESSO MSEF */}
-          {isMSEF && projeto.nome && (
-            <div style={{ marginBottom: 10, paddingBottom: 10, borderBottom: '1px solid rgba(255,255,255,.07)' }}>
-              <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: '1.2px', color: '#3D7A50', textTransform: 'uppercase', marginBottom: 8}}>
-                Progresso MSEF
+          {/* TIER 1 · CONTINUAR */}
+          {!isCliente && (
+            <div style={{ marginBottom: 14 }}>
+              <div style={tierLabel}>Continuar</div>
+              <button
+                onClick={cta.onClick}
+                disabled={!cta.onClick}
+                style={{
+                  width: '100%',
+                  background: cta.onClick ? '#C9A84C' : 'rgba(201,168,76,.35)',
+                  color: '#142218',
+                  border: 'none', borderRadius: 6,
+                  padding: '10px 14px',
+                  fontWeight: 700, fontSize: 12.5,
+                  display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                  cursor: cta.onClick ? 'pointer' : 'default',
+                  fontFamily: "'DM Sans',system-ui,sans-serif",
+                  opacity: cta.onClick ? 1 : .7,
+                  transition: 'background .15s',
+                }}
+                onMouseEnter={e => { if (cta.onClick) e.currentTarget.style.background = '#D9BF73'; }}
+                onMouseLeave={e => { if (cta.onClick) e.currentTarget.style.background = '#C9A84C'; }}
+              >
+                <span>{cta.label}</span>
+                <span style={{ fontFamily: "'DM Mono','Cascadia Code',monospace", fontSize: 13 }}>→</span>
+              </button>
+              <div style={{
+                fontFamily: "'DM Mono','Cascadia Code',monospace",
+                fontSize: 9.5, color: '#A3C9AE',
+                marginTop: 5, letterSpacing: '.4px', lineHeight: 1.5,
+              }}>
+                {cta.hint}
               </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-                {MSEF_STEPS.map(step => {
-                  const done   = currentMsefStep > step.num;
-                  const active = currentMsefStep === step.num;
-                  const future = currentMsefStep < step.num;
-                  return (
-                    <div key={step.num} style={{
-                      display: 'flex', alignItems: 'center', gap: 8,
-                      padding: '4px 8px 4px 6px',
-                      borderRadius: 6,
-                      background: active ? `${step.hex}22` : 'transparent',
-                      borderLeft: active ? `2px solid ${step.hex}` : '2px solid transparent',
-                      transition: 'background var(--t-fast)',
-                    }}>
-                      {/* Icon */}
-                      <div style={{
-                        width: 18, height: 18, borderRadius: '50%', flexShrink: 0,
-                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        fontSize: done ? 9 : 8, fontWeight: 700,
-                        background: done ? '#2E7D52' : active ? '#C9A84C' : 'rgba(255,255,255,.08)',
-                        color: done ? '#fff' : active ? '#142218' : 'rgba(255,255,255,.3)',
-                        border: future ? '1px solid rgba(255,255,255,.15)' : 'none',
-                      }}>
-                        {done ? '✓' : step.num}
-                      </div>
-                      {/* Labels */}
-                      <div style={{ minWidth: 0 }}>
-                        <div style={{
-                          fontSize: 10, lineHeight: 1.2,
-                          fontWeight: active ? 700 : 500,
-                          color: done ? '#A3C9AE' : active ? '#fff' : 'rgba(255,255,255,.35)',
-                          whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
-                        }}>
-                          {step.label}
-                        </div>
-                        {active && (
-                          <div style={{ fontSize: 8, color: 'rgba(255,255,255,.5)', marginTop: 1 }}>
-                            ● {step.agent} ativo
+            </div>
+          )}
+
+          {/* TIER 2 · SESSÃO */}
+          {!isCliente && (
+            <div style={{ marginBottom: 14 }}>
+              <div style={tierLabel}>Sessão</div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                <button
+                  style={outlineBtn}
+                  onMouseEnter={e => { e.currentTarget.style.borderColor = 'rgba(255,255,255,.22)'; e.currentTarget.style.background = 'rgba(255,255,255,.03)'; }}
+                  onMouseLeave={e => { e.currentTarget.style.borderColor = 'rgba(255,255,255,.10)'; e.currentTarget.style.background = 'none'; }}
+                  onClick={onNovaSessao}
+                >
+                  Nova análise
+                </button>
+                <button
+                  style={{ ...outlineBtn, justifyContent: 'space-between' }}
+                  onMouseEnter={e => { e.currentTarget.style.borderColor = 'rgba(255,255,255,.22)'; e.currentTarget.style.background = 'rgba(255,255,255,.03)'; }}
+                  onMouseLeave={e => { e.currentTarget.style.borderColor = 'rgba(255,255,255,.10)'; e.currentTarget.style.background = 'none'; }}
+                  onClick={onToggleSessoes}
+                >
+                  <span>Histórico de análises</span>
+                  <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    {sessoes.length > 0 && (
+                      <span style={{ background: '#22492E', color: '#A3C9AE', padding: '1px 6px', borderRadius: 4, fontSize: 9, fontWeight: 700, fontFamily: "'DM Mono',monospace" }}>
+                        {sessoes.length}
+                      </span>
+                    )}
+                    <span style={{ fontFamily: "'DM Mono',monospace", fontSize: 10, color: '#6B8C7A' }}>{showSessoes ? '▲' : '▼'}</span>
+                  </span>
+                </button>
+              </div>
+
+              {/* Lista de sessões */}
+              {showSessoes && (
+                <div ref={sessaoListRef} style={{ marginTop: 6 }}>
+                  <input
+                    type="text"
+                    value={sessionSearch}
+                    onChange={e => onSessionSearchChange(e.target.value)}
+                    placeholder="Pesquisar análise..."
+                    style={{
+                      width: '100%', boxSizing: 'border-box',
+                      background: 'rgba(255,255,255,.08)', color: '#fff',
+                      border: '1px solid rgba(255,255,255,.1)',
+                      borderRadius: 5, padding: '6px 10px',
+                      fontSize: 11, outline: 'none',
+                      fontFamily: "'DM Sans',system-ui,sans-serif",
+                      marginBottom: 6,
+                    }}
+                  />
+                  <div style={{ display: 'flex', gap: 10, paddingBottom: 6, borderBottom: '1px solid rgba(255,255,255,.07)', marginBottom: 6 }}>
+                    {([['producao', 'Produção', '#90CAF9'], ['ativos', 'Ativos', '#66BB6A'], ['inativos', 'Inativos', '#9E9E9E']] as const).map(([k, l, c]) => (
+                      <label key={k} style={{ fontSize: 9, color: c, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 3 }}>
+                        <input
+                          type="checkbox"
+                          checked={filterStatus[k]}
+                          onChange={e => onFilterChange(k, e.target.checked)}
+                          style={{ accentColor: c }}
+                        />
+                        {l}
+                      </label>
+                    ))}
+                  </div>
+                  <div style={{ maxHeight: 220, overflowY: 'auto' }}>
+                    {sessoes.length === 0 ? (
+                      <div style={{ fontSize: 11, color: '#6B8C7A', padding: '4px 0' }}>Nenhuma análise salva.</div>
+                    ) : (
+                      <>
+                        {filterStatus.producao && (() => {
+                          const prod = sessoes.filter(s => (s.status === 'Em produção' || !s.status) && (!sessionSearch || (s.name || '').toLowerCase().includes(sessionSearch.toLowerCase())));
+                          return prod.length > 0 ? (
+                            <div style={{ marginBottom: 6 }}>
+                              <div style={{ fontSize: 8, color: '#90CAF9', fontWeight: 700, padding: '2px 0', textTransform: 'uppercase', letterSpacing: '1px', fontFamily: "'DM Mono',monospace", marginBottom: 3 }}>Em Produção</div>
+                              {prod.map(s => <SessionCard key={s.id} s={s} onClick={() => onCarregarSessao(s.id)} onDelete={e => onDeletarSessao(s.id, e)} />)}
+                            </div>
+                          ) : null;
+                        })()}
+                        {filterStatus.ativos && filterSessoes('Ativo').length > 0 && (
+                          <div style={{ marginBottom: 6 }}>
+                            <div style={{ fontSize: 8, color: '#66BB6A', fontWeight: 700, padding: '2px 0', textTransform: 'uppercase', letterSpacing: '1px', fontFamily: "'DM Mono',monospace", marginBottom: 3 }}>Monitorados (Ativos)</div>
+                            {filterSessoes('Ativo').map(s => <SessionCard key={s.id} s={s} onClick={() => onCarregarSessao(s.id)} onDelete={e => onDeletarSessao(s.id, e)} />)}
                           </div>
                         )}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
+                        {filterStatus.inativos && filterSessoes('Inativo').length > 0 && (
+                          <div>
+                            <div style={{ fontSize: 8, color: '#9E9E9E', fontWeight: 700, padding: '2px 0', textTransform: 'uppercase', letterSpacing: '1px', fontFamily: "'DM Mono',monospace", marginBottom: 3 }}>Arquivados (Inativos)</div>
+                            {filterSessoes('Inativo').map(s => <SessionCard key={s.id} s={s} onClick={() => onCarregarSessao(s.id)} onDelete={e => onDeletarSessao(s.id, e)} />)}
+                          </div>
+                        )}
+                      </>
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
-          {/* MODO */}
-          <div style={{ marginBottom: 10, paddingBottom: 10, borderBottom: '1px solid rgba(255,255,255,.07)' }}>
-            <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: '1.2px', color: '#3D7A50', textTransform: 'uppercase', marginBottom: 6}}>Modo</div>
-            <div style={{
-              display: 'flex',
-              background: 'rgba(0,0,0,.2)',
-              border: '1px solid rgba(255,255,255,.07)',
-              borderRadius: '12px',
-              padding: 3, gap: 2,
-            }}>
-              <button
-                onClick={() => onModeChange('production')}
-                style={{
-                  flex: 1, padding: '5px 6px', border: 'none',
-                  borderRadius: '8px', fontSize: 11, fontWeight: 500,
-                  fontFamily: "'DM Sans', system-ui, sans-serif",
-                  cursor: 'pointer', textAlign: 'center' as const,
-                  transition: 'all .15s',
-                  background: mode === 'production' ? '#22492E' : 'none',
-                  color: mode === 'production' ? '#fff' : '#5A9E6F',
-                  boxShadow: mode === 'production' ? '0 1px 3px rgba(13,22,18,.08)' : 'none',
-                }}
-              >
-                Produção
-              </button>
-              <button
-                onClick={() => onModeChange('monitoring')}
-                style={{
-                  flex: 1, padding: '5px 6px', border: 'none',
-                  borderRadius: '8px', fontSize: 11, fontWeight: 500,
-                  fontFamily: "'DM Sans', system-ui, sans-serif",
-                  cursor: 'pointer', textAlign: 'center' as const,
-                  transition: 'all .15s',
-                  background: mode === 'monitoring' ? '#22492E' : 'none',
-                  color: mode === 'monitoring' ? '#fff' : '#5A9E6F',
-                  boxShadow: mode === 'monitoring' ? '0 1px 3px rgba(13,22,18,.08)' : 'none',
-                }}
-              >
-                KRATOS
-              </button>
+          {/* TIER 3 · ENTREGÁVEIS */}
+          {!isCliente && projeto.nome && (
+            <div style={{ marginBottom: 14 }}>
+              <div style={tierLabel}>Entregáveis</div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                {[
+                  { label: 'Relatório padrão',    trailing: '↓ PDF', fn: onGerarRelatorioPadrao, disabled: exportingPdf },
+                  { label: 'Relatório estendido', trailing: '↓ PDF', fn: onGerarRelatorioEstendido, disabled: exportingPdf },
+                  { label: 'Link do cliente',     trailing: '⎘',     fn: onCopyClientLink, disabled: false },
+                ].map(item => (
+                  <button
+                    key={item.label}
+                    onClick={item.fn}
+                    disabled={item.disabled}
+                    style={{ ...outlineBtn, justifyContent: 'space-between', opacity: item.disabled ? .5 : 1 }}
+                    onMouseEnter={e => { if (!item.disabled) { e.currentTarget.style.borderColor = 'rgba(255,255,255,.22)'; e.currentTarget.style.background = 'rgba(255,255,255,.03)'; }}}
+                    onMouseLeave={e => { e.currentTarget.style.borderColor = 'rgba(255,255,255,.10)'; e.currentTarget.style.background = 'none'; }}
+                  >
+                    <span>{item.label}</span>
+                    <span style={{ fontFamily: "'DM Mono','Cascadia Code',monospace", fontSize: 10, color: '#A3C9AE' }}>{item.trailing}</span>
+                  </button>
+                ))}
+              </div>
             </div>
-          </div>
-
-          {/* VISUALIZAÇÃO */}
-          <div style={{ marginBottom: 10, paddingBottom: 10, borderBottom: '1px solid rgba(255,255,255,.07)' }}>
-            <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: '1.2px', color: '#3D7A50', textTransform: 'uppercase', marginBottom: 6}}>Visualização</div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 4 }}>
-              {[
-                { id: 'etapa',       label: 'Por Etapa' },
-                { id: 'passoapasso', label: 'Passo a Passo' },
-                { id: 'extended',    label: 'Extended' },
-                { id: 'passagem',    label: 'Passagem' },
-              ].map(v => (
-                <button
-                  key={v.id}
-                  onClick={() => onVizModeChange(v.id)}
-                  style={{
-                    padding: '6px 4px',
-                    background: vizMode === v.id ? 'rgba(200,168,75,.12)' : 'rgba(255,255,255,.04)',
-                    border: vizMode === v.id ? '1px solid rgba(200,168,75,.3)' : '1px solid rgba(255,255,255,.06)',
-                    borderRadius: '8px',
-                    color: vizMode === v.id ? '#D9BF73' : '#5A9E6F',
-                    fontSize: 10, fontWeight: 500,
-                    fontFamily: "'DM Sans', system-ui, sans-serif",
-                    cursor: 'pointer', textAlign: 'center' as const,
-                    lineHeight: 1.3, transition: 'all .15s',
-                  }}
-                >
-                  {v.label}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* AÇÕES */}
-          <div style={{ marginBottom: 10 }}>
-            <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: '1.2px', color: '#3D7A50', textTransform: 'uppercase', marginBottom: 6}}>Ações</div>
-
-            {user?.role !== 'cliente' && (
-              <button onClick={onNovaSessao} className="w-full text-left px-3 py-2 rounded-lg bg-white/5 hover:bg-white/10 transition-colors mb-1" style={{ fontSize: 12, color: 'var(--ink-200)' }}>
-                🔄 Nova Sessão
-              </button>
-            )}
-
-            {user?.role !== 'cliente' && (
-              <>
-                <button onClick={onOpenPainel} className="w-full text-left px-3 py-2 rounded-lg transition-colors mb-1" style={{ fontSize: 12, background: 'rgba(201,168,76,.1)', border: '1px solid rgba(201,168,76,.2)', color: 'var(--gold-400)' }}>
-                  🖥️ Painel KRATOS
-                </button>
-                <button onClick={onGerarRelatorioKratos} className="w-full text-left px-3 py-2 rounded-lg transition-colors mb-1" style={{ fontSize: 12, background: 'rgba(0,77,64,.35)', border: '1px solid rgba(128,203,196,.15)', color: '#80CBC4' }}>
-                  🤖 Gerar Relatório KRATOS
-                </button>
-              </>
-            )}
-
-            {user?.role === 'admin' && (
-              <>
-                <button onClick={onShowUsers} className="w-full text-left px-3 py-2 rounded-lg transition-colors mb-1 bg-purple-900/40 hover:bg-purple-900/60 border border-purple-500/30 text-purple-200" style={{ fontSize: 12 }}>
-                  👥 Gestão de Usuários
-                </button>
-                <button onClick={onShowBackup} className="w-full text-left px-3 py-2 rounded-lg transition-colors mb-1 bg-yellow-900/40 hover:bg-yellow-900/60 border border-yellow-500/30 text-yellow-200" style={{ fontSize: 12 }}>
-                  💾 Backup do Banco
-                </button>
-              </>
-            )}
-
-            {user?.role !== 'cliente' && projeto.nome && (
-              <button onClick={onCopyClientLink} className="w-full text-left px-3 py-2 rounded-lg transition-colors mb-1 bg-blue-900/40 hover:bg-blue-900/60 border border-blue-500/30 text-blue-200" style={{ fontSize: 12 }}>
-                🔗 Link do Cliente
-              </button>
-            )}
-          </div>
+          )}
 
           {/* REVISÃO ANALÍTICA */}
-          {user?.role !== 'cliente' && sessionId && (
-            <div style={{ marginBottom: 10, paddingTop: 8, borderTop: '1px solid rgba(255,255,255,.07)' }}>
-              <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: '1.2px', color: '#5A9E6F', textTransform: 'uppercase', marginBottom: 6}}>Rigor Analítico</div>
-              <button onClick={onShowReviewModal} className="w-full text-left px-3 py-2 rounded-lg transition-colors" style={{ fontSize: 12, background: 'rgba(0,77,64,.35)', border: '1px solid rgba(128,203,196,.15)', color: '#80CBC4' }}>
-                {analyticReview
-                  ? `🔍 ${analyticReview.status === 'aprovado' ? '✅ Aprovado' : analyticReview.status === 'aprovado_com_ressalvas' ? '⚠️ Com Ressalvas' : analyticReview.status === 'requer_revisao' ? '🔴 Requer Revisão' : '⏳ Pendente'}`
-                  : '🔍 Revisar Qualidade (ICD 203)'}
-              </button>
-            </div>
-          )}
-
-          {/* EXPORTAR */}
-          {user?.role !== 'cliente' && (
-            <div style={{ marginBottom: 10, paddingTop: 8, borderTop: '1px solid rgba(255,255,255,.07)' }}>
-              <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: '1.2px', color: '#3D7A50', textTransform: 'uppercase', marginBottom: 6}}>Exportar Relatório</div>
-              <button onClick={onGerarRelatorioPadrao} disabled={exportingPdf} className="w-full text-left px-3 py-2 rounded-lg bg-white/5 hover:bg-white/10 transition-colors mb-1 disabled:opacity-50" style={{ fontSize: 11, color: 'var(--ink-200)' }}>
-                🖨️ Padrão — HERMES (PDF)
-              </button>
-              <button onClick={onGerarRelatorioEstendido} disabled={exportingPdf} className="w-full text-left px-3 py-2 rounded-lg bg-white/5 hover:bg-white/10 transition-colors disabled:opacity-50" style={{ fontSize: 11, color: 'var(--ink-200)' }}>
-                🖨️ Estendido — Todos os Agentes (PDF)
-              </button>
-            </div>
-          )}
-
-          {/* HISTÓRICO */}
-          <div style={{ paddingTop: 8, borderTop: '1px solid rgba(255,255,255,.07)' }} ref={sessaoListRef}>
-            <button
-              onClick={onToggleSessoes}
-              className="w-full px-3 py-2 bg-white/5 hover:bg-white/10 rounded-lg transition-colors text-left flex justify-between items-center"
-              style={{ fontSize: 12, color: 'var(--ink-200)' }}
-            >
-              <span>{showSessoes ? '▲' : '▼'} Histórico de Análises</span>
-              {sessoes.length > 0 && (
-                <span style={{
-                  background: 'var(--ink-600)', color: 'var(--ink-200)',
-                  padding: '1px 6px', borderRadius: 4,
-                  fontSize: 9, fontWeight: 700, fontFamily: 'var(--font-mono)',
-                }}>
-                  {sessoes.length}
+          {!isCliente && sessionId && (
+            <div style={{ marginBottom: 14 }}>
+              <div style={tierLabel}>Rigor analítico</div>
+              <button
+                onClick={onShowReviewModal}
+                style={{ ...outlineBtn, justifyContent: 'space-between' }}
+                onMouseEnter={e => { e.currentTarget.style.borderColor = 'rgba(255,255,255,.22)'; e.currentTarget.style.background = 'rgba(255,255,255,.03)'; }}
+                onMouseLeave={e => { e.currentTarget.style.borderColor = 'rgba(255,255,255,.10)'; e.currentTarget.style.background = 'none'; }}
+              >
+                <span style={{ fontSize: 11.5 }}>
+                  {analyticReview
+                    ? `Revisão · ${analyticReview['status'] === 'aprovado' ? 'Aprovado' : analyticReview['status'] === 'aprovado_com_ressalvas' ? 'Com Ressalvas' : analyticReview['status'] === 'requer_revisao' ? 'Requer Revisao' : 'Pendente'}`
+                    : 'Revisar qualidade (ICD 203)'}
                 </span>
-              )}
-            </button>
+                <span style={{ fontFamily: "'DM Mono','Cascadia Code',monospace", fontSize: 10, color: '#D9BF73' }}>↗</span>
+              </button>
+            </div>
+          )}
 
-            {showSessoes && (
-              <div className="mt-2 max-h-64 overflow-y-auto pr-1 space-y-1">
-                <input
-                  type="text"
-                  value={sessionSearch}
-                  onChange={e => onSessionSearchChange(e.target.value)}
-                  placeholder="🔍 Pesquisar análise..."
-                  className="w-full bg-white/10 text-white placeholder-gray-500 border border-white/10 rounded-lg px-3 py-1.5 mb-2 outline-none"
-                  style={{ fontSize: 11 }}
-                />
-                <div className="flex gap-2 px-1 pb-2 mb-1 border-b border-white/10">
-                  <label style={{ fontSize: 9 }} className="flex items-center gap-1 cursor-pointer text-[#90CAF9]">
-                    <input type="checkbox" checked={filterStatus.producao} onChange={e => onFilterChange('producao', e.target.checked)} /> Produção
-                  </label>
-                  <label style={{ fontSize: 9 }} className="flex items-center gap-1 cursor-pointer text-[#66BB6A]">
-                    <input type="checkbox" checked={filterStatus.ativos} onChange={e => onFilterChange('ativos', e.target.checked)} /> Ativos
-                  </label>
-                  <label style={{ fontSize: 9 }} className="flex items-center gap-1 cursor-pointer text-gray-400">
-                    <input type="checkbox" checked={filterStatus.inativos} onChange={e => onFilterChange('inativos', e.target.checked)} /> Inativos
-                  </label>
+        </div>
+
+        {/* ── ADMIN FOOTER ────────────────────────────────────────────────── */}
+        {!isCliente && (
+          <div style={{
+            padding: '10px 14px',
+            borderTop: '1px solid rgba(255,255,255,.06)',
+            marginTop: 'auto',
+          }}>
+            {isAdmin && (
+              <>
+                <div style={tierLabel}>Administração</div>
+                <div style={{ marginBottom: 6, display: 'flex', flexDirection: 'column', gap: 1 }}>
+                  <button
+                    onClick={onShowUsers}
+                    style={{ background: 'none', border: 'none', textAlign: 'left' as const, padding: '5px 0', fontSize: 11.5, color: '#A3C9AE', cursor: 'pointer', fontFamily: "'DM Sans',system-ui,sans-serif", transition: 'color .12s' }}
+                    onMouseEnter={e => (e.currentTarget.style.color = '#fff')}
+                    onMouseLeave={e => (e.currentTarget.style.color = '#A3C9AE')}
+                  >
+                    Usuários · Backup · Engine
+                  </button>
+                  <button
+                    onClick={onShowReviewModal}
+                    style={{ background: 'none', border: 'none', textAlign: 'left' as const, padding: '5px 0', fontSize: 11.5, color: '#A3C9AE', cursor: 'pointer', fontFamily: "'DM Sans',system-ui,sans-serif", transition: 'color .12s' }}
+                    onMouseEnter={e => (e.currentTarget.style.color = '#fff')}
+                    onMouseLeave={e => (e.currentTarget.style.color = '#A3C9AE')}
+                  >
+                    Revisao analítica · ICD 203
+                  </button>
                 </div>
-
-                {sessoes.length === 0 ? (
-                  <div style={{ fontSize: 11, color: 'var(--text-ter)', padding: '4px 8px' }}>Nenhuma análise salva.</div>
-                ) : (
-                  <>
-                    {filterStatus.producao && (() => {
-                      const producao = sessoes.filter(s =>
-                        (s.status === 'Em produção' || !s.status) &&
-                        (!sessionSearch || (s.name || '').toLowerCase().includes(sessionSearch.toLowerCase()))
-                      );
-                      return producao.length > 0 ? (
-                        <div className="mb-2">
-                          <div style={{ fontSize: 8, color: '#90CAF9', fontWeight: 700, padding: '2px 8px', textTransform: 'uppercase' }}>Em Produção</div>
-                          {producao.map(s => (
-                            <SessionCard key={s.id} s={s} onClick={() => onCarregarSessao(s.id)} onDelete={e => onDeletarSessao(s.id, e)} />
-                          ))}
-                        </div>
-                      ) : null;
-                    })()}
-                    {filterStatus.ativos && filter('Ativo').length > 0 && (
-                      <div className="mb-2">
-                        <div style={{ fontSize: 8, color: '#66BB6A', fontWeight: 700, padding: '2px 8px', textTransform: 'uppercase' }}>Monitorados (Ativos)</div>
-                        {filter('Ativo').map(s => (
-                          <SessionCard key={s.id} s={s} onClick={() => onCarregarSessao(s.id)} onDelete={e => onDeletarSessao(s.id, e)} />
-                        ))}
-                      </div>
-                    )}
-                    {filterStatus.inativos && filter('Inativo').length > 0 && (
-                      <div>
-                        <div style={{ fontSize: 8, color: 'var(--text-ter)', fontWeight: 700, padding: '2px 8px', textTransform: 'uppercase' }}>Arquivados (Inativos)</div>
-                        {filter('Inativo').map(s => (
-                          <SessionCard key={s.id} s={s} onClick={() => onCarregarSessao(s.id)} onDelete={e => onDeletarSessao(s.id, e)} />
-                        ))}
-                      </div>
-                    )}
-                  </>
-                )}
-              </div>
+              </>
             )}
-          </div>
-        </div>
 
-        {/* ── Perfil e Logout ─────────────────────────────────────────── */}
-        <div style={{
-          padding: '10px 14px',
-          borderTop: '1px solid rgba(255,255,255,.08)',
-          background: 'rgba(0,0,0,.2)',
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            {/* Perfil do usuário */}
             <div style={{
-              width: 28, height: 28, borderRadius: 'var(--r-md)',
-              background: 'var(--ink-500)',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              fontSize: 10, color: '#fff', fontWeight: 700,
+              display: 'flex', alignItems: 'center', gap: 8,
+              paddingTop: 8,
+              borderTop: '1px solid rgba(255,255,255,.06)',
             }}>
-              {user?.name?.slice(0, 2).toUpperCase()}
-            </div>
-            <div>
-              <div style={{ fontSize: 11, color: '#fff', fontWeight: 700, maxWidth: 110, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                {user?.name}
+              <div style={{
+                width: 24, height: 24, borderRadius: '50%',
+                background: '#22492E', border: '1px solid #3D7A50',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                fontFamily: "'DM Mono','Cascadia Code',monospace",
+                fontSize: 9, fontWeight: 700, letterSpacing: '.5px', color: '#A3C9AE',
+              }}>
+                {user?.name?.slice(0, 2).toUpperCase() || '??'}
               </div>
-              <div style={{ fontSize: 8, color: 'var(--gold-400)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
-                {user?.role}
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 11.5, fontWeight: 600, color: '#fff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {user?.name}
+                </div>
+                <div style={{ fontFamily: "'DM Mono','Cascadia Code',monospace", fontSize: 9, color: '#A3C9AE', letterSpacing: '.5px' }}>
+                  {user?.role?.toUpperCase()}
+                </div>
               </div>
+              <button
+                onClick={onLogout}
+                style={{ background: 'none', border: 'none', fontSize: 10, fontWeight: 700, color: '#ef9a9a', cursor: 'pointer', padding: '4px 6px', borderRadius: 4, transition: 'background .12s', flexShrink: 0 }}
+                onMouseEnter={e => (e.currentTarget.style.background = 'rgba(239,154,154,.1)')}
+                onMouseLeave={e => (e.currentTarget.style.background = 'none')}
+              >
+                SAIR
+              </button>
             </div>
           </div>
-          <button
-            onClick={onLogout}
-            style={{
-              background: 'none', border: 'none',
-              fontSize: 10, fontWeight: 700,
-              color: '#ef9a9a', cursor: 'pointer',
-              padding: '5px 8px', borderRadius: 'var(--r-md)',
-              transition: 'background var(--t-fast)',
-            }}
-            onMouseEnter={e => (e.currentTarget.style.background = 'rgba(239,154,154,.1)')}
-            onMouseLeave={e => (e.currentTarget.style.background = 'none')}
-          >
-            SAIR
-          </button>
-        </div>
+        )}
 
       </div>
     </div>

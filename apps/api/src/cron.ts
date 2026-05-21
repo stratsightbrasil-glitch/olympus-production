@@ -4,6 +4,38 @@ import { eq, and, isNull, asc } from 'drizzle-orm';
 import { sign } from 'hono/jwt';
 import { sendEmail } from './mailer';
 
+export function buildKratosEmailHtml(projectName: string, conteudo: string): string {
+  const geradoEm = new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' });
+  // Converte markdown mínimo em HTML
+  const html = conteudo
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+    .replace(/^#{1,3} (.+)$/gm, '<h3 style="color:#1B3A2D;margin:14px 0 6px">$1</h3>')
+    .replace(/^[-*] (.+)$/gm, '<li style="margin:3px 0">$1</li>')
+    .replace(/\n\n/g, '</p><p style="margin:6px 0">')
+    .replace(/\n/g, '<br>');
+
+  return `<!DOCTYPE html>
+<html lang="pt-BR"><head><meta charset="UTF-8"></head>
+<body style="font-family:'Segoe UI',sans-serif;color:#333;max-width:760px;margin:0 auto;padding:24px">
+  <div style="background:#1B3A2D;color:white;padding:16px 24px;border-radius:8px 8px 0 0">
+    <strong>⚡ OLYMPUS v1.0 · StratSight Brasil</strong>
+    <span style="float:right;font-size:12px;color:#A5D6A7">Relatório KRATOS · ${geradoEm}</span>
+  </div>
+  <div style="border:1px solid #ddd;border-top:none;padding:24px;border-radius:0 0 8px 8px">
+    <h2 style="color:#1B3A2D;margin:0 0 8px">Relatório de Monitoramento</h2>
+    <p style="color:#555;font-size:13px;margin:0 0 20px">Projeto: <strong>${projectName}</strong></p>
+    <div style="background:#f8f9fa;border-left:4px solid #2E7D52;padding:16px 20px;border-radius:4px;font-size:13px;line-height:1.7">
+      <p style="margin:6px 0">${html}</p>
+    </div>
+    <p style="margin-top:24px;font-size:11px;color:#aaa">
+      Gerado automaticamente pelo KRONOS · OLYMPUS v1.0 · StratSight Brasil<br>
+      Este relatório é confidencial e destinado exclusivamente ao destinatário indicado.
+    </p>
+  </div>
+</body></html>`;
+}
+
 interface KratosTask {
   projectId: string;
   projectName: string;
@@ -78,20 +110,21 @@ class KronosOrchestrator {
       });
       const lastMessage = latestMsgs[latestMsgs.length - 1]?.content || 'Análise concluída sem detalhes legíveis.';
 
-      const alertEmail = process.env.ALERT_EMAIL || process.env.SMTP_USER || 'admin@stratsight.com.br';
-      const subject = `[OLYMPUS] Alerta KRATOS - ${projectName}`;
-      const htmlContent = `
-        <div style="font-family: sans-serif; color: #333;">
-          <h2>Alerta de Monitoramento - KRATOS</h2>
-          <p>O agente KRATOS finalizou uma nova análise autônoma para o projeto <strong>${projectName}</strong>.</p>
-          <div style="background: #f4f4f4; padding: 15px; border-radius: 5px; margin-top: 20px;">
-            ${lastMessage.replace(/\n/g, '<br/>')}
-          </div>
-          <p style="margin-top: 30px; font-size: 12px; color: #888;">Este é um e-mail automático do orquestrador OLYMPUS v4.</p>
-        </div>
-      `;
+      // Destinatários: alertEmails do projeto (vírgula-separado) ou fallback para ALERT_EMAIL do .env
+      const projeto = await db.query.projects.findFirst({ where: eq(projects.id, projectId) });
+      const emailsStr = projeto?.alertEmails?.trim() || process.env.ALERT_EMAIL || process.env.SMTP_USER || '';
+      const destinatarios = emailsStr.split(',').map((e: string) => e.trim()).filter(Boolean);
 
-      await sendEmail(alertEmail, subject, htmlContent);
+      if (destinatarios.length === 0) {
+        console.log(`[KRATOS CRON] ⚠️ Nenhum e-mail de alerta configurado para "${projectName}". Pulando envio.`);
+      } else {
+        const subject = `[OLYMPUS] Relatório KRATOS - ${projectName}`;
+        const htmlContent = buildKratosEmailHtml(projectName, lastMessage);
+        for (const dest of destinatarios) {
+          await sendEmail(dest, subject, htmlContent);
+        }
+        console.log(`[KRATOS CRON] 📧 Relatório enviado para: ${destinatarios.join(', ')}`);
+      }
 
       // 2. Disparo de Webhook Opcional (Mantido para extensibilidade futura, mas não quebra se o n8n estiver off)
       try {

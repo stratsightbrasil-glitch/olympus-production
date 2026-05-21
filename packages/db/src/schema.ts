@@ -71,6 +71,7 @@ export const projects = pgTable("projects", {
   panelToken: text("panel_token").unique(),
   status: text("status").default("Em produção").notNull(),
   kratosCron: text("kratos_cron").default("0 6 * * *").notNull(),
+  alertEmails: text("alert_emails").default("").notNull(),
   createdBy: text("created_by").default("Sistema").notNull(),
   updatedBy: text("updated_by").default("Sistema").notNull(),
   deletedBy: text("deleted_by"),

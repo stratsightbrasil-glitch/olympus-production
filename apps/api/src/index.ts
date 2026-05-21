@@ -27,15 +27,21 @@ import embeddingsRoutes from './routes/embeddings';
 import docsRoutes from './routes/docs';
 import signalsRouter from './routes/signals';
 import reviewsRouter from './routes/reviews';
+import kratosRoutes from './routes/kratos';
 
 const app = new Hono();
 
-app.use('*', logger());
+// Logger filtrado — suprime health-checks /ping do output para não poluir os logs
+const logMiddleware = logger();
+app.use('*', async (c, next) => {
+  if (c.req.path === '/ping') return next();
+  return logMiddleware(c, next);
+});
 app.use('*', cors({
   origin: process.env.ALLOWED_ORIGIN || 'http://localhost:8080',
 }));
 
-app.get('/ping', (c) => c.json({ status: 'ok', message: 'OLYMPUS API v4.0 rodando com Hono!' }));
+app.get('/ping', (c) => c.json({ status: 'ok', message: 'OLYMPUS API v1.0 rodando com Hono!' }));
 
 // Rotas públicas de Autenticação
 app.route('/api/v1/auth', authRoutes);
@@ -65,6 +71,7 @@ const PROTECTED_PREFIXES = [
   '/api/v1/indicators',
   '/api/v1/signals',
   '/api/v1/reviews',
+  '/api/v1/kratos',
   '/api/v1/test-email',
 ];
 for (const prefix of PROTECTED_PREFIXES) {
@@ -84,6 +91,7 @@ app.route('/api/v1/indicators', indicatorsRoutes);
 app.route('/api/v1/embeddings', embeddingsRoutes);
 app.route('/api/v1/signals', signalsRouter);
 app.route('/api/v1/reviews', reviewsRouter);
+app.route('/api/v1/kratos', kratosRoutes);
 app.route('/api/docs', docsRoutes);
 
 // Rota de Teste do Nodemailer (KRATOS Mock) — auth via PROTECTED_PREFIXES
@@ -110,7 +118,7 @@ app.post('/api/v1/test-email', async (c) => {
 });
 
 const port = Number(process.env.PORT) || 3333;
-console.log(`🚀 Servidor OLYMPUS v4 iniciado na porta ${port}`);
+console.log(`🚀 Servidor OLYMPUS v1.0 iniciado na porta ${port}`);
 
 serve({ fetch: app.fetch, port, hostname: '0.0.0.0' });
 

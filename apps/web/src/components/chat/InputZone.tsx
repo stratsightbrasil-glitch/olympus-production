@@ -10,12 +10,14 @@ interface InputZoneProps {
   fileError: string;
   attachedFiles: { name: string }[];
   acceptedTypes: string;
+  metodologia?: string;
   onInputChange: (v: string) => void;
   onSend: () => void;
   onQuickSend: (cmd: string) => void;
   onRemoveFile: (i: number) => void;
   onFileChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
   onGerarRelatorio: () => void;
+  onExportEstimativa?: () => void;
 }
 
 // Chips contextuais por modo — estilos alinhados ao design system
@@ -33,8 +35,9 @@ const CHIPS_MONITORING = [
 
 export function InputZone({
   userRole, mode, hasMessages, input, loading, extracting,
-  fileError, attachedFiles, acceptedTypes,
-  onInputChange, onSend, onQuickSend, onRemoveFile, onFileChange, onGerarRelatorio,
+  fileError, attachedFiles, acceptedTypes, metodologia,
+  onInputChange, onSend, onQuickSend, onRemoveFile, onFileChange,
+  onGerarRelatorio, onExportEstimativa,
 }: InputZoneProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const isCliente = userRole === 'cliente';
@@ -106,6 +109,25 @@ export function InputZone({
           >
             ↓ Exportar
           </button>
+          {/* Estimativa EB — só aparece na metodologia SIEx/EB */}
+          {metodologia === 'SIEx/EB' && onExportEstimativa && (
+            <button
+              onClick={onExportEstimativa}
+              disabled={busy}
+              style={{
+                padding: '3px 10px', borderRadius: 20, fontSize: 11, fontWeight: 600,
+                background: '#FFF3E0', color: '#BF360C',
+                border: '1px solid #FFCCBC',
+                cursor: busy ? 'not-allowed' : 'pointer',
+                opacity: busy ? .5 : 1,
+                transition: 'all .12s',
+                whiteSpace: 'nowrap' as const,
+                fontFamily: "'DM Sans', system-ui, sans-serif",
+              }}
+            >
+              📋 Estimativa EB
+            </button>
+          )}
         </div>
       )}
 

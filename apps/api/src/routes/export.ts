@@ -42,7 +42,7 @@ function buildDocx(projeto: any, messages: any[]) {
     alignment: AlignmentType.CENTER, spacing: { after: 300 },
   }));
   children.push(new Paragraph({
-    children: [new TextRun({ text: 'Produzido por OLYMPUS v4.0 — Sistema Multiagente de Cenários Prospectivos', size: 20, color: '555555' })],
+    children: [new TextRun({ text: 'Produzido por OLYMPUS v1.0 — Sistema Multiagente de Cenários Prospectivos', size: 20, color: '555555' })],
     alignment: AlignmentType.CENTER, spacing: { after: 800 },
   }));
 
@@ -63,22 +63,39 @@ function buildDocx(projeto: any, messages: any[]) {
   children.push(new Table({ rows: metaRows, width: { size: 100, type: WidthType.PERCENTAGE } }));
   children.push(new Paragraph({ children: [new TextRun({ text: '' })], pageBreakBefore: true }));
 
-  const filtered = messages.filter(m => m && m.role && m.content && m.content.trim() && !(m.role === 'user' && m.content.startsWith('Iniciar')) && !(m.role === 'user' && m.content.startsWith('⚙️ Comando: Gerar Relatório')));
+  const DOCX_PHASE_LABELS: Record<string, string> = {
+    SCOPUS: 'Enquadramento Estratégico', KLIO: 'Análise Ambiental',
+    PYTHIA: 'Cenários Prospectivos', MNEMOSYNE: 'Narrativas de Cenários',
+    THEMIS: 'Implicações e Alertas', KRATOS: 'Monitoramento Contínuo',
+    HERMES: 'Síntese e Conclusão', HERMES_GRUMBACH: 'Síntese e Conclusão',
+    HERMES_GODET: 'Síntese e Conclusão', HERMES_SIEX: 'Síntese e Conclusão',
+  };
+  const DOCX_AGENT_MARKER_RE = /\*\*(HERMES(?:_\w+)?|SCOPUS|KLIO|PYTHIA|MNEMOSYNE|THEMIS|KRATOS|HERMES_REVISOR)\*\*\s*[··•\-]\s*/g;
 
+  const filtered = messages.filter(m =>
+    m && m.role === 'assistant' && m.content?.trim() &&
+    !m.content.startsWith('⚙️ Comando')
+  );
+
+  const docxPhasesSeen = new Set<string>();
   for (const msg of filtered) {
-    if (msg.role === 'user') {
-      if (msg.content && msg.content.trim()) {
-        const displayText = msg.content.length > 300 ? msg.content.slice(0, 300) + '...' : msg.content;
-        children.push(new Paragraph({ children: [new TextRun({ text: 'Usuário: ', bold: true, size: 18, color: '1B3A2D' }), new TextRun({ text: displayText.trim(), size: 18, color: '444444' })], spacing: { before: 160, after: 80 } }));
+    const upper = msg.content.toUpperCase().slice(0, 300);
+    let agente = 'HERMES';
+    for (const a of ['HERMES_GRUMBACH','HERMES_GODET','HERMES_SIEX','KRATOS','MNEMOSYNE','THEMIS','PYTHIA','KLIO','SCOPUS','HERMES']) {
+      if (upper.includes(a)) { agente = a; break; }
+    }
+    const phaseLabel = DOCX_PHASE_LABELS[agente] || 'Análise';
+    // Evita repetir o mesmo cabeçalho de fase (ex: múltiplas mensagens do HERMES)
+    if (!docxPhasesSeen.has(phaseLabel) || agente === 'HERMES') {
+      if (!docxPhasesSeen.has(phaseLabel)) {
+        docxPhasesSeen.add(phaseLabel);
+        children.push(new Paragraph({ children: [new TextRun({ text: phaseLabel, bold: true, size: 20, color: 'FFFFFF' })], spacing: { before: 300, after: 0 }, shading: { type: ShadingType.SOLID, fill: '1B3A2D' } }));
       }
-    } else {
-      const upper = msg.content.toUpperCase().slice(0, 200);
-      let agente = 'HERMES';
-      for (const a of ['KRATOS','HERMES','SCOPUS','KLIO','PYTHIA','MNEMOSYNE','THEMIS']) if (upper.includes(a)) { agente = a; break; }
+    }
 
-      children.push(new Paragraph({ children: [new TextRun({ text: agente, bold: true, size: 20, color: 'FFFFFF' })], spacing: { before: 300, after: 0 }, shading: { type: ShadingType.SOLID, fill: '1B3A2D' } }));
-
-      const lines = msg.content.split('\n');
+      // Remove todos os marcadores de agente do conteúdo antes de processar
+      const cleanedContent = msg.content.replace(DOCX_AGENT_MARKER_RE, '');
+      const lines = cleanedContent.split('\n');
       for (const line of lines) {
         // clean: versão sem markdown inline, usada apenas para detecção de padrões
         const clean = line.replace(/\*\*\*([^*]+)\*\*\*/g, '$1').replace(/\*\*([^*]+)\*\*/g, '$1').replace(/\*([^*]+)\*/g, '$1').replace(/`([^`]+)`/g, '$1').trim();
@@ -113,8 +130,8 @@ function buildDocx(projeto: any, messages: any[]) {
   return new Document({
     sections: [{
       properties: {},
-      headers: { default: new Header({ children: [new Paragraph({ children: [new TextRun({ text: 'StratSight Brasil  ·  OLYMPUS v4.0  ·  ', bold: true, size: 16, color: '1B3A2D' }), new TextRun({ text: nome || 'Relatório de Cenários', size: 16, color: '555555' })], border: { bottom: { style: BorderStyle.SINGLE, size: 4, color: '2E7D52' } } })] }) },
-      footers: { default: new Footer({ children: [new Paragraph({ children: [new TextRun({ text: 'StratSight Brasil  ·  OLYMPUS v4.0  ·  ' + (classificacao || 'Confidencial') + '  ·  Página ', size: 16, color: '888888' }), new TextRun({ children: [PageNumber.CURRENT], size: 16, color: '888888' })], alignment: AlignmentType.CENTER, border: { top: { style: BorderStyle.SINGLE, size: 4, color: 'DDDDDD' } } })] }) },
+      headers: { default: new Header({ children: [new Paragraph({ children: [new TextRun({ text: 'StratSight Brasil  ·  OLYMPUS v1.0  ·  ', bold: true, size: 16, color: '1B3A2D' }), new TextRun({ text: nome || 'Relatório de Cenários', size: 16, color: '555555' })], border: { bottom: { style: BorderStyle.SINGLE, size: 4, color: '2E7D52' } } })] }) },
+      footers: { default: new Footer({ children: [new Paragraph({ children: [new TextRun({ text: 'StratSight Brasil  ·  OLYMPUS v1.0  ·  ' + (classificacao || 'Confidencial') + '  ·  Página ', size: 16, color: '888888' }), new TextRun({ children: [PageNumber.CURRENT], size: 16, color: '888888' })], alignment: AlignmentType.CENTER, border: { top: { style: BorderStyle.SINGLE, size: 4, color: 'DDDDDD' } } })] }) },
       children,
     }],
   });
@@ -123,16 +140,25 @@ function buildDocx(projeto: any, messages: any[]) {
 function buildHtml(projeto: any, messages: any[], tipo: string = 'relatorio') {
   const { nome, cliente, analista, horizonte, classificacao } = projeto;
   const filename = `${(nome || 'Relatorio').replace(/[<>:"/\\|?*]/g,'').replace(/\s+/g,'_')}_${tipo}`;
-  const agora = new Date().toLocaleDateString('pt-BR', { day:'2-digit', month:'long', year:'numeric', hour:'2-digit', minute:'2-digit' });
+  const agora = new Date().toLocaleDateString('pt-BR', { day:'2-digit', month:'long', year:'numeric', hour:'2-digit', minute:'2-digit', timeZone: 'America/Sao_Paulo' });
 
-  const AGENT_COLORS: Record<string, string> = {
-    HERMES: '#1B3A2D', SCOPUS: '#1565C0', KLIO: '#4527A0', PYTHIA: '#B71C1C',
-    MNEMOSYNE: '#BF360C', THEMIS: '#37474F', KRATOS: '#004D40', ATHENA: '#2E7D52',
+  // Mapeamento agente → fase da metodologia (sem expor nomes internos ao cliente)
+  const PHASE_LABELS: Record<string, string> = {
+    SCOPUS:    'Enquadramento Estratégico',
+    KLIO:      'Análise Ambiental',
+    PYTHIA:    'Cenários Prospectivos',
+    MNEMOSYNE: 'Narrativas de Cenários',
+    THEMIS:    'Implicações e Alertas',
+    KRATOS:    'Monitoramento Contínuo',
+    HERMES:    'Síntese e Conclusão',
+    HERMES_GRUMBACH: 'Síntese e Conclusão',
+    HERMES_GODET:    'Síntese e Conclusão',
+    HERMES_SIEX:     'Síntese e Conclusão',
   };
-  const AGENT_ROLES: Record<string, string> = {
-    HERMES: 'Orquestrador MSEF', SCOPUS: 'Enquadramento Estratégico', KLIO: 'Análise Ambiental',
-    PYTHIA: 'Geração de Cenários', MNEMOSYNE: 'Desenvolvimento Narrativo',
-    THEMIS: 'Implicações Estratégicas', KRATOS: 'Monitoramento Contínuo', ATHENA: 'Motor Estratégico',
+  const PHASE_COLORS: Record<string, string> = {
+    SCOPUS: '#1565C0', KLIO: '#4527A0', PYTHIA: '#B71C1C',
+    MNEMOSYNE: '#BF360C', THEMIS: '#37474F', KRATOS: '#004D40',
+    HERMES: '#1B3A2D', HERMES_GRUMBACH: '#1B3A2D', HERMES_GODET: '#1B3A2D', HERMES_SIEX: '#1B3A2D',
   };
 
   // ── Markdown → HTML ──────────────────────────────────────────────────────────
@@ -209,33 +235,59 @@ function buildHtml(projeto: any, messages: any[], tipo: string = 'relatorio') {
   };
 
   // ── Body ─────────────────────────────────────────────────────────────────────
-  const filtered = messages.filter(m =>
-    m && m.role && m.content && m.content.trim() &&
-    !(m.role === 'user' && m.content.startsWith('Iniciar')) &&
-    !(m.role === 'user' && m.content.startsWith('⚙️ Comando'))
+  // Remove TODOS os marcadores de agente ("**AGENTE** · ") do conteúdo — globalmente
+  const KNOWN_AGENTS = ['HERMES_GRUMBACH','HERMES_GODET','HERMES_SIEX','HERMES_REVISOR','HERMES','KRATOS','MNEMOSYNE','THEMIS','PYTHIA','KLIO','SCOPUS'];
+  const AGENT_MARKER_RE = new RegExp(`\\*\\*(${KNOWN_AGENTS.join('|')})\\*\\*\\s*[··•\\-]\\s*`, 'g');
+
+  const stripAllAgentMarkers = (text: string): string =>
+    text.replace(AGENT_MARKER_RE, '');
+
+  // Detecta agente pela assinatura no início do conteúdo
+  const detectAgent = (content: string): string => {
+    const upper = content.slice(0, 300).toUpperCase();
+    const ORDER = ['HERMES_GRUMBACH','HERMES_GODET','HERMES_SIEX','KRATOS','MNEMOSYNE','THEMIS','PYTHIA','KLIO','SCOPUS','HERMES'];
+    for (const a of ORDER) { if (upper.includes(a)) return a; }
+    return 'HERMES';
+  };
+
+  // Para o relatório padrão (single message): renderiza limpo, sem cabeçalho de agente
+  // Para o estendido: agrupa por fase, elimina mensagens do usuário e conversas intermediárias
+  const agentMsgsOnly = messages.filter(m =>
+    m && m.role === 'assistant' && m.content?.trim() &&
+    !m.content.startsWith('⚙️ Comando')
   );
 
+  const isExtendido = tipo === 'estendido';
+  const isPadrao    = !isExtendido;
+
   let body = '';
-  for (const msg of filtered) {
-    if (msg.role === 'user') {
-      if (msg.content?.trim()) {
-        body += `<div class="user-msg"><span class="user-label">Usuário</span>${escHtml(msg.content.trim())}</div>`;
-      }
-    } else {
-      const upper = msg.content.toUpperCase().slice(0, 200);
-      let agente = 'HERMES';
-      for (const a of ['KRATOS','HERMES','SCOPUS','KLIO','PYTHIA','MNEMOSYNE','THEMIS']) {
-        if (upper.includes(a)) { agente = a; break; }
-      }
-      const color = AGENT_COLORS[agente] || '#1B3A2D';
-      const role  = AGENT_ROLES[agente]  || '';
-      body += `<div class="agent-block">
-  <div class="agent-header" style="background:${color}">
-    <span class="agent-name">${agente}</span>
-    <span class="agent-role">${role}</span>
+
+  if (isPadrao) {
+    // Padrão: renderiza o conteúdo diretamente (já é o relatório final do HERMES)
+    const content = agentMsgsOnly[0]?.content || '';
+    body = `<div class="report-content">${mdToHtml(stripAllAgentMarkers(content))}</div>`;
+  } else {
+    // Estendido: uma seção por agente/fase, sem expor nomes de agentes
+    const phasesSeen = new Set<string>();
+    for (const msg of agentMsgsOnly) {
+      const agente = detectAgent(msg.content);
+      const phaseLabel = PHASE_LABELS[agente] || 'Análise';
+      const color = PHASE_COLORS[agente] || '#1B3A2D';
+      // Evita repetir a mesma fase seguida (ex: múltiplas mensagens de HERMES)
+      const phaseKey = agente;
+      const cleanContent = stripAllAgentMarkers(msg.content);
+      if (phasesSeen.has(phaseKey) && agente.startsWith('HERMES')) {
+        // Múltiplas mensagens do orquestrador: agrega na seção de síntese sem novo cabeçalho
+        body += `<div class="phase-content-extra">${mdToHtml(cleanContent)}</div>`;
+      } else {
+        phasesSeen.add(phaseKey);
+        body += `<div class="phase-block">
+  <div class="phase-header" style="border-left-color:${color}">
+    <span class="phase-label">${escHtml(phaseLabel)}</span>
   </div>
-  <div class="agent-content">${mdToHtml(msg.content)}</div>
+  <div class="phase-content">${mdToHtml(cleanContent)}</div>
 </div>`;
+      }
     }
   }
 
@@ -291,17 +343,17 @@ thead th { background: #1B3A2D; color: #fff; font-weight: 600; padding: 7px 11px
 td { border: 1px solid #e0e0e0; padding: 6px 11px; vertical-align: top; }
 tr:nth-child(even) td { background: #f9fbfa; }
 
-/* ── Agent blocks ── */
-.agent-block { margin: 20px 0; page-break-inside: avoid; border-radius: 6px; overflow: hidden; border: 1px solid #ddd; box-shadow: 0 1px 3px rgba(0,0,0,.06); }
-.agent-header { padding: 9px 18px; display: flex; align-items: baseline; gap: 12px; }
-.agent-name { font-size: 8.5pt; font-weight: 800; letter-spacing: 2.5px; color: #fff; }
-.agent-role { font-size: 8pt; color: rgba(255,255,255,.65); font-style: italic; }
-.agent-content { padding: 16px 20px; background: #fff; }
-.agent-content p:last-child { margin-bottom: 0; }
+/* ── Relatório Padrão — conteúdo limpo ── */
+.report-content { padding: 0; }
+.report-content p:last-child { margin-bottom: 0; }
 
-/* ── User message ── */
-.user-msg { background: #f8f8f8; border-left: 3px solid #bbb; padding: 8px 14px; margin: 14px 0; font-size: 9.5pt; color: #666; border-radius: 0 4px 4px 0; display: flex; gap: 10px; align-items: baseline; }
-.user-label { font-weight: 700; color: #555; font-size: 8pt; letter-spacing: 1px; text-transform: uppercase; white-space: nowrap; }
+/* ── Relatório Estendido — seções por fase ── */
+.phase-block { margin: 24px 0; page-break-inside: avoid; }
+.phase-header { padding: 6px 0 6px 14px; border-left: 4px solid #1B3A2D; margin-bottom: 12px; }
+.phase-label { font-size: 9pt; font-weight: 800; letter-spacing: 1.5px; text-transform: uppercase; color: #1B3A2D; }
+.phase-content { padding: 0; }
+.phase-content p:last-child { margin-bottom: 0; }
+.phase-content-extra { padding: 0; margin-top: 8px; }
 
 @media print {
   @page { margin: 2.2cm 2.5cm 2cm; size: A4; }
@@ -312,16 +364,11 @@ tr:nth-child(even) td { background: #f9fbfa; }
   body { padding-top: 0 !important; font-size: 10pt; }
   .cover { page-break-after: always; min-height: 100vh; justify-content: center; }
 
-  /* Agent headers: fallback when background-graphics is off */
-  .agent-header {
-    border-bottom: 2px solid #1B3A2D !important;
-    background: #f5f5f5 !important;
-    padding: 8px 18px !important;
-  }
-  .agent-name { color: #1B3A2D !important; font-size: 8pt; letter-spacing: 2px; }
-  .agent-role { color: #555 !important; }
-  .agent-block { border: 1px solid #ccc !important; box-shadow: none !important; page-break-inside: avoid; margin: 16px 0; }
-  .agent-content { border-top: 1px solid #e0e0e0; }
+  /* Phase blocks: impressão */
+  .phase-block { page-break-inside: avoid; margin: 16px 0; }
+  .phase-header { border-left: 3px solid #1B3A2D !important; padding-left: 12px !important; }
+  .phase-label { color: #1B3A2D !important; }
+  .report-content { padding: 0; }
 
   /* Meta-card cover table */
   .meta-card td:first-child { background: #f0f0f0 !important; }
@@ -369,7 +416,7 @@ tr:nth-child(even) td { background: #f9fbfa; }
 
 <div class="cover">
   <div class="brand">StratSight Brasil</div>
-  <div class="brand-sub">Strategic Foresight · OLYMPUS v4.0</div>
+  <div class="brand-sub">Strategic Foresight · OLYMPUS v1.0</div>
   <div class="cover-bar"></div>
   <h1>${escHtml(nome || 'Relatório de Cenários')}</h1>
   <div class="doc-sub">${tipoLabel} · Sistema Multiagente de Cenários Prospectivos</div>
@@ -390,6 +437,204 @@ ${body}
 </body>
 </html>`;
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ESTIMATIVA EB — §5.8 do EB70-MT-10.401 (SIEx)
+// ─────────────────────────────────────────────────────────────────────────────
+function buildEstimativaHtml(projeto: any, messages: any[]) {
+  const { nome, cliente, analista, horizonte } = projeto;
+  const agora = new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' });
+  const filename = `Estimativa_${(nome || 'SIEx').replace(/[<>:"/\\|?*]/g,'').replace(/\s+/g,'_')}`;
+
+  // Extrai blocos de cada fase das mensagens dos agentes
+  const agentMsgs = messages.filter(m => m && m.role === 'assistant' && m.content?.trim());
+
+  const getBlock = (keywords: string[]): string => {
+    const found = agentMsgs.find(m =>
+      keywords.some(k => m.content.toUpperCase().includes(k.toUpperCase()))
+    );
+    return found ? found.content : '';
+  };
+
+  const planejamentoBlock = getBlock(['FICHA DE PLANEJAMENTO', 'AECK', 'AEC —', 'FASE 1', 'PLANEJAMENTO']);
+  const reuniaoBlock      = getBlock(['TAD', 'AVALIAÇÃO DA FONTE', 'AVALIAÇÃO DO CONTEÚDO', 'REUNIÃO', 'FASE 2']);
+  const analiseBlock      = getBlock(['FRAÇÕES SIGNIFICATIVAS', 'PERTINÊNCIA', 'SÍNTESE', 'ANÁLISE E SÍNTESE', 'FASE 3']);
+  const interpretacaoBlock= getBlock(['FATORES DE INFLUÊNCIA', 'HIPÓTESE', 'DELINEAMENTO', 'INTERPRETAÇÃO', 'FASE 4']);
+  const conclusaoBlock    = getBlock(['H1', 'H2', 'PROBABILIDADE ESTIMADA', 'CONCLUSÃO', 'FASE 5', 'FORMALIZAÇÃO']);
+
+  // Markdown → HTML inline (reutiliza lógica similar ao buildHtml)
+  const escH = (s: string) => (s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  const inline = (s: string) => escH(s)
+    .replace(/\*\*\*(.+?)\*\*\*/g,'<strong><em>$1</em></strong>')
+    .replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>')
+    .replace(/\*(.+?)\*/g,'<em>$1</em>')
+    .replace(/`(.+?)`/g,'<code>$1</code>');
+
+  const md2html = (text: string): string => {
+    if (!text) return '<p><em>(sem conteúdo)</em></p>';
+    const lines = text.split('\n');
+    const out: string[] = [];
+    let ul = false, ol = false;
+    let tableRows: string[][] = [], inTable = false;
+
+    const flushList  = () => { if (ul) { out.push('</ul>'); ul=false; } if (ol) { out.push('</ol>'); ol=false; } };
+    const flushTable = () => {
+      if (!inTable || tableRows.length === 0) return;
+      const [head, ...body] = tableRows;
+      out.push('<table><thead><tr>' + head.map(c=>`<th>${inline(c)}</th>`).join('') + '</tr></thead>');
+      if (body.length) { out.push('<tbody>'); body.forEach(r=>out.push('<tr>'+r.map(c=>`<td>${inline(c)}</td>`).join('')+'</tr>')); out.push('</tbody>'); }
+      out.push('</table>'); tableRows=[]; inTable=false;
+    };
+    for (const line of lines) {
+      const t = line.trim();
+      if (/^\|/.test(t) && /\|$/.test(t)) { flushList(); if (/^[\s|:-]+$/.test(t)) continue; tableRows.push(t.split('|').map(c=>c.trim()).filter(Boolean)); inTable=true; continue; }
+      if (inTable) flushTable();
+      if (/^#{1,4}\s/.test(line)) { flushList(); const lvl=line.match(/^(#+)/)?.[1].length||1; const txt=line.replace(/^#+\s*/,''); out.push(`<h${lvl}>${inline(txt)}</h${lvl}>`); continue; }
+      if (/^[-─═*]{3,}$/.test(t)) { flushList(); out.push('<hr>'); continue; }
+      if (/^\s*[-*•]\s/.test(line)) { if (ol){out.push('</ol>');ol=false;} if(!ul){out.push('<ul>');ul=true;} out.push(`<li>${inline(line.replace(/^\s*[-*•]\s+/,''))}</li>`); continue; }
+      if (/^\s*\d+\.\s/.test(line)) { if (ul){out.push('</ul>');ul=false;} if(!ol){out.push('<ol>');ol=true;} out.push(`<li>${inline(line.replace(/^\s*\d+\.\s+/,''))}</li>`); continue; }
+      if (!t) { flushList(); continue; }
+      flushList(); out.push(`<p>${inline(t)}</p>`);
+    }
+    flushList(); flushTable();
+    return out.join('\n');
+  };
+
+  const css = `
+@page { margin: 2.5cm 3cm 2.5cm; size: A4; }
+*, *::before, *::after { box-sizing: border-box; margin:0; padding:0;
+  -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+body { font-family: 'Times New Roman', Times, serif; font-size: 11pt; color: #111; line-height: 1.7; background:#fff; padding-top: 52px; }
+
+/* ── Barra salvar ── */
+.save-bar { position:fixed; top:0; left:0; right:0; z-index:9999; background:#1B3A2D; color:#fff;
+  padding:10px 24px; display:flex; align-items:center; justify-content:space-between; font-size:12px;
+  gap:16px; box-shadow:0 2px 8px rgba(0,0,0,.35); font-family:'DM Sans',system-ui,sans-serif; }
+.save-bar strong { color:#C9A84C; }
+.save-btn { background:#C9A84C; color:#1B3A2D; font-weight:800; border:none; padding:7px 20px;
+  border-radius:4px; cursor:pointer; font-size:12px; }
+.save-btn:hover { background:#d4b45a; }
+
+/* ── Documento ── */
+.doc { max-width: 680px; margin: 0 auto; padding: 0 0 40px; }
+
+/* ── Cabeçalho ── */
+.cabecalho { text-align:center; margin-bottom: 20px; border-bottom: 2px solid #111; padding-bottom: 10px; }
+.classif { font-weight:900; font-size: 10pt; letter-spacing: 3px; text-transform:uppercase; }
+.classif.conf { color: #7B0000; }
+.doc-titulo { font-size: 12pt; font-weight: bold; text-transform: uppercase; letter-spacing: 1px; margin: 6px 0 2px; }
+.doc-subtitulo { font-size: 10pt; }
+.doc-meta { font-size: 10pt; margin-top: 6px; display:flex; justify-content:space-between; }
+
+/* ── Seções ── */
+.secao { margin-bottom: 22px; }
+.secao-titulo { font-size: 11pt; font-weight: bold; text-transform: uppercase; letter-spacing: 1px;
+  border-bottom: 1px solid #333; padding-bottom: 3px; margin-bottom: 10px; }
+.secao-num { font-weight: bold; margin-right: 6px; }
+
+/* ── Typography ── */
+h1,h2,h3,h4 { font-family: 'Times New Roman', Times, serif; page-break-after: avoid; }
+h2 { font-size: 11pt; font-weight: bold; margin: 14px 0 6px; }
+h3 { font-size: 11pt; font-weight: bold; font-style: italic; margin: 10px 0 4px; }
+p { margin: 0 0 8px; text-align: justify; }
+ul, ol { margin: 6px 0 10px 22px; }
+li { margin-bottom: 3px; }
+code { font-family: 'Courier New', monospace; font-size: 9.5pt; background:#f5f5f5; border:1px solid #ddd; padding:1px 4px; border-radius:2px; }
+hr { border:none; border-top:1px solid #aaa; margin:14px 0; }
+table { border-collapse:collapse; width:100%; margin:10px 0 14px; font-size:10pt; }
+thead th { background:#1B3A2D; color:#fff; font-weight:700; padding:6px 10px; text-align:left; font-size:9.5pt; }
+td { border:1px solid #ccc; padding:5px 10px; vertical-align:top; }
+tr:nth-child(even) td { background:#f9f9f9; }
+
+/* ── Rodapé ── */
+.rodape { margin-top: 30px; border-top: 2px solid #111; padding-top: 8px;
+  text-align: center; font-size: 9.5pt; font-style: italic; color: #444; }
+
+@media print {
+  .save-bar { display:none !important; }
+  body { padding-top: 0 !important; }
+}`;
+
+  return `<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>${filename}</title>
+<style>${css}</style>
+</head>
+<body>
+
+<div class="save-bar">
+  <div style="display:flex;align-items:center;gap:10px;">
+    <span>📋</span>
+    <strong>${filename}.pdf</strong>
+    <span style="opacity:.7;font-size:11px">· Estimativa SIEx — EB70-MT-10.401</span>
+  </div>
+  <div style="display:flex;align-items:center;gap:10px;">
+    <span style="opacity:.65;font-size:11px">Selecione "Salvar como PDF" no diálogo</span>
+    <button class="save-btn" onclick="window.print()">🖨️ Imprimir / Salvar PDF</button>
+  </div>
+</div>
+
+<div class="doc">
+
+  <!-- CABEÇALHO -->
+  <div class="cabecalho">
+    <div class="classif conf">CONFIDENCIAL</div>
+    <div class="doc-titulo">Estimativa</div>
+    <div class="doc-subtitulo">Sistema de Inteligência do Exército (SIEx) · EB70-MT-10.401</div>
+    <div class="doc-meta">
+      <span><strong>Assunto:</strong> ${escH(nome || '—')}</span>
+      <span><strong>Data:</strong> ${agora}</span>
+    </div>
+    <div class="doc-meta">
+      <span><strong>Usuário:</strong> ${escH(cliente || analista || '—')}</span>
+      <span><strong>Horizonte:</strong> ${escH(horizonte || '—')}</span>
+    </div>
+  </div>
+
+  <!-- 1. SITUAÇÃO -->
+  <div class="secao">
+    <div class="secao-titulo"><span class="secao-num">1.</span>Situação</div>
+    <div class="secao-sub"><strong>1.1 Planejamento (Fase 1)</strong></div>
+    ${md2html(planejamentoBlock)}
+    <div class="secao-sub" style="margin-top:12px"><strong>1.2 Reunião (Fase 2)</strong></div>
+    ${md2html(reuniaoBlock)}
+    <div class="secao-sub" style="margin-top:12px"><strong>1.3 Análise e Síntese (Fase 3)</strong></div>
+    ${md2html(analiseBlock)}
+  </div>
+
+  <!-- 2. ANÁLISE -->
+  <div class="secao">
+    <div class="secao-titulo"><span class="secao-num">2.</span>Análise</div>
+    <div class="secao-sub"><strong>Fase 4 — Interpretação: Fatores de Influência, Trajetória e Hipóteses</strong></div>
+    ${md2html(interpretacaoBlock)}
+  </div>
+
+  <!-- 3. CONCLUSÃO -->
+  <div class="secao">
+    <div class="secao-titulo"><span class="secao-num">3.</span>Conclusão</div>
+    ${md2html(conclusaoBlock || interpretacaoBlock)}
+  </div>
+
+  <!-- RODAPÉ -->
+  <div class="rodape">
+    OLYMPUS v5.0 · SIEx/EB · EB70-MT-10.401 · CONFIDENCIAL
+  </div>
+
+</div>
+</body>
+</html>`;
+}
+
+exportRoutes.post('/estimativa', async (c) => {
+  try {
+    const { projeto, messages } = (await c.req.json()) as any;
+    const html = buildEstimativaHtml(projeto || {}, messages || []);
+    return new Response(html, { status: 200, headers: { 'Content-Type': 'text/html; charset=utf-8' } });
+  } catch (e: any) { return c.json({ error: e.message }, 500); }
+});
 
 exportRoutes.post('/docx', async (c) => {
   try {
