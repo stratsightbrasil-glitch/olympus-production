@@ -286,18 +286,20 @@ export function Sidebar({
                   <div className="text-xs text-gray-400 px-2 py-1">Nenhuma análise salva.</div>
                 ) : (
                   <>
-                    {filterStatus.producao && filter('Em produção').length > 0 && (
-                      <div className="mb-2">
-                        <div style={{ fontSize: 9, color: '#90CAF9', fontWeight: 700, padding: '2px 8px', textTransform: 'uppercase' }}>Em Produção</div>
-                        {filter('Em produção').map(s => (
-                          <SessionCard key={s.id} s={s} onClick={() => onCarregarSessao(s.id)} onDelete={e => onDeletarSessao(s.id, e)} />
-                        ))}
-                        {/* Also match sessions with no status */}
-                        {sessoes.filter(s => !s.status && (!sessionSearch || (s.name || '').toLowerCase().includes(sessionSearch.toLowerCase()))).map(s => (
-                          <SessionCard key={s.id} s={s} onClick={() => onCarregarSessao(s.id)} onDelete={e => onDeletarSessao(s.id, e)} />
-                        ))}
-                      </div>
-                    )}
+                    {filterStatus.producao && (() => {
+                      const producao = sessoes.filter(s =>
+                        (s.status === 'Em produção' || !s.status) &&
+                        (!sessionSearch || (s.name || '').toLowerCase().includes(sessionSearch.toLowerCase()))
+                      );
+                      return producao.length > 0 ? (
+                        <div className="mb-2">
+                          <div style={{ fontSize: 9, color: '#90CAF9', fontWeight: 700, padding: '2px 8px', textTransform: 'uppercase' }}>Em Produção</div>
+                          {producao.map(s => (
+                            <SessionCard key={s.id} s={s} onClick={() => onCarregarSessao(s.id)} onDelete={e => onDeletarSessao(s.id, e)} />
+                          ))}
+                        </div>
+                      ) : null;
+                    })()}
                     {filterStatus.ativos && filter('Ativo').length > 0 && (
                       <div className="mb-2">
                         <div style={{ fontSize: 9, color: '#66BB6A', fontWeight: 700, padding: '2px 8px', textTransform: 'uppercase' }}>Monitorados (Ativos)</div>
