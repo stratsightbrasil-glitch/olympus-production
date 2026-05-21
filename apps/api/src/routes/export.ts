@@ -238,8 +238,18 @@ function buildHtml(projeto: any, messages: any[], tipo: string = 'relatorio') {
   const KNOWN_AGENTS = ['HERMES_GRUMBACH','HERMES_GODET','HERMES_SIEX','HERMES_REVISOR','HERMES','KRATOS','MNEMOSYNE','THEMIS','PYTHIA','KLIO','SCOPUS'];
   const AGENT_MARKER_RE = new RegExp(`\\*\\*(${KNOWN_AGENTS.join('|')})\\*\\*\\s*[··•\\-]\\s*`, 'g');
 
-  const stripAllAgentMarkers = (text: string): string =>
-    text.replace(AGENT_MARKER_RE, '');
+  const stripAllAgentMarkers = (text: string): string => {
+    // 1. Remove **AGENT** · markdown markers
+    let result = text.replace(AGENT_MARKER_RE, '');
+    // 2. Remove plain-text agent coordination lines (e.g. "MNEMOSYNE entregou a Seção 1...")
+    result = result.split('\n').filter(line => {
+      const t = line.trim();
+      return !KNOWN_AGENTS.some(agent =>
+        t.startsWith(agent) && t.length > agent.length && /[\s,.:;]/.test(t[agent.length])
+      );
+    }).join('\n');
+    return result;
+  };
 
   // Detecta agente pela assinatura no início do conteúdo
   const detectAgent = (content: string): string => {

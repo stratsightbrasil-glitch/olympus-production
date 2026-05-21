@@ -1,260 +1,322 @@
-// ─── KRATOS Panel — Painel de Monitoramento Contínuo ─────────────────────────
-// Dashboard dedicado: indicadores, radar de sinais, últimas análises, ações.
+// ─── KRATOS Panel — Painel de Monitoramento Infográfico ──────────────────────
+// Dark-theme dashboard: semáforo, gauges de cenário, tabela densa, gatilhos.
 
 import { useState, useEffect, useCallback } from 'react';
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
-
 interface Indicator {
-  id: string;
-  name: string;
-  status: string;
-  lastValue?: number | null;
-  source?: string | null;
-  lastCheckedAt?: string | null;
-  thresholdYellow?: number | null;
-  thresholdRed?: number | null;
-  parametersJson?: any;
+  id: string; name: string; status: string;
+  lastValue?: number | null; source?: string | null; lastCheckedAt?: string | null;
+  thresholdYellow?: number | null; thresholdRed?: number | null; parametersJson?: any;
 }
-
 interface Signal {
-  id: string;
-  titulo: string;
-  tipo?: string;
-  classificacao: string;
-  statusRadar: string;
-  interpretacaoAtual?: string | null;
-  acaoRecomendada?: string | null;
-  sentinela1Status?: string | null;
-  sentinela1Descricao?: string | null;
-  sentinela2Status?: string | null;
-  sentinela2Descricao?: string | null;
-  janelaAnos?: string | null;
-  updatedAt?: string;
+  id: string; titulo: string; tipo?: string; classificacao: string; statusRadar: string;
+  interpretacaoAtual?: string | null; acaoRecomendada?: string | null;
+  sentinela1Status?: string | null; sentinela1Descricao?: string | null;
+  sentinela2Status?: string | null; sentinela2Descricao?: string | null;
+  janelaAnos?: string | null; updatedAt?: string;
 }
-
 interface DashboardData {
   projeto: { id: string; nome: string; kratosCron: string; alertEmails: string };
-  indicadores: Indicator[];
-  sinais: Signal[];
-  sinalStats: Record<string, number>;
-  overallStatus: string;
-  lastKratosAt: string | null;
-  lastKratosExcerpt: string | null;
+  indicadores: Indicator[]; sinais: Signal[]; sinalStats: Record<string, number>;
+  overallStatus: string; lastKratosAt: string | null; lastKratosExcerpt: string | null;
 }
-
 interface KratosPanelProps {
-  sessionId: string;
-  reqHeaders: Record<string, string>;
-  onRunKratos: () => void;   // dispara análise KRATOS no chat
-  onSettings: () => void;    // abre modal de configurações
+  sessionId: string; reqHeaders: Record<string, string>;
+  onRunKratos: () => void; onSettings: () => void;
 }
 
-// ─── Paleta ───────────────────────────────────────────────────────────────────
+// ─── Paleta escura ────────────────────────────────────────────────────────────
+const DARK   = '#0D1B11';
+const PANEL  = '#152A18';
+const PANEL2 = '#0A1410';
+const BORDER = '#243D28';
+const GOLD   = '#C9A84C';
+const TEXT1  = '#E8F0E9';
+const TEXT2  = '#7FA88A';
+const TEXT3  = '#4A6A52';
 
-const S_COLOR: Record<string, { bg: string; text: string; border: string }> = {
-  verde:    { bg: '#E8F5E9', text: '#1B5E20', border: '#4CAF50' },
-  amarelo:  { bg: '#FFF9C4', text: '#7D5A00', border: '#F9A825' },
-  vermelho: { bg: '#FFEBEE', text: '#7B1A1A', border: '#E53935' },
+const CLR: Record<string, string> = {
+  verde: '#43A047', amarelo: '#F9A825', vermelho: '#E53935',
 };
-const S_DOT: Record<string, string>    = { verde: '🟢', amarelo: '🟡', vermelho: '🔴' };
-const RADAR_DOT: Record<string, string> = { materializado: '🔴', amplificando: '🟠', monitorando: '🔵', arquivado: '⚫' };
+const RADAR_CLR: Record<string, string> = {
+  materializado: '#E53935', amplificando: '#FF9800', monitorando: '#2196F3', arquivado: '#616161',
+};
 const RADAR_LABEL: Record<string, string> = {
   materializado: 'Materializado', amplificando: 'Amplificando',
   monitorando: 'Monitorando', arquivado: 'Arquivado',
 };
-const RADAR_BG: Record<string, string> = {
-  materializado: '#FFEBEE', amplificando: '#FFF3E0',
-  monitorando: '#E3F2FD', arquivado: '#F5F5F5',
-};
-const RADAR_BORDER: Record<string, string> = {
-  materializado: '#EF9A9A', amplificando: '#FFCC80',
-  monitorando: '#90CAF9', arquivado: '#E0E0E0',
-};
 
 function fmtDate(iso: string | null) {
   if (!iso) return '—';
-  return new Date(iso).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+  return new Date(iso).toLocaleString('pt-BR', {
+    day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit',
+  });
 }
 
-// ─── Indicador Card ───────────────────────────────────────────────────────────
-
-function IndicadorCard({ ind }: { ind: Indicator }) {
-  const st = ind.status || 'verde';
-  const col = S_COLOR[st] ?? S_COLOR.verde;
-  const val = ind.lastValue !== null && ind.lastValue !== undefined ? ind.lastValue : null;
-
-  // Threshold bar: [min=0 ... yellow ... red ... max]
-  // Se não temos thresholds, apenas mostra o valor
-  const yellow = ind.parametersJson?.yellowThreshold ?? ind.thresholdYellow;
-  const red    = ind.parametersJson?.redThreshold    ?? ind.thresholdRed;
-  const hasThreshold = yellow !== null && yellow !== undefined && red !== null && red !== undefined && val !== null;
-
+// ─── Semáforo SVG ─────────────────────────────────────────────────────────────
+function Semaforo({ status }: { status: string }) {
+  const LIGHTS = [
+    { id: 'vermelho', fill: '#E53935', glow: '#FF5252' },
+    { id: 'amarelo',  fill: '#F9A825', glow: '#FFD740' },
+    { id: 'verde',    fill: '#43A047', glow: '#69F0AE' },
+  ];
   return (
     <div style={{
-      background: '#fff', border: `1.5px solid ${col.border}`,
-      borderRadius: 10, padding: '14px 16px',
-      display: 'flex', flexDirection: 'column', gap: 6,
-      boxShadow: '0 1px 4px rgba(0,0,0,.06)',
-      minWidth: 0,
+      background: '#060D07', borderRadius: 14, padding: '14px 10px',
+      display: 'flex', flexDirection: 'column', gap: 10, alignItems: 'center',
+      border: `2px solid ${BORDER}`, boxShadow: 'inset 0 0 14px rgba(0,0,0,.7)',
     }}>
-      {/* Status badge */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
-        <span style={{
-          fontFamily: "'DM Sans', sans-serif", fontSize: 12, fontWeight: 700,
-          color: '#1B3A2D', lineHeight: 1.3, flex: 1,
-        }}>{ind.name}</span>
-        <span style={{
-          background: col.bg, color: col.text, border: `1px solid ${col.border}`,
-          borderRadius: 20, padding: '2px 8px', fontSize: 10, fontWeight: 700,
-          whiteSpace: 'nowrap', flexShrink: 0,
-        }}>{S_DOT[st]} {st.toUpperCase()}</span>
-      </div>
-
-      {/* Valor */}
-      <div style={{
-        fontFamily: "'DM Mono', monospace", fontSize: 22, fontWeight: 700,
-        color: col.text, lineHeight: 1,
-      }}>
-        {val !== null ? String(val) : <span style={{ fontSize: 14, color: '#9CA3AF' }}>sem dado</span>}
-      </div>
-
-      {/* Threshold bar */}
-      {hasThreshold && val !== null && (
-        <div style={{ marginTop: 2 }}>
-          <div style={{
-            height: 6, background: '#E5E7EB', borderRadius: 3, overflow: 'hidden', position: 'relative',
-          }}>
-            {/* Bar fill up to current value (0–red scale) */}
-            <div style={{
-              position: 'absolute', left: 0, top: 0, height: '100%',
-              width: `${Math.min(100, (val / (red * 1.2)) * 100)}%`,
-              background: st === 'vermelho' ? '#E53935' : st === 'amarelo' ? '#F9A825' : '#4CAF50',
-              borderRadius: 3, transition: 'width .4s',
-            }} />
-            {/* Yellow threshold marker */}
-            <div style={{
-              position: 'absolute', top: 0, height: '100%', width: 2,
-              left: `${Math.min(98, (yellow / (red * 1.2)) * 100)}%`,
-              background: '#F9A825', opacity: 0.9,
-            }} />
-          </div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 2, fontSize: 9, color: '#9CA3AF', fontFamily: "'DM Mono', monospace" }}>
-            <span>0</span>
-            <span style={{ color: '#F9A825' }}>⚠ {yellow}</span>
-            <span style={{ color: '#E53935' }}>🔴 {red}</span>
-          </div>
-        </div>
-      )}
-
-      {/* Fonte + última verificação */}
-      <div style={{ fontSize: 10, color: '#9CA3AF', marginTop: 2 }}>
-        {ind.source && <span>{ind.source} · </span>}
-        {fmtDate(ind.lastCheckedAt ?? null)}
-      </div>
+      {LIGHTS.map(l => {
+        const on = l.id === status;
+        return (
+          <div key={l.id} style={{
+            width: 32, height: 32, borderRadius: '50%',
+            background: on ? l.fill : '#121F14',
+            boxShadow: on ? `0 0 16px ${l.glow}, 0 0 32px ${l.glow}60` : 'none',
+            border: `1.5px solid ${on ? l.fill : BORDER}`,
+            transition: 'all .35s',
+          }} />
+        );
+      })}
     </div>
   );
 }
 
-// ─── Sinal Row ────────────────────────────────────────────────────────────────
+// ─── Gauge de semicírculo ─────────────────────────────────────────────────────
+// Arc vai de 180° (esquerda) a 0° (direita) passando pelo topo — sweep=0 (anti-horário na tela).
+function Gauge({ label, value, color }: { label: string; value: number; color: string }) {
+  const cx = 50, cy = 52, r = 38;
+  const toXY = (deg: number) => ({
+    x: cx + r * Math.cos(deg * Math.PI / 180),
+    y: cy - r * Math.sin(deg * Math.PI / 180), // y invertido para coordenadas SVG
+  });
+  const start = toXY(180); // esquerda
+  const end   = toXY(0);   // direita
+  const v = Math.max(0.5, Math.min(99.5, value));
+  const fillDeg = 180 - 180 * v / 100;
+  const fp = toXY(fillDeg);
 
-function SinalRow({ s }: { s: Signal }) {
-  const [expanded, setExpanded] = useState(false);
-  const radar = s.statusRadar || 'monitorando';
+  const arc = (x1: number, y1: number, x2: number, y2: number, large: number) =>
+    `M${x1.toFixed(1)},${y1.toFixed(1)} A${r},${r} 0 ${large},0 ${x2.toFixed(1)},${y2.toFixed(1)}`;
+
   return (
-    <div style={{
-      background: RADAR_BG[radar] ?? '#F9FAFB',
-      border: `1px solid ${RADAR_BORDER[radar] ?? '#E5E7EB'}`,
-      borderRadius: 8, padding: '10px 12px', cursor: 'pointer',
-      transition: 'box-shadow .15s',
-    }} onClick={() => setExpanded(e => !e)}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-        <span style={{ fontSize: 14 }}>{RADAR_DOT[radar]}</span>
-        <span style={{ flex: 1, fontSize: 12, fontWeight: 700, color: '#1B3A2D' }}>{s.titulo}</span>
-        <div style={{ display: 'flex', gap: 4, alignItems: 'center', flexShrink: 0 }}>
-          {s.sentinela1Status === 'disparado' && <span style={{ fontSize: 9, background: '#FFEBEE', color: '#7B1A1A', borderRadius: 10, padding: '1px 6px', fontWeight: 700 }}>S1 🔴</span>}
-          {s.sentinela2Status === 'disparado' && <span style={{ fontSize: 9, background: '#FFEBEE', color: '#7B1A1A', borderRadius: 10, padding: '1px 6px', fontWeight: 700 }}>S2 🔴</span>}
-          <span style={{ fontSize: 10, color: '#9CA3AF' }}>{expanded ? '▲' : '▼'}</span>
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, minWidth: 96 }}>
+      <svg width={100} height={66} viewBox="0 0 100 66" style={{ overflow: 'visible' }}>
+        {/* Track */}
+        <path d={arc(start.x, start.y, end.x, end.y, 0)}
+          fill="none" stroke={PANEL2} strokeWidth={7} strokeLinecap="round" />
+        {/* Fill */}
+        {value > 1 && (
+          <path d={arc(start.x, start.y, fp.x, fp.y, 0)}
+            fill="none" stroke={color} strokeWidth={7} strokeLinecap="round"
+            style={{ filter: `drop-shadow(0 0 4px ${color}80)` }} />
+        )}
+        {/* Valor */}
+        <text x={50} y={50} textAnchor="middle" fontSize={15} fontWeight={700}
+          fill={value > 1 ? color : TEXT3} fontFamily="DM Mono, monospace">{value}%</text>
+      </svg>
+      <span style={{
+        fontSize: 9, color: TEXT2, fontFamily: "'DM Mono', monospace",
+        letterSpacing: 1.2, textTransform: 'uppercase', textAlign: 'center',
+      }}>{label}</span>
+    </div>
+  );
+}
+
+// ─── Parser de probabilidades de cenário do texto KRATOS ──────────────────────
+function parseScenarios(text: string | null): { label: string; value: number; color: string }[] {
+  if (!text) return [];
+  const found: Record<number, number> = {};
+  // Padrões: "Q1... 40%", "Cenário 1... 40%", "cenario1... 40%"
+  const re = /\bQ(\d)\b[^\n%]{0,50}?(\d{1,3})\s*%|\b[Cc]en[aá]rio\s*(\d)\b[^\n%]{0,50}?(\d{1,3})\s*%/g;
+  let m;
+  while ((m = re.exec(text)) !== null) {
+    const q = parseInt(m[1] || m[3]);
+    const pct = parseInt(m[2] || m[4]);
+    if (q >= 1 && q <= 4 && pct >= 0 && pct <= 100 && !found[q]) found[q] = pct;
+  }
+  const COLORS  = [CLR.verde, '#2196F3', CLR.amarelo, CLR.vermelho];
+  const LABELS  = ['Q1 — Base', 'Q2 — Alt.', 'Q3 — Adv.', 'Q4 — Crise'];
+  return [1, 2, 3, 4]
+    .map((i, idx) => ({ label: LABELS[idx], value: found[i] ?? 0, color: COLORS[idx] }))
+    .filter(g => g.value > 0);
+}
+
+// ─── Tabela densa de indicadores ──────────────────────────────────────────────
+function TabelaIndicadores({ indicadores }: { indicadores: Indicator[] }) {
+  if (indicadores.length === 0)
+    return (
+      <div style={{ padding: '16px', color: TEXT3, fontSize: 12, textAlign: 'center' }}>
+        Nenhum indicador configurado. Acione o KRATOS para iniciar.
+      </div>
+    );
+  return (
+    <div style={{ overflowX: 'auto' }}>
+      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
+        <thead>
+          <tr style={{ borderBottom: `1px solid ${BORDER}` }}>
+            {['INDICADOR', 'VALOR', 'STATUS', '⚠ LIMIAR', '🔴 CRÍTICO'].map(h => (
+              <th key={h} style={{
+                padding: '7px 10px', textAlign: 'left',
+                fontSize: 8, letterSpacing: 1.5, color: TEXT3,
+                fontFamily: "'DM Mono', monospace", fontWeight: 700, textTransform: 'uppercase',
+              }}>{h}</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {indicadores.map((ind, i) => {
+            const st  = ind.status || 'verde';
+            const stc = CLR[st] ?? CLR.verde;
+            const yellow = ind.parametersJson?.yellowThreshold ?? ind.thresholdYellow;
+            const red    = ind.parametersJson?.redThreshold    ?? ind.thresholdRed;
+            const val    = ind.lastValue !== null && ind.lastValue !== undefined ? ind.lastValue : null;
+            return (
+              <tr key={ind.id} style={{
+                borderBottom: `1px solid ${BORDER}`,
+                background: i % 2 === 0 ? 'transparent' : 'rgba(255,255,255,.018)',
+              }}>
+                <td style={{ padding: '8px 10px', color: TEXT1, fontWeight: 600 }}>{ind.name}</td>
+                <td style={{ padding: '8px 10px', fontFamily: "'DM Mono', monospace", fontWeight: 700, color: stc }}>
+                  {val !== null ? String(val) : <span style={{ color: TEXT3 }}>—</span>}
+                </td>
+                <td style={{ padding: '8px 10px' }}>
+                  <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                    <span style={{
+                      width: 7, height: 7, borderRadius: '50%', background: stc,
+                      boxShadow: `0 0 5px ${stc}`, flexShrink: 0,
+                    }} />
+                    <span style={{
+                      fontSize: 9, fontWeight: 700, color: stc,
+                      fontFamily: "'DM Mono', monospace", letterSpacing: 1,
+                    }}>{st.toUpperCase()}</span>
+                  </span>
+                </td>
+                <td style={{ padding: '8px 10px', fontFamily: "'DM Mono', monospace", fontSize: 10, color: CLR.amarelo }}>
+                  {yellow !== null && yellow !== undefined ? yellow : <span style={{ color: TEXT3 }}>—</span>}
+                </td>
+                <td style={{ padding: '8px 10px', fontFamily: "'DM Mono', monospace", fontSize: 10, color: CLR.vermelho }}>
+                  {red !== null && red !== undefined ? red : <span style={{ color: TEXT3 }}>—</span>}
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+// ─── Gatilho de aceleração (sinal com cadeia sentinela) ───────────────────────
+function GatilhoRow({ s }: { s: Signal }) {
+  const [open, setOpen] = useState(false);
+  const radar  = s.statusRadar || 'monitorando';
+  const rc     = RADAR_CLR[radar] ?? '#2196F3';
+  const s1fire = s.sentinela1Status === 'disparado';
+  const s2fire = s.sentinela2Status === 'disparado';
+
+  return (
+    <div
+      style={{ borderBottom: `1px solid ${BORDER}`, cursor: 'pointer' }}
+      onClick={() => setOpen(o => !o)}
+    >
+      {/* Linha principal */}
+      <div style={{ padding: '8px 14px', display: 'flex', alignItems: 'center', gap: 8 }}>
+        <span style={{
+          width: 7, height: 7, borderRadius: '50%', background: rc,
+          boxShadow: `0 0 6px ${rc}`, flexShrink: 0,
+        }} />
+        <span style={{ flex: 1, fontSize: 11, fontWeight: 600, color: TEXT1 }}>{s.titulo}</span>
+        <div style={{ display: 'flex', gap: 5, alignItems: 'center', flexShrink: 0 }}>
+          {s1fire && (
+            <span style={{
+              fontSize: 8, padding: '1px 6px', borderRadius: 10, fontWeight: 700,
+              background: `${CLR.vermelho}30`, color: CLR.vermelho,
+              border: `1px solid ${CLR.vermelho}`,
+            }}>S1 ⚡</span>
+          )}
+          {s2fire && (
+            <span style={{
+              fontSize: 8, padding: '1px 6px', borderRadius: 10, fontWeight: 700,
+              background: `${CLR.vermelho}30`, color: CLR.vermelho,
+              border: `1px solid ${CLR.vermelho}`,
+            }}>S2 ⚡</span>
+          )}
+          <span style={{ fontSize: 8, color: rc, fontFamily: "'DM Mono', monospace", letterSpacing: 1 }}>
+            {RADAR_LABEL[radar]?.toUpperCase()}
+          </span>
+          <span style={{ fontSize: 10, color: TEXT3 }}>{open ? '▲' : '▼'}</span>
         </div>
       </div>
-      {expanded && (
-        <div style={{ marginTop: 8, paddingTop: 8, borderTop: `1px solid ${RADAR_BORDER[radar]}` }}>
+
+      {/* Detalhe expandido */}
+      {open && (
+        <div style={{ padding: '0 14px 10px 29px', display: 'flex', flexDirection: 'column', gap: 6 }}>
           {s.interpretacaoAtual && (
-            <p style={{ fontSize: 11, color: '#374151', lineHeight: 1.6, margin: '0 0 6px' }}>
-              <strong>Interpretação:</strong> {s.interpretacaoAtual}
+            <p style={{ fontSize: 11, color: TEXT2, lineHeight: 1.65, margin: 0 }}>
+              <span style={{
+                color: GOLD, fontWeight: 700, fontFamily: "'DM Mono', monospace",
+                fontSize: 8, letterSpacing: 1, marginRight: 6,
+              }}>INTERPR.</span>
+              {s.interpretacaoAtual}
             </p>
           )}
-          {s.acaoRecomendada && (
-            <p style={{ fontSize: 11, color: '#374151', lineHeight: 1.6, margin: '0 0 6px' }}>
-              <strong>Ação:</strong> {s.acaoRecomendada}
-            </p>
-          )}
-          {s.sentinela1Descricao && (
-            <p style={{ fontSize: 10, color: '#6B7280', margin: '4px 0' }}>
-              S1: {s.sentinela1Descricao}
-            </p>
-          )}
-          {s.sentinela2Descricao && (
-            <p style={{ fontSize: 10, color: '#6B7280', margin: '4px 0' }}>
-              S2: {s.sentinela2Descricao}
-            </p>
+          {/* Cadeia sentinela → ação */}
+          {(s.sentinela1Descricao || s.sentinela2Descricao || s.acaoRecomendada) && (
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center', marginTop: 2 }}>
+              {s.sentinela1Descricao && (
+                <span style={{
+                  fontSize: 9, padding: '2px 9px', borderRadius: 10,
+                  background: s1fire ? `${CLR.vermelho}25` : PANEL2,
+                  color: s1fire ? CLR.vermelho : TEXT2,
+                  border: `1px solid ${s1fire ? CLR.vermelho : BORDER}`,
+                }}>
+                  S1: {s.sentinela1Descricao.slice(0, 55)}{s.sentinela1Descricao.length > 55 ? '…' : ''}
+                </span>
+              )}
+              {s.sentinela2Descricao && (
+                <>
+                  <span style={{ color: TEXT3, fontSize: 11 }}>→</span>
+                  <span style={{
+                    fontSize: 9, padding: '2px 9px', borderRadius: 10,
+                    background: s2fire ? `${CLR.vermelho}25` : PANEL2,
+                    color: s2fire ? CLR.vermelho : TEXT2,
+                    border: `1px solid ${s2fire ? CLR.vermelho : BORDER}`,
+                  }}>
+                    S2: {s.sentinela2Descricao.slice(0, 55)}{s.sentinela2Descricao.length > 55 ? '…' : ''}
+                  </span>
+                </>
+              )}
+              {s.acaoRecomendada && (
+                <>
+                  <span style={{ color: TEXT3, fontSize: 11 }}>→</span>
+                  <span style={{
+                    fontSize: 9, padding: '2px 9px', borderRadius: 10,
+                    background: `${GOLD}20`, color: GOLD,
+                    border: `1px solid ${GOLD}50`,
+                  }}>
+                    ⚡ {s.acaoRecomendada.slice(0, 65)}{s.acaoRecomendada.length > 65 ? '…' : ''}
+                  </span>
+                </>
+              )}
+            </div>
           )}
           {s.janelaAnos && (
-            <p style={{ fontSize: 10, color: '#9CA3AF', margin: '4px 0' }}>Janela: {s.janelaAnos}</p>
+            <span style={{ fontSize: 9, color: TEXT3 }}>Janela: {s.janelaAnos}</span>
           )}
         </div>
       )}
     </div>
-  );
-}
-
-// ─── Radar donut SVG simples ──────────────────────────────────────────────────
-
-function RadarDonut({ stats }: { stats: Record<string, number> }) {
-  const total = stats.total || 1;
-  const slices = [
-    { key: 'materializado', color: '#E53935' },
-    { key: 'amplificando',  color: '#FF9800' },
-    { key: 'monitorando',   color: '#2196F3' },
-    { key: 'arquivado',     color: '#BDBDBD' },
-  ].filter(s => (stats[s.key] ?? 0) > 0);
-
-  // Build SVG pie slices
-  const R = 38, CX = 44, CY = 44;
-  let cum = 0;
-  const paths = slices.map(({ key, color }) => {
-    const pct = (stats[key] ?? 0) / total;
-    const startAngle = cum * 2 * Math.PI - Math.PI / 2;
-    cum += pct;
-    const endAngle = cum * 2 * Math.PI - Math.PI / 2;
-    const large = pct > 0.5 ? 1 : 0;
-    const x1 = CX + R * Math.cos(startAngle);
-    const y1 = CY + R * Math.sin(startAngle);
-    const x2 = CX + R * Math.cos(endAngle);
-    const y2 = CY + R * Math.sin(endAngle);
-    const d = `M${CX},${CY} L${x1.toFixed(2)},${y1.toFixed(2)} A${R},${R} 0 ${large},1 ${x2.toFixed(2)},${y2.toFixed(2)} Z`;
-    return <path key={key} d={d} fill={color} />;
-  });
-
-  return (
-    <svg width={88} height={88} viewBox="0 0 88 88">
-      {paths}
-      {/* Donut hole */}
-      <circle cx={CX} cy={CY} r={22} fill="white" />
-      <text x={CX} y={CY + 5} textAnchor="middle" fontSize={14} fontWeight={700} fill="#1B3A2D" fontFamily="DM Sans,sans-serif">
-        {total}
-      </text>
-    </svg>
   );
 }
 
 // ─── Painel Principal ─────────────────────────────────────────────────────────
-
 export function KratosPanel({ sessionId, reqHeaders, onRunKratos, onSettings }: KratosPanelProps) {
-  const [data, setData] = useState<DashboardData | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [sending, setSending] = useState(false);
-  const [sendMsg, setSendMsg] = useState('');
+  const [data,        setData]        = useState<DashboardData | null>(null);
+  const [loading,     setLoading]     = useState(true);
+  const [sending,     setSending]     = useState(false);
+  const [sendMsg,     setSendMsg]     = useState('');
   const [radarFilter, setRadarFilter] = useState<string | null>(null);
 
   const load = useCallback(async () => {
@@ -270,211 +332,273 @@ export function KratosPanel({ sessionId, reqHeaders, onRunKratos, onSettings }: 
   useEffect(() => { load(); }, [load]);
 
   const enviarRelatorio = async () => {
-    setSending(true);
-    setSendMsg('');
+    setSending(true); setSendMsg('');
     try {
       const res = await fetch(`/api/v1/kratos/${sessionId}/report`, {
-        method: 'POST', headers: reqHeaders,
-        body: JSON.stringify({}),
+        method: 'POST', headers: reqHeaders, body: JSON.stringify({}),
       });
       const json = await res.json();
       setSendMsg(json.message || json.error || 'Concluído.');
-    } catch (e: any) {
-      setSendMsg('Erro: ' + e.message);
-    }
+    } catch (e: any) { setSendMsg('Erro: ' + e.message); }
     setSending(false);
   };
 
-  // ── Loading / Empty states ─────────────────────────────────────────────────
+  // ── Loading / vazio ──────────────────────────────────────────────────────────
 
-  if (loading) {
-    return (
-      <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#6B8C7A', fontFamily: "'DM Sans', sans-serif", fontSize: 13 }}>
-        ⚡ Carregando painel KRATOS…
-      </div>
-    );
-  }
+  if (loading) return (
+    <div style={{
+      flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center',
+      background: DARK, color: TEXT2, fontFamily: "'DM Sans', sans-serif", fontSize: 13,
+    }}>⚡ Carregando painel KRATOS…</div>
+  );
 
-  if (!data) {
-    return (
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 12, padding: 40 }}>
-        <span style={{ fontSize: 36 }}>📭</span>
-        <p style={{ color: '#6B8C7A', fontSize: 13, fontFamily: "'DM Sans', sans-serif" }}>Nenhum dado KRATOS para este projeto.</p>
-        <button onClick={onRunKratos} style={{ background: '#1B3A2D', color: '#fff', border: 'none', borderRadius: 8, padding: '10px 20px', fontWeight: 700, cursor: 'pointer', fontSize: 13 }}>
-          ⚡ Acionar KRATOS agora
-        </button>
-      </div>
-    );
-  }
+  if (!data) return (
+    <div style={{
+      flex: 1, display: 'flex', flexDirection: 'column',
+      alignItems: 'center', justifyContent: 'center', gap: 14, padding: 40, background: DARK,
+    }}>
+      <span style={{ fontSize: 40 }}>📭</span>
+      <p style={{ color: TEXT2, fontSize: 13, fontFamily: "'DM Sans', sans-serif" }}>
+        Nenhum dado KRATOS para este projeto.
+      </p>
+      <button onClick={onRunKratos} style={{
+        background: GOLD, color: DARK, border: 'none', borderRadius: 8,
+        padding: '10px 22px', fontWeight: 700, cursor: 'pointer', fontSize: 13,
+      }}>⚡ Acionar KRATOS agora</button>
+    </div>
+  );
 
   const { indicadores, sinais, sinalStats, overallStatus, lastKratosAt, lastKratosExcerpt } = data;
-  const col = S_COLOR[overallStatus] ?? S_COLOR.verde;
+  const stColor   = CLR[overallStatus] ?? CLR.verde;
+  const scenarios = parseScenarios(lastKratosExcerpt);
 
-  // Sinais filtrados
   const RADAR_ORDER = ['materializado', 'amplificando', 'monitorando', 'arquivado'];
   const sinaisFiltrados = radarFilter
     ? sinais.filter(s => s.statusRadar === radarFilter)
     : [...sinais].sort((a, b) => RADAR_ORDER.indexOf(a.statusRadar) - RADAR_ORDER.indexOf(b.statusRadar));
 
-  // ── Render ────────────────────────────────────────────────────────────────
-
+  // ── Render ───────────────────────────────────────────────────────────────────
   return (
     <div style={{
       flex: 1, display: 'flex', flexDirection: 'column',
-      background: '#F0F4F0', overflow: 'hidden', fontFamily: "'DM Sans', sans-serif",
+      background: DARK, overflow: 'hidden', fontFamily: "'DM Sans', sans-serif",
     }}>
 
       {/* ── Header bar ─────────────────────────────────────────────────────── */}
       <div style={{
-        background: '#1B3A2D', color: '#fff',
-        padding: '10px 20px', display: 'flex', alignItems: 'center', gap: 12,
-        borderBottom: '1px solid rgba(255,255,255,.1)',
-        flexShrink: 0,
+        background: PANEL2, borderBottom: `1px solid ${BORDER}`,
+        padding: '10px 20px', display: 'flex', alignItems: 'center', gap: 14, flexShrink: 0,
       }}>
-        <span style={{ fontFamily: "'DM Mono', monospace", fontSize: 10, letterSpacing: '1.5px', color: '#C9A84C', fontWeight: 700, textTransform: 'uppercase' }}>
-          ⚡ KRATOS · Monitoramento Contínuo
-        </span>
-        <span style={{ fontSize: 11, color: '#6B8C7A' }}>|</span>
-        <span style={{ fontSize: 12, color: '#A3C9AE', fontWeight: 600 }}>{data.projeto.nome}</span>
-
-        {/* Status geral */}
         <span style={{
-          marginLeft: 'auto', background: col.bg, color: col.text,
-          border: `1px solid ${col.border}`, borderRadius: 20,
-          padding: '3px 12px', fontSize: 11, fontWeight: 700,
-        }}>
-          {S_DOT[overallStatus]} {overallStatus.toUpperCase()}
-        </span>
-
-        {/* Ações */}
-        <button onClick={load} title="Atualizar" style={{ background: 'rgba(255,255,255,.1)', border: '1px solid rgba(255,255,255,.15)', borderRadius: 6, color: '#A3C9AE', fontSize: 12, padding: '4px 10px', cursor: 'pointer' }}>↻</button>
-        <button onClick={onSettings} style={{ background: 'rgba(255,255,255,.1)', border: '1px solid rgba(255,255,255,.15)', borderRadius: 6, color: '#A3C9AE', fontSize: 12, padding: '4px 10px', cursor: 'pointer' }}>⚙ Config</button>
-        <button onClick={onRunKratos} style={{ background: '#C9A84C', border: 'none', borderRadius: 6, color: '#1B3A2D', fontSize: 12, fontWeight: 700, padding: '4px 12px', cursor: 'pointer' }}>⚡ Analisar</button>
+          fontFamily: "'DM Mono', monospace", fontSize: 10,
+          letterSpacing: 2, color: GOLD, fontWeight: 700,
+        }}>⚡ KRATOS</span>
+        <span style={{ color: BORDER, fontSize: 16 }}>|</span>
+        <span style={{ fontSize: 12, color: TEXT2, fontWeight: 600 }}>{data.projeto.nome}</span>
+        <div style={{ marginLeft: 'auto', display: 'flex', gap: 8, alignItems: 'center' }}>
+          {lastKratosAt && (
+            <span style={{ fontSize: 10, color: TEXT3, fontFamily: "'DM Mono', monospace" }}>
+              {fmtDate(lastKratosAt)}
+            </span>
+          )}
+          <button onClick={load} title="Atualizar" style={{
+            background: PANEL, border: `1px solid ${BORDER}`, borderRadius: 6,
+            color: TEXT2, fontSize: 11, padding: '4px 10px', cursor: 'pointer',
+          }}>↻</button>
+          <button onClick={onSettings} style={{
+            background: PANEL, border: `1px solid ${BORDER}`, borderRadius: 6,
+            color: TEXT2, fontSize: 11, padding: '4px 10px', cursor: 'pointer',
+          }}>⚙</button>
+          <button onClick={onRunKratos} style={{
+            background: GOLD, border: 'none', borderRadius: 6, color: DARK,
+            fontSize: 11, fontWeight: 700, padding: '4px 14px', cursor: 'pointer',
+          }}>⚡ Analisar</button>
+        </div>
       </div>
 
-      {/* ── Corpo (scroll) ──────────────────────────────────────────────────── */}
-      <div style={{ flex: 1, overflowY: 'auto', padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: 20 }}>
+      {/* ── Corpo com scroll ───────────────────────────────────────────────── */}
+      <div style={{
+        flex: 1, overflowY: 'auto', padding: '16px 20px',
+        display: 'flex', flexDirection: 'column', gap: 14,
+      }}>
 
-        {/* ── Seção: Indicadores ──────────────────────────────────────────── */}
-        <section>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
-            <span style={{ fontFamily: "'DM Mono', monospace", fontSize: 9, letterSpacing: '1.5px', fontWeight: 700, color: '#1B3A2D', textTransform: 'uppercase' }}>Indicadores</span>
-            <span style={{ fontSize: 10, color: '#9CA3AF' }}>{indicadores.length} monitorados</span>
-            <button onClick={() => load()} style={{ marginLeft: 'auto', background: 'none', border: '1px solid #D4E2DA', borderRadius: 4, color: '#6B8C7A', fontSize: 10, padding: '2px 8px', cursor: 'pointer' }}>↻ Atualizar</button>
+        {/* ── Linha 1: Semáforo + Status + Gauges de cenário ─────────────── */}
+        <div style={{ display: 'flex', gap: 14, alignItems: 'stretch' }}>
+
+          {/* Semáforo + status geral */}
+          <div style={{
+            background: PANEL, border: `1px solid ${BORDER}`, borderRadius: 12,
+            padding: '16px 20px', display: 'flex', gap: 16, alignItems: 'center', flexShrink: 0,
+          }}>
+            <Semaforo status={overallStatus} />
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              <span style={{
+                fontSize: 8, letterSpacing: 2, color: TEXT3,
+                fontFamily: "'DM Mono', monospace", textTransform: 'uppercase',
+              }}>Status Geral</span>
+              <span style={{
+                fontSize: 26, fontWeight: 800, color: stColor,
+                fontFamily: "'DM Mono', monospace", lineHeight: 1,
+                textShadow: `0 0 12px ${stColor}60`,
+              }}>{overallStatus.toUpperCase()}</span>
+              <span style={{ fontSize: 10, color: TEXT2, marginTop: 4 }}>
+                {indicadores.length} indicadores · {sinais.filter(s => s.statusRadar !== 'arquivado').length} sinais ativos
+              </span>
+            </div>
           </div>
 
-          {indicadores.length === 0 ? (
-            <div style={{ background: '#fff', border: '1px solid #D4E2DA', borderRadius: 10, padding: '20px', textAlign: 'center', color: '#9CA3AF', fontSize: 12 }}>
-              Nenhum indicador configurado. Acione o KRATOS para iniciar o monitoramento.
-            </div>
-          ) : (
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 10 }}>
-              {indicadores.map(ind => <IndicadorCard key={ind.id} ind={ind} />)}
-            </div>
-          )}
-        </section>
-
-        {/* ── Seção: Radar de Sinais ──────────────────────────────────────── */}
-        <section>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
-            <span style={{ fontFamily: "'DM Mono', monospace", fontSize: 9, letterSpacing: '1.5px', fontWeight: 700, color: '#1B3A2D', textTransform: 'uppercase' }}>Radar de Sinais</span>
-            <span style={{ fontSize: 10, color: '#9CA3AF' }}>{sinais.length} sinais</span>
-          </div>
-
-          {sinais.length === 0 ? (
-            <div style={{ background: '#fff', border: '1px solid #D4E2DA', borderRadius: 10, padding: '20px', textAlign: 'center', color: '#9CA3AF', fontSize: 12 }}>
-              Nenhum sinal identificado. O KLIO registra sinais durante as análises.
-            </div>
-          ) : (
-            <div style={{ background: '#fff', border: '1px solid #D4E2DA', borderRadius: 10, overflow: 'hidden' }}>
-              {/* Filtros + donut */}
-              <div style={{ display: 'flex', gap: 12, padding: '14px 16px', background: '#F9FAFB', borderBottom: '1px solid #E5E7EB', alignItems: 'center', flexWrap: 'wrap' }}>
-                <RadarDonut stats={sinalStats} />
-                <div style={{ flex: 1, display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-                  <button
-                    onClick={() => setRadarFilter(null)}
-                    style={{
-                      background: !radarFilter ? '#1B3A2D' : '#fff',
-                      color: !radarFilter ? '#fff' : '#6B7280',
-                      border: `1px solid ${!radarFilter ? '#1B3A2D' : '#E5E7EB'}`,
-                      borderRadius: 20, padding: '4px 12px', fontSize: 11, cursor: 'pointer', fontWeight: !radarFilter ? 700 : 400,
-                    }}>Todos ({sinais.length})</button>
-                  {RADAR_ORDER.map(key => {
-                    const cnt = sinalStats[key] ?? 0;
-                    if (!cnt) return null;
-                    const active = radarFilter === key;
-                    return (
-                      <button key={key} onClick={() => setRadarFilter(active ? null : key)} style={{
-                        background: active ? RADAR_BORDER[key] : '#fff',
-                        color: active ? '#fff' : '#374151',
-                        border: `1px solid ${RADAR_BORDER[key]}`,
-                        borderRadius: 20, padding: '4px 12px', fontSize: 11, cursor: 'pointer', fontWeight: active ? 700 : 400,
-                      }}>{RADAR_DOT[key]} {RADAR_LABEL[key]} ({cnt})</button>
-                    );
-                  })}
-                </div>
+          {/* Gauges de probabilidade de cenários */}
+          <div style={{
+            background: PANEL, border: `1px solid ${BORDER}`, borderRadius: 12,
+            padding: '16px', flex: 1, display: 'flex', flexDirection: 'column', gap: 10,
+          }}>
+            <span style={{
+              fontSize: 8, letterSpacing: 2, color: TEXT3,
+              fontFamily: "'DM Mono', monospace", textTransform: 'uppercase',
+            }}>Probabilidades de Cenário</span>
+            {scenarios.length > 0 ? (
+              <div style={{ display: 'flex', gap: 8, justifyContent: 'space-around', flexWrap: 'wrap', flex: 1, alignItems: 'center' }}>
+                {scenarios.map(s => (
+                  <Gauge key={s.label} label={s.label} value={s.value} color={s.color} />
+                ))}
               </div>
-              {/* Lista de sinais */}
-              <div style={{ padding: '12px 16px', display: 'flex', flexDirection: 'column', gap: 8, maxHeight: 400, overflowY: 'auto' }}>
-                {sinaisFiltrados.map(s => <SinalRow key={s.id} s={s} />)}
-              </div>
-            </div>
-          )}
-        </section>
-
-        {/* ── Seção: Última análise ────────────────────────────────────────── */}
-        <section>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
-            <span style={{ fontFamily: "'DM Mono', monospace", fontSize: 9, letterSpacing: '1.5px', fontWeight: 700, color: '#1B3A2D', textTransform: 'uppercase' }}>Última Análise KRATOS</span>
-            {lastKratosAt && <span style={{ fontSize: 10, color: '#9CA3AF' }}>{fmtDate(lastKratosAt)}</span>}
-          </div>
-          <div style={{ background: '#fff', border: '1px solid #D4E2DA', borderRadius: 10, padding: '16px' }}>
-            {lastKratosExcerpt ? (
-              <p style={{ fontSize: 12, lineHeight: 1.7, color: '#374151', margin: 0 }}>
-                {lastKratosExcerpt}
-                {lastKratosExcerpt.length >= 500 && <span style={{ color: '#9CA3AF' }}> …</span>}
-              </p>
             ) : (
-              <p style={{ fontSize: 12, color: '#9CA3AF', margin: 0 }}>Nenhuma análise KRATOS registrada nesta sessão.</p>
+              <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <span style={{ fontSize: 11, color: TEXT3, textAlign: 'center' }}>
+                  Probabilidades de cenário aparecerão após análise KRATOS
+                </span>
+              </div>
             )}
           </div>
-        </section>
+        </div>
 
-        {/* ── Seção: Ações ────────────────────────────────────────────────── */}
-        <section style={{ background: '#fff', border: '1px solid #D4E2DA', borderRadius: 10, padding: '16px' }}>
-          <div style={{ fontFamily: "'DM Mono', monospace", fontSize: 9, letterSpacing: '1.5px', fontWeight: 700, color: '#1B3A2D', textTransform: 'uppercase', marginBottom: 12 }}>Relatório por E-mail</div>
+        {/* ── Tabela de Indicadores ──────────────────────────────────────── */}
+        <div style={{
+          background: PANEL, border: `1px solid ${BORDER}`, borderRadius: 12,
+          overflow: 'hidden', flexShrink: 0,
+        }}>
+          <div style={{
+            padding: '9px 14px', borderBottom: `1px solid ${BORDER}`,
+            display: 'flex', alignItems: 'center', gap: 10,
+          }}>
+            <span style={{
+              fontSize: 8, letterSpacing: 2, color: GOLD,
+              fontFamily: "'DM Mono', monospace", textTransform: 'uppercase', fontWeight: 700,
+            }}>Indicadores</span>
+            <span style={{ fontSize: 10, color: TEXT3 }}>{indicadores.length} monitorados</span>
+          </div>
+          <TabelaIndicadores indicadores={indicadores} />
+        </div>
+
+        {/* ── Gatilhos de Aceleração ─────────────────────────────────────── */}
+        <div style={{
+          background: PANEL, border: `1px solid ${BORDER}`, borderRadius: 12,
+          overflow: 'hidden', flexShrink: 0,
+        }}>
+          {/* Cabeçalho + filtros */}
+          <div style={{
+            padding: '9px 14px', borderBottom: `1px solid ${BORDER}`,
+            display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap',
+          }}>
+            <span style={{
+              fontSize: 8, letterSpacing: 2, color: GOLD,
+              fontFamily: "'DM Mono', monospace", textTransform: 'uppercase', fontWeight: 700,
+            }}>Gatilhos de Aceleração</span>
+            <span style={{ fontSize: 10, color: TEXT3 }}>{sinais.length} sinais</span>
+            <div style={{ marginLeft: 'auto', display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+              <button onClick={() => setRadarFilter(null)} style={{
+                fontSize: 9, padding: '2px 10px', borderRadius: 10, cursor: 'pointer',
+                border: `1px solid ${!radarFilter ? GOLD : BORDER}`,
+                background: !radarFilter ? `${GOLD}20` : 'transparent',
+                color: !radarFilter ? GOLD : TEXT3,
+              }}>TODOS</button>
+              {RADAR_ORDER.map(k => {
+                const cnt = sinalStats[k] ?? 0;
+                if (!cnt) return null;
+                const c = RADAR_CLR[k];
+                const active = radarFilter === k;
+                return (
+                  <button key={k} onClick={() => setRadarFilter(active ? null : k)} style={{
+                    fontSize: 9, padding: '2px 10px', borderRadius: 10, cursor: 'pointer',
+                    border: `1px solid ${active ? c : BORDER}`,
+                    background: active ? `${c}30` : 'transparent',
+                    color: active ? c : TEXT3,
+                  }}>{RADAR_LABEL[k]?.toUpperCase()} ({cnt})</button>
+                );
+              })}
+            </div>
+          </div>
+          {/* Lista */}
+          <div style={{ maxHeight: 300, overflowY: 'auto' }}>
+            {sinaisFiltrados.length === 0
+              ? <div style={{ padding: '16px', color: TEXT3, fontSize: 12, textAlign: 'center' }}>
+                  Nenhum sinal identificado. O KLIO registra sinais durante as análises.
+                </div>
+              : sinaisFiltrados.map(s => <GatilhoRow key={s.id} s={s} />)
+            }
+          </div>
+        </div>
+
+        {/* ── Última análise KRATOS ─────────────────────────────────────── */}
+        {lastKratosExcerpt && (
+          <div style={{
+            background: PANEL, border: `1px solid ${BORDER}`, borderRadius: 12,
+            padding: '14px 16px', flexShrink: 0,
+          }}>
+            <div style={{
+              fontSize: 8, letterSpacing: 2, color: GOLD,
+              fontFamily: "'DM Mono', monospace", textTransform: 'uppercase', fontWeight: 700, marginBottom: 8,
+            }}>Última Análise KRATOS</div>
+            <p style={{ fontSize: 11, color: TEXT2, lineHeight: 1.8, margin: 0 }}>
+              {lastKratosExcerpt}
+              {lastKratosExcerpt.length >= 500 && <span style={{ color: TEXT3 }}> …</span>}
+            </p>
+          </div>
+        )}
+
+        {/* ── Relatório por E-mail ─────────────────────────────────────── */}
+        <div style={{
+          background: PANEL, border: `1px solid ${BORDER}`, borderRadius: 12,
+          padding: '14px 16px', flexShrink: 0,
+        }}>
+          <div style={{
+            fontSize: 8, letterSpacing: 2, color: GOLD,
+            fontFamily: "'DM Mono', monospace", textTransform: 'uppercase', fontWeight: 700, marginBottom: 10,
+          }}>Relatório Snapshot</div>
           <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
             <button
               onClick={enviarRelatorio}
               disabled={sending}
               style={{
-                background: sending ? '#9CA3AF' : '#1B3A2D', color: '#fff',
-                border: 'none', borderRadius: 8, padding: '10px 20px',
-                fontWeight: 700, fontSize: 13, cursor: sending ? 'not-allowed' : 'pointer',
+                background: sending ? TEXT3 : GOLD, color: sending ? '#fff' : DARK,
+                border: 'none', borderRadius: 8, padding: '9px 20px',
+                fontWeight: 700, fontSize: 12, cursor: sending ? 'not-allowed' : 'pointer',
                 transition: 'background .15s',
               }}
             >
               {sending ? '⏳ Enviando…' : '📊 Enviar Snapshot por E-mail'}
             </button>
-            {data.projeto.alertEmails && (
-              <span style={{ fontSize: 11, color: '#6B8C7A' }}>→ {data.projeto.alertEmails}</span>
-            )}
-            {!data.projeto.alertEmails && (
-              <span style={{ fontSize: 11, color: '#9CA3AF' }}>Configure os e-mails nas ⚙ Configurações</span>
-            )}
+            <span style={{ fontSize: 11, color: TEXT3 }}>
+              {data.projeto.alertEmails
+                ? `→ ${data.projeto.alertEmails}`
+                : 'Configure e-mails nas ⚙ Configurações'}
+            </span>
           </div>
           {sendMsg && (
             <div style={{
-              marginTop: 10, padding: '8px 12px', borderRadius: 6, fontSize: 12,
-              background: sendMsg.includes('Erro') ? '#FFEBEE' : '#E8F5E9',
-              color: sendMsg.includes('Erro') ? '#7B1A1A' : '#1B5E20',
+              marginTop: 8, padding: '6px 10px', borderRadius: 6, fontSize: 11,
+              background: sendMsg.includes('Erro') ? `${CLR.vermelho}20` : `${CLR.verde}20`,
+              color: sendMsg.includes('Erro') ? CLR.vermelho : CLR.verde,
+              border: `1px solid ${sendMsg.includes('Erro') ? CLR.vermelho : CLR.verde}60`,
             }}>{sendMsg}</div>
           )}
+          {data.projeto.kratosCron && (
+            <div style={{ marginTop: 8, fontSize: 9, color: TEXT3, fontFamily: "'DM Mono', monospace" }}>
+              CRON: {data.projeto.kratosCron}
+            </div>
+          )}
+        </div>
 
-          <div style={{ marginTop: 14, paddingTop: 14, borderTop: '1px solid #E5E7EB', fontSize: 11, color: '#9CA3AF' }}>
-            Destinatários configurados · {data.projeto.kratosCron ? `Cron: ${data.projeto.kratosCron}` : 'Agendamento não configurado'}
-          </div>
-        </section>
       </div>
     </div>
   );

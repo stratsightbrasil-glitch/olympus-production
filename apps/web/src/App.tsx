@@ -754,20 +754,33 @@ function App() {
     if (loading || extracting || messages.length === 0) return;
 
     if (tipo === 'padrao') {
-      // Busca especificamente o produto "RELATÓRIO FINAL PADRÃO" do HERMES
       const patterns = ['RELATÓRIO FINAL PADRÃO', 'RELATÓRIO FINAL', 'RELATÓRIO DE CENÁRIOS', 'RELATÓRIO ESTRATÉGICO', 'RELATÓRIO PROSPECTIVO'];
       let targetMsg: {role: string, content: string, id?: string} | undefined;
+      // 1ª tentativa: padrão + assinatura HERMES (evita capturar mensagens intermediárias de outros agentes)
       for (const pat of patterns) {
         targetMsg = [...messages].reverse().find(m =>
-          m.role === 'assistant' && m.content.toUpperCase().includes(pat)
+          m.role === 'assistant' &&
+          m.content.toUpperCase().includes(pat) &&
+          m.content.toUpperCase().slice(0, 600).includes('HERMES')
         );
         if (targetMsg) break;
       }
-      // Fallback: última mensagem do HERMES
+      // 2ª tentativa: última mensagem com marcador HERMES explícito
       if (!targetMsg) {
         targetMsg = [...messages].reverse().find(m =>
-          m.role === 'assistant' && (m.content.includes('**HERMES**') || m.content.includes('HERMES ·'))
+          m.role === 'assistant' &&
+          (m.content.includes('**HERMES**') || m.content.includes('HERMES ·') ||
+           m.content.toUpperCase().slice(0, 300).includes('HERMES'))
         );
+      }
+      // 3ª tentativa: qualquer mensagem com os padrões (fallback sem filtro de agente)
+      if (!targetMsg) {
+        for (const pat of patterns) {
+          targetMsg = [...messages].reverse().find(m =>
+            m.role === 'assistant' && m.content.toUpperCase().includes(pat)
+          );
+          if (targetMsg) break;
+        }
       }
       if (!targetMsg) return alert('Nenhum relatório final do HERMES encontrado. Conclua a análise primeiro.');
       await exportSinglePdf(targetMsg.content);
@@ -1356,7 +1369,7 @@ function App() {
       {/* ── MODAL: CONFIGURAÇÕES DO PROJETO ───────────────────────────────────── */}
       {showSettingsModal && (
         <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-8">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-8 max-h-[92vh] overflow-y-auto">
             <h2 className="font-bold text-stratsight-dark text-xl mb-4">Configurações do Projeto</h2>
             <div className="space-y-4">
               <div>
