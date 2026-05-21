@@ -1,6 +1,9 @@
 services:
   postgres:
-    image: pgvector/pgvector:pg15
+    build:
+      context: .
+      dockerfile: Dockerfile.postgres
+    image: olympus/postgres:pg15
     container_name: olympus_db
     environment:
       POSTGRES_USER: postgres
