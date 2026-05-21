@@ -125,7 +125,6 @@ function buildDocx(projeto: any, messages: any[]) {
         }
       }
     }
-  }
 
   return new Document({
     sections: [{
