@@ -5,56 +5,53 @@ interface AgentWorkingProps {
 
 export function AgentWorking({ progressAgent, stepLog }: AgentWorkingProps) {
   return (
-    <div className="flex justify-start" style={{ animation: 'fade-in .2s ease' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', animation: 'fade-in .2s ease' }}>
       <div style={{
-        background: 'var(--surface)',
-        borderLeft: '4px solid var(--ink-400)',
-        borderRadius: 'var(--r-lg)',
-        boxShadow: 'var(--shadow-sm)',
-        padding: '16px',
-        minWidth: 260,
-        maxWidth: 520,
+        display: 'flex', alignItems: 'center', gap: 10,
+        padding: '8px 14px',
+        background: '#ffffff',
+        border: '1px solid #D4E2DA',
+        borderRadius: '12px',
+        fontSize: 12, color: '#3D5A48',
+        maxWidth: 340,
+        boxShadow: '0 1px 3px rgba(13,22,18,.08)',
+        marginLeft: 38,
+        fontFamily: "'DM Sans', system-ui, sans-serif",
       }}>
-        <div className="flex items-center gap-3 italic text-[15px]" style={{ color: 'var(--text-ter)' }}>
-          <div className="flex gap-1 shrink-0">
-            {[0, 0.2, 0.4].map((delay, i) => (
-              <div
-                key={i}
-                className="w-2 h-2 rounded-full animate-bounce"
-                style={{ background: 'var(--ink-400)', animationDelay: `${delay}s` }}
-              />
-            ))}
-          </div>
+        {/* Três dots pulsantes */}
+        <div style={{ display: 'flex', gap: 3, flexShrink: 0 }}>
+          {[0, 1, 2].map(i => (
+            <div key={i} style={{
+              width: 5, height: 5,
+              background: '#3D7A50', borderRadius: '50%',
+              animation: `bounce-dot .8s ease-in-out ${i * 0.12}s infinite`,
+            }} />
+          ))}
+        </div>
+        <span>
           {progressAgent ? (
             <>
-              <span className="font-bold not-italic" style={{ color: 'var(--ink-700)' }}>
-                {progressAgent}
-              </span>
+              <strong style={{ fontWeight: 700, color: '#1B3A2D' }}>{progressAgent}</strong>
               {' '}raciocinando...
             </>
-          ) : (
-            'HERMES raciocinando...'
-          )}
-        </div>
-
-        {stepLog.length > 0 && (
-          <div className="mt-2 space-y-1 border-t border-gray-100 pt-2">
-            {stepLog.slice(-5).map((step, i, arr) => (
-              <div
-                key={i}
-                className="text-[11px] truncate"
-                style={{
-                  fontFamily: 'var(--font-mono)',
-                  color: 'var(--text-ter)',
-                  opacity: 0.5 + (i / arr.length) * 0.5,
-                }}
-              >
-                {step}
-              </div>
-            ))}
-          </div>
-        )}
+          ) : 'HERMES raciocinando...'}
+        </span>
       </div>
+
+      {stepLog.length > 0 && (
+        <div style={{ marginLeft: 38, marginTop: 4, display: 'flex', flexDirection: 'column', gap: 1 }}>
+          {stepLog.slice(-5).map((step, i, arr) => (
+            <div key={i} style={{
+              fontSize: 10,
+              fontFamily: "'DM Mono', 'Cascadia Code', monospace",
+              color: '#6B8C7A',
+              opacity: 0.4 + (i / arr.length) * 0.6,
+            }}>
+              {step}
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

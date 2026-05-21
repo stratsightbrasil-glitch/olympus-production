@@ -18,17 +18,17 @@ interface InputZoneProps {
   onGerarRelatorio: () => void;
 }
 
-// Chips contextuais por modo
+// Chips contextuais por modo — estilos alinhados ao design system
 const CHIPS_PRODUCTION = [
-  { label: '✓ Confirmar',       cmd: 'CONFIRMAR',      bg: 'rgba(46,125,82,.12)',  color: '#2E7D52',  border: 'rgba(46,125,82,.3)'  },
-  { label: '🔍 Sinais',         cmd: 'SINAIS',         bg: 'rgba(90,45,130,.10)', color: '#7C43BD',  border: 'rgba(90,45,130,.25)' },
-  { label: '🔎 Aprofundar',     cmd: 'APROFUNDAR',     bg: 'rgba(0,0,0,.05)',     color: '#555',     border: 'rgba(0,0,0,.12)'     },
-  { label: '🔄 Reiniciar fase', cmd: 'REINICIAR FASE', bg: 'rgba(183,28,28,.08)', color: '#C62828',  border: 'rgba(183,28,28,.2)'  },
+  { label: '✓ Confirmar',       cmd: 'CONFIRMAR',      bg: '#F5EDD8', color: '#B8913A', border: '#D9BF73', fontWeight: 600 },
+  { label: '🔍 Sinais',         cmd: 'SINAIS',         bg: '#F2F7F4', color: '#3D5A48', border: '#D4E2DA', fontWeight: 500 },
+  { label: '🔎 Aprofundar',     cmd: 'APROFUNDAR',     bg: '#F2F7F4', color: '#3D5A48', border: '#D4E2DA', fontWeight: 500 },
+  { label: '🔄 Reiniciar fase', cmd: 'REINICIAR FASE', bg: '#FFF5F5', color: '#C62828', border: '#FFCDD2', fontWeight: 500 },
 ];
 
 const CHIPS_MONITORING = [
-  { label: '🔄 Nova Coleta',    cmd: 'NOVA SESSÃO', bg: 'rgba(0,77,64,.12)', color: '#004D40', border: 'rgba(0,77,64,.3)'   },
-  { label: '◀ Produção',        cmd: 'PRODUÇÃO',    bg: 'rgba(0,0,0,.05)',   color: '#555',    border: 'rgba(0,0,0,.12)'   },
+  { label: '🔄 Nova Coleta',    cmd: 'NOVA SESSÃO', bg: '#F2F7F4', color: '#2E7D52', border: '#D4E2DA', fontWeight: 500 },
+  { label: '◀ Produção',        cmd: 'PRODUÇÃO',    bg: '#F2F7F4', color: '#3D5A48', border: '#D4E2DA', fontWeight: 500 },
 ];
 
 export function InputZone({
@@ -73,13 +73,15 @@ export function InputZone({
               onClick={() => onQuickSend(chip.cmd)}
               disabled={busy}
               style={{
-                padding: '4px 12px', borderRadius: 20, fontSize: 10, fontWeight: 700,
+                padding: '3px 10px', borderRadius: 20,
+                fontSize: 11, fontWeight: chip.fontWeight || 500,
                 background: chip.bg, color: chip.color,
                 border: `1px solid ${chip.border}`,
                 cursor: busy ? 'not-allowed' : 'pointer',
                 opacity: busy ? .5 : 1,
-                transition: 'opacity var(--t-fast)',
-                whiteSpace: 'nowrap',
+                transition: 'all .12s',
+                whiteSpace: 'nowrap' as const,
+                fontFamily: "'DM Sans', system-ui, sans-serif",
               }}
             >
               {chip.label}
@@ -92,13 +94,14 @@ export function InputZone({
             onClick={onGerarRelatorio}
             disabled={busy}
             style={{
-              padding: '4px 12px', borderRadius: 20, fontSize: 10, fontWeight: 700,
-              background: 'rgba(184,145,58,.1)', color: 'var(--gold-500)',
-              border: '1px solid rgba(184,145,58,.25)',
+              padding: '3px 10px', borderRadius: 20, fontSize: 11, fontWeight: 500,
+              background: '#F2F7F4', color: '#3D5A48',
+              border: '1px solid #D4E2DA',
               cursor: busy ? 'not-allowed' : 'pointer',
               opacity: busy ? .5 : 1,
-              transition: 'opacity var(--t-fast)',
-              whiteSpace: 'nowrap',
+              transition: 'all .12s',
+              whiteSpace: 'nowrap' as const,
+              fontFamily: "'DM Sans', system-ui, sans-serif",
             }}
           >
             ↓ Exportar
@@ -191,18 +194,18 @@ export function InputZone({
               }
               style={{
                 flex: 1, minWidth: 0,
-                border: '1.5px solid var(--border)',
-                borderRadius: 'var(--r-lg)',
-                padding: '11px 14px',
+                border: '1.5px solid #B0C9BC',
+                borderRadius: '16px',
+                padding: '10px 14px',
                 fontSize: 13.5,
-                background: 'var(--ink-50)',
-                color: 'var(--text-pri)',
+                background: '#F2F7F4',
+                color: '#0D1612',
                 outline: 'none',
-                fontFamily: 'var(--font-ui)',
-                transition: 'border-color var(--t-fast)',
+                fontFamily: "'DM Sans', system-ui, sans-serif",
+                transition: 'border-color .15s, box-shadow .15s',
               }}
-              onFocus={e => (e.currentTarget.style.borderColor = 'var(--ink-400)')}
-              onBlur={e => (e.currentTarget.style.borderColor = 'var(--border)')}
+              onFocus={e => { e.currentTarget.style.borderColor = '#3D7A50'; e.currentTarget.style.boxShadow = '0 0 0 3px rgba(61,122,80,.08)'; }}
+              onBlur={e => { e.currentTarget.style.borderColor = '#B0C9BC'; e.currentTarget.style.boxShadow = 'none'; }}
             />
 
             {/* Send button — arrow icon */}
@@ -210,16 +213,15 @@ export function InputZone({
               onClick={onSend}
               disabled={busy || (!input.trim() && attachedFiles.length === 0)}
               style={{
-                width: 44, height: 44, borderRadius: 'var(--r-lg)', flexShrink: 0,
-                background: 'var(--ink-700)',
+                width: 36, height: 36, borderRadius: '12px', flexShrink: 0,
+                background: busy || (!input.trim() && attachedFiles.length === 0) ? '#D4E2DA' : '#1B3A2D',
                 color: '#fff', border: 'none',
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
                 cursor: busy || (!input.trim() && attachedFiles.length === 0) ? 'not-allowed' : 'pointer',
-                opacity: busy || (!input.trim() && attachedFiles.length === 0) ? .45 : 1,
-                transition: 'background var(--t-fast), opacity var(--t-fast)',
+                transition: 'all .15s',
               }}
-              onMouseEnter={e => { if (!busy) e.currentTarget.style.background = 'var(--ink-500)'; }}
-              onMouseLeave={e => { e.currentTarget.style.background = 'var(--ink-700)'; }}
+              onMouseEnter={e => { if (!busy && (input.trim() || attachedFiles.length > 0)) e.currentTarget.style.background = '#22492E'; }}
+              onMouseLeave={e => { if (!busy && (input.trim() || attachedFiles.length > 0)) e.currentTarget.style.background = '#1B3A2D'; }}
               title="Enviar (Enter)"
             >
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">

@@ -6,15 +6,39 @@ interface ThinkingBlockProps {
 
 export function ThinkingBlock({ thinking, open, onToggle }: ThinkingBlockProps) {
   return (
-    <div className="ml-14 mb-2 max-w-[85%]">
+    <div style={{
+      marginBottom: 4, marginLeft: 38,
+      border: '1px solid #D7C8E8', borderRadius: '12px',
+      overflow: 'hidden', maxWidth: '85%',
+    }}>
       <button
         onClick={onToggle}
-        className="flex items-center gap-2 bg-purple-900/5 border border-purple-900/10 rounded-lg px-3 py-1.5 text-[11px] text-purple-800 font-bold hover:bg-purple-900/10 transition-colors"
+        style={{
+          background: '#F3EEF9', border: 'none',
+          width: '100%', padding: '7px 12px',
+          display: 'flex', alignItems: 'center', gap: 8,
+          fontSize: 11, fontWeight: 600, color: '#6A35A8',
+          cursor: 'pointer',
+          fontFamily: "'DM Sans', system-ui, sans-serif",
+          textAlign: 'left' as const,
+          transition: 'background .12s',
+        }}
+        onMouseEnter={e => (e.currentTarget.style.background = '#EDE5F7')}
+        onMouseLeave={e => (e.currentTarget.style.background = '#F3EEF9')}
       >
         🧠 Raciocínio interno — {open ? '▲ ocultar' : '▼ expandir'}
       </button>
       {open && (
-        <div className="mt-1 bg-[#F3E5F5] border border-[#CE93D8] rounded-b-xl rounded-tr-xl p-4 text-[12px] text-[#4A148C] whitespace-pre-wrap max-h-96 overflow-y-auto font-mono">
+        <div style={{
+          background: '#FAF7FD',
+          padding: '10px 14px',
+          fontSize: 12, color: '#5A3080',
+          fontFamily: "'DM Mono', 'Cascadia Code', monospace",
+          lineHeight: 1.6,
+          borderTop: '1px solid #D7C8E8',
+          maxHeight: 200, overflowY: 'auto' as const,
+          whiteSpace: 'pre-wrap',
+        }}>
           {thinking}
         </div>
       )}

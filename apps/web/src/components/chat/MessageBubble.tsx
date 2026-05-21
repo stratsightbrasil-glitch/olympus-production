@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { ThinkingBlock } from './ThinkingBlock';
 import { fmt } from '../../lib/fmt';
 
@@ -37,8 +38,10 @@ export function MessageBubble({
   onExportDocx,
   onExportPdf,
 }: MessageBubbleProps) {
+  const [showActions, setShowActions] = useState(false);
   const isUser = role === 'user';
   const agentVar = `var(--agent-${agentName.toLowerCase()})`;
+  const now = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
 
   if (isUser) {
     return (
@@ -70,14 +73,19 @@ export function MessageBubble({
         />
       )}
 
-      <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start', width: '100%', maxWidth: '85%' }}>
+      <div
+        style={{ display: 'flex', gap: 10, alignItems: 'flex-start', width: '100%', maxWidth: '85%' }}
+        onMouseEnter={() => setShowActions(true)}
+        onMouseLeave={() => setShowActions(false)}
+      >
         {/* Avatar */}
         <div style={{
-          width: 32, height: 32,
-          background: agentVar,
-          borderRadius: 'var(--r-md)',
+          width: 28, height: 28,
+          background: agentHex,
+          borderRadius: '8px',
           display: 'flex', alignItems: 'center', justifyContent: 'center',
-          fontFamily: 'var(--font-ui)', fontSize: 10, fontWeight: 700,
+          fontFamily: "'DM Sans', system-ui, sans-serif",
+          fontSize: 10, fontWeight: 700, letterSpacing: '0.3px',
           color: '#fff', flexShrink: 0, marginTop: 2,
         }}>
           {agentName.slice(0, 2)}
@@ -87,24 +95,32 @@ export function MessageBubble({
           {/* Header */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 5 }}>
             <span style={{
-              fontFamily: 'var(--font-ui)', fontSize: 11, fontWeight: 700,
+              fontFamily: "'DM Sans', system-ui, sans-serif",
+              fontSize: 11, fontWeight: 700,
               letterSpacing: '0.8px', textTransform: 'uppercase',
-              color: agentVar,
+              color: agentHex,
             }}>
               {agentName}
             </span>
-            <span style={{ fontSize: 11, color: 'var(--text-ter)' }}>{agentLabel}</span>
+            <span style={{ fontSize: 11, color: '#6B8C7A' }}>{agentLabel}</span>
+            {!isStreaming && (
+              <span style={{ fontSize: 10, color: '#6B8C7A', marginLeft: 'auto', fontFamily: "'DM Mono', monospace" }}>
+                {now}
+              </span>
+            )}
           </div>
 
           {/* Body */}
           <div style={{
-            background: 'var(--surface)',
-            border: '1px solid var(--border)',
+            background: '#ffffff',
+            border: '1px solid #D4E2DA',
             borderLeft: `3px solid ${agentHex}`,
-            borderRadius: 'var(--r-lg)',
+            borderRadius: '12px',
             padding: '14px 16px',
             fontSize: 13.5, lineHeight: 1.7,
-            boxShadow: 'var(--shadow-sm)',
+            color: '#0D1612',
+            boxShadow: '0 1px 3px rgba(13,22,18,.08)',
+            position: 'relative' as const,
           }}>
             <div
               className="msg-markdown"
@@ -113,51 +129,48 @@ export function MessageBubble({
             {isStreaming && (
               <span style={{
                 display: 'inline-block', width: 2, height: 14,
-                background: 'var(--gold-400)', marginLeft: 2,
+                background: '#C9A84C', marginLeft: 2,
                 animation: 'blink .8s ease-in-out infinite',
                 verticalAlign: 'middle',
               }} />
             )}
           </div>
 
-          {/* Actions */}
+          {/* Actions — visíveis no hover */}
           {!isStreaming && (
-            <div className="mt-2 pt-2 border-t border-gray-100 flex justify-between items-center">
+            <div style={{
+              display: 'flex', gap: 4, marginTop: 6,
+              opacity: showActions ? 1 : 0,
+              transition: 'opacity .15s',
+              justifyContent: 'space-between', alignItems: 'center',
+            }}>
               {userRole !== 'cliente' ? (
                 <button
                   onClick={onDelete}
-                  className="text-[10px] uppercase font-bold tracking-wider text-gray-300 hover:text-red-500 transition-colors flex items-center gap-1"
+                  style={{ background: 'none', border: '1px solid #D4E2DA', borderRadius: '4px', color: '#6B8C7A', fontSize: 11, fontFamily: "'DM Sans', sans-serif", padding: '2px 8px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 3 }}
+                  onMouseEnter={e => e.currentTarget.style.color = '#C62828'}
+                  onMouseLeave={e => e.currentTarget.style.color = '#6B8C7A'}
                 >
                   🗑 Excluir
                 </button>
               ) : <div />}
-              <div className="flex gap-3">
-                <button
-                  onClick={onCopy}
-                  className="text-[10px] uppercase font-bold tracking-wider text-gray-400 hover:text-gray-700 transition-colors"
-                >
-                  📋 Copiar
-                </button>
-                <button
-                  onClick={onExportMd}
-                  className="text-[10px] uppercase font-bold tracking-wider hover:opacity-70 transition-opacity"
-                  style={{ color: 'var(--ink-400)' }}
-                >
-                  ⬇ Markdown
-                </button>
-                <button
-                  onClick={onExportDocx}
-                  className="text-[10px] uppercase font-bold tracking-wider hover:opacity-70 transition-opacity"
-                  style={{ color: 'var(--ink-400)' }}
-                >
-                  ⬇ DOCX
-                </button>
-                <button
-                  onClick={onExportPdf}
-                  className="text-[10px] uppercase font-bold tracking-wider text-red-600 hover:text-red-900 transition-colors"
-                >
-                  ⬇ PDF
-                </button>
+              <div style={{ display: 'flex', gap: 4 }}>
+                {[
+                  { label: '📋 Copiar', fn: onCopy },
+                  { label: '⬇ MD', fn: onExportMd },
+                  { label: '⬇ DOCX', fn: onExportDocx },
+                  { label: '⬇ PDF', fn: onExportPdf },
+                ].map(({ label, fn }) => (
+                  <button
+                    key={label}
+                    onClick={fn}
+                    style={{ background: 'none', border: '1px solid #D4E2DA', borderRadius: '4px', color: '#6B8C7A', fontSize: 11, fontFamily: "'DM Sans', sans-serif", padding: '2px 8px', cursor: 'pointer', transition: 'all .12s' }}
+                    onMouseEnter={e => { e.currentTarget.style.background = '#F2F7F4'; e.currentTarget.style.color = '#1B3A2D'; }}
+                    onMouseLeave={e => { e.currentTarget.style.background = 'none'; e.currentTarget.style.color = '#6B8C7A'; }}
+                  >
+                    {label}
+                  </button>
+                ))}
               </div>
             </div>
           )}

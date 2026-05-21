@@ -154,7 +154,7 @@ export function Sidebar({
             background: 'rgba(255,255,255,.04)',
             position: 'relative',
           }}>
-            <div style={{ fontSize: 8, color: '#66BB6A', fontWeight: 700, letterSpacing: '0.1em', marginBottom: 3, textTransform: 'uppercase' }}>
+            <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: '1.2px', color: '#3D7A50', textTransform: 'uppercase', marginBottom: 3}}>
               Projeto Ativo
             </div>
             <div style={{ fontWeight: 700, fontSize: 12, color: '#fff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', paddingRight: 22 }}>
@@ -198,7 +198,7 @@ export function Sidebar({
           {/* PROGRESSO MSEF */}
           {isMSEF && projeto.nome && (
             <div style={{ marginBottom: 10, paddingBottom: 10, borderBottom: '1px solid rgba(255,255,255,.07)' }}>
-              <div style={{ fontSize: 8, color: '#66BB6A', fontWeight: 700, letterSpacing: '0.1em', marginBottom: 8, textTransform: 'uppercase' }}>
+              <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: '1.2px', color: '#3D7A50', textTransform: 'uppercase', marginBottom: 8}}>
                 Progresso MSEF
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
@@ -220,8 +220,8 @@ export function Sidebar({
                         width: 18, height: 18, borderRadius: '50%', flexShrink: 0,
                         display: 'flex', alignItems: 'center', justifyContent: 'center',
                         fontSize: done ? 9 : 8, fontWeight: 700,
-                        background: done ? '#2E7D52' : active ? step.hex : 'rgba(255,255,255,.08)',
-                        color: done ? '#fff' : active ? '#fff' : 'rgba(255,255,255,.3)',
+                        background: done ? '#2E7D52' : active ? '#C9A84C' : 'rgba(255,255,255,.08)',
+                        color: done ? '#fff' : active ? '#142218' : 'rgba(255,255,255,.3)',
                         border: future ? '1px solid rgba(255,255,255,.15)' : 'none',
                       }}>
                         {done ? '✓' : step.num}
@@ -251,16 +251,25 @@ export function Sidebar({
 
           {/* MODO */}
           <div style={{ marginBottom: 10, paddingBottom: 10, borderBottom: '1px solid rgba(255,255,255,.07)' }}>
-            <div style={{ fontSize: 8, color: '#66BB6A', fontWeight: 700, letterSpacing: '0.1em', marginBottom: 6, textTransform: 'uppercase' }}>Modo</div>
-            <div style={{ display: 'flex', gap: 4 }}>
+            <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: '1.2px', color: '#3D7A50', textTransform: 'uppercase', marginBottom: 6}}>Modo</div>
+            <div style={{
+              display: 'flex',
+              background: 'rgba(0,0,0,.2)',
+              border: '1px solid rgba(255,255,255,.07)',
+              borderRadius: '12px',
+              padding: 3, gap: 2,
+            }}>
               <button
                 onClick={() => onModeChange('production')}
                 style={{
-                  flex: 1, padding: '5px 0', borderRadius: 6, fontSize: 10, fontWeight: 700,
-                  background: mode === 'production' ? 'rgba(255,255,255,.15)' : 'transparent',
-                  color: mode === 'production' ? '#fff' : 'rgba(255,255,255,.35)',
-                  border: mode === 'production' ? '1px solid rgba(255,255,255,.2)' : '1px solid rgba(255,255,255,.08)',
-                  cursor: 'pointer', transition: 'all var(--t-fast)',
+                  flex: 1, padding: '5px 6px', border: 'none',
+                  borderRadius: '8px', fontSize: 11, fontWeight: 500,
+                  fontFamily: "'DM Sans', system-ui, sans-serif",
+                  cursor: 'pointer', textAlign: 'center' as const,
+                  transition: 'all .15s',
+                  background: mode === 'production' ? '#22492E' : 'none',
+                  color: mode === 'production' ? '#fff' : '#5A9E6F',
+                  boxShadow: mode === 'production' ? '0 1px 3px rgba(13,22,18,.08)' : 'none',
                 }}
               >
                 Produção
@@ -268,11 +277,14 @@ export function Sidebar({
               <button
                 onClick={() => onModeChange('monitoring')}
                 style={{
-                  flex: 1, padding: '5px 0', borderRadius: 6, fontSize: 10, fontWeight: 700,
-                  background: mode === 'monitoring' ? 'rgba(0,77,64,.7)' : 'transparent',
-                  color: mode === 'monitoring' ? '#80CBC4' : 'rgba(255,255,255,.35)',
-                  border: mode === 'monitoring' ? '1px solid rgba(128,203,196,.3)' : '1px solid rgba(255,255,255,.08)',
-                  cursor: 'pointer', transition: 'all var(--t-fast)',
+                  flex: 1, padding: '5px 6px', border: 'none',
+                  borderRadius: '8px', fontSize: 11, fontWeight: 500,
+                  fontFamily: "'DM Sans', system-ui, sans-serif",
+                  cursor: 'pointer', textAlign: 'center' as const,
+                  transition: 'all .15s',
+                  background: mode === 'monitoring' ? '#22492E' : 'none',
+                  color: mode === 'monitoring' ? '#fff' : '#5A9E6F',
+                  boxShadow: mode === 'monitoring' ? '0 1px 3px rgba(13,22,18,.08)' : 'none',
                 }}
               >
                 KRATOS
@@ -282,7 +294,7 @@ export function Sidebar({
 
           {/* VISUALIZAÇÃO */}
           <div style={{ marginBottom: 10, paddingBottom: 10, borderBottom: '1px solid rgba(255,255,255,.07)' }}>
-            <div style={{ fontSize: 8, color: '#66BB6A', fontWeight: 700, letterSpacing: '0.1em', marginBottom: 6, textTransform: 'uppercase' }}>Visualização</div>
+            <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: '1.2px', color: '#3D7A50', textTransform: 'uppercase', marginBottom: 6}}>Visualização</div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 4 }}>
               {[
                 { id: 'etapa',       label: 'Por Etapa' },
@@ -294,12 +306,15 @@ export function Sidebar({
                   key={v.id}
                   onClick={() => onVizModeChange(v.id)}
                   style={{
-                    padding: '5px 4px', borderRadius: 6, fontSize: 9, fontWeight: 700,
-                    textAlign: 'center',
-                    background: vizMode === v.id ? 'rgba(255,255,255,.15)' : 'transparent',
-                    color: vizMode === v.id ? '#fff' : 'rgba(255,255,255,.3)',
-                    border: vizMode === v.id ? '1px solid rgba(255,255,255,.2)' : '1px solid rgba(255,255,255,.07)',
-                    cursor: 'pointer', transition: 'all var(--t-fast)',
+                    padding: '6px 4px',
+                    background: vizMode === v.id ? 'rgba(200,168,75,.12)' : 'rgba(255,255,255,.04)',
+                    border: vizMode === v.id ? '1px solid rgba(200,168,75,.3)' : '1px solid rgba(255,255,255,.06)',
+                    borderRadius: '8px',
+                    color: vizMode === v.id ? '#D9BF73' : '#5A9E6F',
+                    fontSize: 10, fontWeight: 500,
+                    fontFamily: "'DM Sans', system-ui, sans-serif",
+                    cursor: 'pointer', textAlign: 'center' as const,
+                    lineHeight: 1.3, transition: 'all .15s',
                   }}
                 >
                   {v.label}
@@ -310,7 +325,7 @@ export function Sidebar({
 
           {/* AÇÕES */}
           <div style={{ marginBottom: 10 }}>
-            <div style={{ fontSize: 8, color: '#66BB6A', fontWeight: 700, letterSpacing: '0.1em', marginBottom: 6, textTransform: 'uppercase' }}>Ações</div>
+            <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: '1.2px', color: '#3D7A50', textTransform: 'uppercase', marginBottom: 6}}>Ações</div>
 
             {user?.role !== 'cliente' && (
               <button onClick={onNovaSessao} className="w-full text-left px-3 py-2 rounded-lg bg-white/5 hover:bg-white/10 transition-colors mb-1" style={{ fontSize: 12, color: 'var(--ink-200)' }}>
@@ -350,7 +365,7 @@ export function Sidebar({
           {/* REVISÃO ANALÍTICA */}
           {user?.role !== 'cliente' && sessionId && (
             <div style={{ marginBottom: 10, paddingTop: 8, borderTop: '1px solid rgba(255,255,255,.07)' }}>
-              <div style={{ fontSize: 8, color: '#80CBC4', fontWeight: 700, letterSpacing: '0.1em', marginBottom: 6, textTransform: 'uppercase' }}>Rigor Analítico</div>
+              <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: '1.2px', color: '#5A9E6F', textTransform: 'uppercase', marginBottom: 6}}>Rigor Analítico</div>
               <button onClick={onShowReviewModal} className="w-full text-left px-3 py-2 rounded-lg transition-colors" style={{ fontSize: 12, background: 'rgba(0,77,64,.35)', border: '1px solid rgba(128,203,196,.15)', color: '#80CBC4' }}>
                 {analyticReview
                   ? `🔍 ${analyticReview.status === 'aprovado' ? '✅ Aprovado' : analyticReview.status === 'aprovado_com_ressalvas' ? '⚠️ Com Ressalvas' : analyticReview.status === 'requer_revisao' ? '🔴 Requer Revisão' : '⏳ Pendente'}`
@@ -362,7 +377,7 @@ export function Sidebar({
           {/* EXPORTAR */}
           {user?.role !== 'cliente' && (
             <div style={{ marginBottom: 10, paddingTop: 8, borderTop: '1px solid rgba(255,255,255,.07)' }}>
-              <div style={{ fontSize: 8, color: '#66BB6A', fontWeight: 700, letterSpacing: '0.1em', marginBottom: 6, textTransform: 'uppercase' }}>Exportar Relatório</div>
+              <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: '1.2px', color: '#3D7A50', textTransform: 'uppercase', marginBottom: 6}}>Exportar Relatório</div>
               <button onClick={onGerarRelatorioPadrao} disabled={exportingPdf} className="w-full text-left px-3 py-2 rounded-lg bg-white/5 hover:bg-white/10 transition-colors mb-1 disabled:opacity-50" style={{ fontSize: 11, color: 'var(--ink-200)' }}>
                 🖨️ Padrão — HERMES (PDF)
               </button>

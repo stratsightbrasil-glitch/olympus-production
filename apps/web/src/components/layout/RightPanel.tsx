@@ -92,12 +92,14 @@ export function RightPanel({ projeto, indicadores, weakSignals, signalStats, onR
   });
 
   const tabStyle = (tab: Tab): React.CSSProperties => ({
-    flex: 1, padding: '8px 4px',
-    fontSize: 9, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase',
+    flex: 1, padding: '10px 4px',
+    fontSize: 11, fontWeight: 600,
+    letterSpacing: '0.5px', textTransform: 'uppercase',
+    fontFamily: "'DM Sans', system-ui, sans-serif",
     background: 'none', border: 'none', cursor: 'pointer',
-    borderBottom: activeTab === tab ? '2px solid var(--ink-600)' : '2px solid transparent',
-    color: activeTab === tab ? 'var(--text-pri)' : 'var(--text-ter)',
-    transition: 'color var(--t-fast), border-color var(--t-fast)',
+    borderBottom: activeTab === tab ? '2px solid #1B3A2D' : '2px solid transparent',
+    color: activeTab === tab ? '#1B3A2D' : '#6B8C7A',
+    transition: 'all .15s',
   });
 
   return (
@@ -140,7 +142,7 @@ export function RightPanel({ projeto, indicadores, weakSignals, signalStats, onR
                 {/* Título */}
                 <div style={{ marginBottom: 12 }}>
                   <div style={{ fontSize: 8, color: 'var(--text-ter)', fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 4 }}>Projeto</div>
-                  <div style={{ fontWeight: 700, fontSize: 13, color: 'var(--text-pri)', lineHeight: 1.3 }}>{projeto.nome}</div>
+                  <div style={{ fontFamily: "'Fraunces', Georgia, serif", fontSize: 14, fontWeight: 600, color: '#1B3A2D', lineHeight: 1.3 }}>{projeto.nome}</div>
                 </div>
 
                 {/* Cards de info */}
@@ -156,14 +158,14 @@ export function RightPanel({ projeto, indicadores, weakSignals, signalStats, onR
                   ].filter(f => f.value).map(({ label, value }) => (
                     <div key={label} style={{
                       padding: '8px 10px',
-                      background: 'var(--ink-50)',
-                      borderRadius: 'var(--r-md)',
-                      border: '1px solid var(--border)',
+                      background: '#F2F7F4',
+                      borderRadius: '8px',
+                      border: '1px solid #D4E2DA',
                     }}>
-                      <div style={{ fontSize: 8, fontWeight: 700, color: 'var(--text-ter)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 3 }}>
+                      <div style={{ fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.6px', color: '#6B8C7A', marginBottom: 3 }}>
                         {label}
                       </div>
-                      <div style={{ fontSize: 11, color: 'var(--text-pri)', lineHeight: 1.4 }}>
+                      <div style={{ fontSize: 11, color: '#3D5A48', fontWeight: 500, lineHeight: 1.4 }}>
                         {value}
                       </div>
                     </div>
