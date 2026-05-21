@@ -7,6 +7,7 @@ import { Sidebar } from './components/layout/Sidebar';
 import { AgentMark } from './components/ui/AgentMark';
 import { InputZone } from './components/chat/InputZone';
 import { RightPanel } from './components/layout/RightPanel';
+import { KratosPanel } from './components/layout/KratosPanel';
 
 function UsersModal({ onClose, reqHeaders }: { onClose: () => void, reqHeaders: any }) {
   const [usersList, setUsersList] = useState<any[]>([]);
@@ -185,6 +186,7 @@ function App() {
   });
   const [vizMode, setVizMode] = useState('passos');
   const [mode, setMode] = useState('production');
+  const [mainView, setMainView] = useState<'chat' | 'kratos'>('chat');
   const [sessionId, setSessionId] = useState(() => `sess_${Date.now()}`);
   const [sessoes, setSessoes] = useState<any[]>([]);
   const [showSessoes, setShowSessoes] = useState(false);
@@ -342,6 +344,7 @@ function App() {
         mudancaIdentificada: ''
       });
       setSessionId(s.id);
+      setMainView('chat');
       const msgs = s.mensagens || [];
       setMessages(msgs.map((m: any) => ({ role: m.role, content: m.content, id: m.id })));
       setShowSessoes(false);
@@ -1478,6 +1481,8 @@ function App() {
           streamingText={streamingText}
           currentMsefStep={currentMsefStep}
           user={user}
+          mainView={mainView}
+          onToggleKratos={() => setMainView(v => v === 'kratos' ? 'chat' : 'kratos')}
           onToggleSidebar={() => setSidebarOpen(s => !s)}
           onNovaSessao={() => {
             setScopeForm({ tema: '', horizonte: '', elaborador: '', cliente: '', questaoEstrategica: '', mudancaIdentificada: '', instrucoes: '' });
@@ -1498,7 +1503,19 @@ function App() {
         />
 
         <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
-        <main className="flex-1 overflow-y-auto p-6 flex flex-col gap-6">
+
+        {/* ── VIEW: KRATOS PANEL ─────────────────────────────────────────── */}
+        {mainView === 'kratos' && sessionId && (
+          <KratosPanel
+            sessionId={sessionId}
+            reqHeaders={reqHeaders}
+            onRunKratos={() => { setMainView('chat'); gerarRelatorioKratos(); }}
+            onSettings={() => setShowSettingsModal(true)}
+          />
+        )}
+
+        {/* ── VIEW: CHAT ──────────────────────────────────────────────────── */}
+        {mainView === 'chat' && <main className="flex-1 overflow-y-auto p-6 flex flex-col gap-6">
 
           {/* ── PAINEL DE BOAS-VINDAS (estado vazio) ────────────────────────────── */}
           {messages.length === 0 && !loading && (
@@ -1580,18 +1597,21 @@ function App() {
             <AgentWorking progressAgent={progressAgent} stepLog={stepLog} />
           )}
           <div ref={bottomRef} />
-        </main>
+        </main>}
 
-        <RightPanel
-          projeto={projeto}
-          indicadores={indicadores}
-          weakSignals={weakSignals}
-          signalStats={signalStats}
-          onRefreshIndicators={() => carregarIndicadores(sessionId)}
-          onRefreshSignals={() => carregarSinais(sessionId)}
-        />
+        {mainView === 'chat' && (
+          <RightPanel
+            projeto={projeto}
+            indicadores={indicadores}
+            weakSignals={weakSignals}
+            signalStats={signalStats}
+            onRefreshIndicators={() => carregarIndicadores(sessionId)}
+            onRefreshSignals={() => carregarSinais(sessionId)}
+          />
+        )}
         </div>
 
+        {mainView === 'chat' && (
         <InputZone
           userRole={user?.role}
           mode={mode}
@@ -1611,6 +1631,7 @@ function App() {
           onGerarRelatorio={() => gerarRelatorio('padrao')}
           onExportEstimativa={exportEstimativa}
         />
+        )}
       </div>
     </div>
 

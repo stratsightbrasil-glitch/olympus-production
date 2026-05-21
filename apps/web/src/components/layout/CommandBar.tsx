@@ -12,10 +12,12 @@ interface CommandBarProps {
   streamingText: string;
   currentMsefStep: number;
   user: { name: string; role: string } | null;
+  mainView?: 'chat' | 'kratos';
   onToggleSidebar: () => void;
   onNovaSessao: () => void;
   onGerarRelatorio: () => void;
   onCopyClientLink: () => void;
+  onToggleKratos?: () => void;
   // Linha 2 — subbar (dados do projeto)
   cliente?: string;
   horizonte?: string;
@@ -80,7 +82,7 @@ function EngineChip({ mode }: { mode: string }) {
 
 export function CommandBar({
   mode, projetoNome, progressAgent, streamingText, currentMsefStep, user,
-  onToggleSidebar, onNovaSessao, onGerarRelatorio, onCopyClientLink,
+  mainView, onToggleSidebar, onNovaSessao, onGerarRelatorio, onCopyClientLink, onToggleKratos,
   cliente, horizonte, questaoEstrategica, classificacao,
 }: CommandBarProps) {
   const isCliente = user?.role === 'cliente';
@@ -202,6 +204,25 @@ export function CommandBar({
                 title="Link do cliente"
               >
                 ⎘ Link
+              </button>
+            )}
+
+            {/* Toggle KRATOS panel */}
+            {projetoNome && onToggleKratos && (
+              <button
+                onClick={onToggleKratos}
+                style={{
+                  ...btnBase,
+                  background: mainView === 'kratos' ? 'rgba(201,168,76,.25)' : 'none',
+                  border: mainView === 'kratos' ? '1px solid #C9A84C' : '1px solid rgba(255,255,255,.14)',
+                  color: mainView === 'kratos' ? '#C9A84C' : '#A3C9AE',
+                  fontWeight: mainView === 'kratos' ? 700 : 500,
+                }}
+                onMouseEnter={e => { if (mainView !== 'kratos') { e.currentTarget.style.background = 'rgba(255,255,255,.07)'; e.currentTarget.style.color = '#fff'; } }}
+                onMouseLeave={e => { if (mainView !== 'kratos') { e.currentTarget.style.background = 'none'; e.currentTarget.style.color = '#A3C9AE'; } }}
+                title="Painel KRATOS"
+              >
+                ⚡ KRATOS
               </button>
             )}
 
