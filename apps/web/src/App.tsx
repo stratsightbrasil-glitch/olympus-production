@@ -1,9 +1,10 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { AGENTS } from './constants';
 import { MessageBubble } from './components/chat/MessageBubble';
 import { AgentWorking } from './components/chat/AgentWorking';
 import { Topbar } from './components/layout/Topbar';
 import { Sidebar } from './components/layout/Sidebar';
+import { InfoBar } from './components/layout/InfoBar';
 import { InputZone } from './components/chat/InputZone';
 import { RightPanel } from './components/layout/RightPanel';
 
@@ -409,6 +410,18 @@ function App() {
     const foundKey = Object.keys(AGENTS).find(key => text.includes(`${key} ·`) || text.includes(`**${key}**`));
     return foundKey ? { name: foundKey, ...AGENTS[foundKey] } : { name: 'ATHENA', ...AGENTS.ATHENA };
   };
+
+  // ── MSEF step derivado das mensagens ──────────────────────────────────────────
+  const MSEF_AGENT_ORDER = ['SCOPUS', 'KLIO', 'PYTHIA', 'MNEMOSYNE', 'THEMIS'];
+  const currentMsefStep = useMemo(() => {
+    for (let i = MSEF_AGENT_ORDER.length - 1; i >= 0; i--) {
+      const agent = MSEF_AGENT_ORDER[i];
+      if (messages.some(m => m.role === 'assistant' && (m.content.includes(`${agent} ·`) || m.content.includes(`**${agent}**`)))) {
+        return i + 1;
+      }
+    }
+    return messages.length > 0 ? 1 : 0;
+  }, [messages]);
 
   // ── Nova Sessão: upload de arquivos de contexto ──────────────────────────────
   const handleScopeFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -1212,6 +1225,11 @@ function App() {
         analyticReview={analyticReview}
         sessionId={sessionId}
         exportingPdf={exportingPdf}
+        currentMsefStep={currentMsefStep}
+        mode={mode}
+        vizMode={vizMode}
+        onModeChange={m => setMode(m)}
+        onVizModeChange={v => setVizMode(v)}
         onNovaSessao={() => {
           setScopeForm({ tema: '', horizonte: '', elaborador: '', cliente: '', questaoEstrategica: '', mudancaIdentificada: '' });
           setScopeFiles([]);
@@ -1254,7 +1272,28 @@ function App() {
           projetoNome={projeto.nome}
           progressAgent={progressAgent}
           streamingText={streamingText}
+          currentMsefStep={currentMsefStep}
+          user={user}
           onToggleSidebar={() => setSidebarOpen(s => !s)}
+          onNovaSessao={() => {
+            setScopeForm({ tema: '', horizonte: '', elaborador: '', cliente: '', questaoEstrategica: '', mudancaIdentificada: '' });
+            setScopeFiles([]);
+            setProjeto(p => ({ ...p, metodologia: 'MSEF' }));
+            setShowNovaSessaoModal(true);
+          }}
+          onGerarRelatorio={() => gerarRelatorio('padrao')}
+          onCopyClientLink={() => {
+            const url = `${window.location.origin}/api/v1/painel/project/${sessionId}?token=${token}`;
+            navigator.clipboard.writeText(url).then(() => {
+              alert('✅ Link do cliente copiado!\n\nCompartilhe este link com o cliente para acesso ao Painel de Monitoramento.');
+            }).catch(() => { prompt('Copie o link abaixo:', url); });
+          }}
+        />
+        <InfoBar
+          projetoNome={projeto.nome}
+          cliente={projeto.cliente}
+          horizonte={projeto.horizonte}
+          questaoEstrategica={projeto.questaoEstrategica}
         />
 
         <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
@@ -1343,6 +1382,7 @@ function App() {
         </main>
 
         <RightPanel
+          projeto={projeto}
           indicadores={indicadores}
           weakSignals={weakSignals}
           signalStats={signalStats}

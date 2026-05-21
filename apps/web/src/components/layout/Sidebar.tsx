@@ -1,5 +1,12 @@
 import React, { useRef, useEffect } from 'react';
-import { AGENTS } from '../../constants';
+
+const MSEF_STEPS = [
+  { num: 1, agent: 'SCOPUS',    label: 'Escopo',             hex: '#1A4A7A' },
+  { num: 2, agent: 'KLIO',      label: 'Drivers + Sinais',   hex: '#5A2D82' },
+  { num: 3, agent: 'PYTHIA',    label: 'Incertezas · Eixos', hex: '#B71C1C' },
+  { num: 4, agent: 'MNEMOSYNE', label: 'Narrativas',         hex: '#E65100' },
+  { num: 5, agent: 'THEMIS',    label: 'Implicações',        hex: '#2D4A5A' },
+];
 
 interface Session {
   id: string;
@@ -26,6 +33,11 @@ interface SidebarProps {
   analyticReview: any;
   sessionId: string;
   exportingPdf: boolean;
+  currentMsefStep: number;
+  mode: string;
+  vizMode: string;
+  onModeChange: (m: string) => void;
+  onVizModeChange: (v: string) => void;
   onNovaSessao: () => void;
   onOpenPainel: () => void;
   onGerarRelatorioKratos: () => void;
@@ -70,6 +82,7 @@ function SessionCard({ s, onClick, onDelete }: { s: Session; onClick: () => void
 export function Sidebar({
   open, user, projeto, sessoes, showSessoes, sessionSearch, filterStatus,
   analyticReview, sessionId, exportingPdf,
+  currentMsefStep, mode, vizMode, onModeChange, onVizModeChange,
   onNovaSessao, onOpenPainel, onGerarRelatorioKratos, onShowUsers, onShowBackup,
   onCopyClientLink, onShowReviewModal, onGerarRelatorioPadrao, onGerarRelatorioEstendido,
   onShowSettings, onToggleSessoes, onSessionSearchChange, onFilterChange,
@@ -85,6 +98,8 @@ export function Sidebar({
       setTimeout(() => sessaoListRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' }), 50);
     }
   }, [showSessoes]);
+
+  const isMSEF = projeto.metodologia === 'MSEF';
 
   return (
     <div
@@ -103,66 +118,58 @@ export function Sidebar({
     >
       <div style={{ width: 'var(--sidebar-w)', display: 'flex', flexDirection: 'column', height: '100%' }}>
 
-        {/* Logo */}
+        {/* ── Logo ─────────────────────────────────────────────────── */}
         <div style={{
-          padding: '16px 20px',
+          padding: '14px 16px',
           borderBottom: '1px solid rgba(255,255,255,.08)',
           display: 'flex',
           alignItems: 'center',
-          gap: 12,
+          gap: 10,
         }}>
           <div style={{
-            width: 32, height: 32,
+            width: 30, height: 30,
             borderRadius: 'var(--r-md)',
-            background: 'var(--ink-400)',
+            background: 'var(--ink-500)',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
-            fontWeight: 700, color: '#fff', fontSize: 16,
+            fontWeight: 700, color: '#fff', fontSize: 15,
+            flexShrink: 0,
           }}>
             Ω
           </div>
           <div>
-            <div style={{
-              fontFamily: 'var(--font-ui)', fontWeight: 700,
-              fontSize: 13, letterSpacing: '0.1em',
-              color: 'var(--ink-200)',
-            }}>
+            <div style={{ fontFamily: 'var(--font-ui)', fontWeight: 700, fontSize: 12, letterSpacing: '0.1em', color: 'var(--ink-200)' }}>
               STRATSIGHT
             </div>
-            <div style={{
-              fontFamily: 'var(--font-mono)', fontSize: 9,
-              color: 'var(--gold-400)',
-              letterSpacing: '0.08em', textTransform: 'uppercase',
-            }}>
+            <div style={{ fontFamily: 'var(--font-mono)', fontSize: 8, color: 'var(--gold-400)', letterSpacing: '0.08em', textTransform: 'uppercase' }}>
               Strategic Foresight
             </div>
           </div>
         </div>
 
-        {/* Projeto Ativo */}
+        {/* ── Projeto Ativo ─────────────────────────────────────────── */}
         {projeto.nome && (
           <div style={{
-            padding: '12px 16px',
+            padding: '10px 14px',
             borderBottom: '1px solid rgba(255,255,255,.08)',
             background: 'rgba(255,255,255,.04)',
             position: 'relative',
           }}>
-            <div style={{ fontSize: 9, color: '#66BB6A', fontWeight: 700, letterSpacing: '0.1em', marginBottom: 4 }}>
-              PROJETO ATIVO
+            <div style={{ fontSize: 8, color: '#66BB6A', fontWeight: 700, letterSpacing: '0.1em', marginBottom: 3, textTransform: 'uppercase' }}>
+              Projeto Ativo
             </div>
-            <div style={{ fontWeight: 700, fontSize: 13, color: '#fff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', paddingRight: 24 }}>
+            <div style={{ fontWeight: 700, fontSize: 12, color: '#fff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', paddingRight: 22 }}>
               {projeto.nome}
             </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 4 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginTop: 4 }}>
               <span style={{
-                background: 'var(--ink-400)', color: '#fff',
-                padding: '1px 7px', borderRadius: 4,
-                fontSize: 9, fontWeight: 700,
-                fontFamily: 'var(--font-mono)',
+                background: 'var(--ink-500)', color: '#fff',
+                padding: '1px 6px', borderRadius: 4,
+                fontSize: 8, fontWeight: 700, fontFamily: 'var(--font-mono)',
               }}>
                 {projeto.metodologia}
               </span>
               <span style={{
-                padding: '1px 7px', borderRadius: 4, fontSize: 9, fontWeight: 700,
+                padding: '1px 6px', borderRadius: 4, fontSize: 8, fontWeight: 700,
                 background: projeto.status === 'Ativo' ? 'rgba(0,100,0,.5)' : projeto.status === 'Inativo' ? 'rgba(100,0,0,.5)' : 'rgba(0,50,100,.5)',
                 color: projeto.status === 'Ativo' ? '#a5d6a7' : projeto.status === 'Inativo' ? '#ef9a9a' : '#90caf9',
               }}>
@@ -172,96 +179,212 @@ export function Sidebar({
             <button
               onClick={onShowSettings}
               style={{
-                position: 'absolute', top: 12, right: 12,
+                position: 'absolute', top: 10, right: 10,
                 background: 'none', border: 'none',
-                color: 'rgba(255,255,255,.4)', cursor: 'pointer', fontSize: 14,
-                transition: 'color var(--t-fast)',
+                color: 'rgba(255,255,255,.35)', cursor: 'pointer', fontSize: 13,
               }}
               onMouseEnter={e => (e.currentTarget.style.color = '#fff')}
-              onMouseLeave={e => (e.currentTarget.style.color = 'rgba(255,255,255,.4)')}
-              title="Configurações do Projeto"
+              onMouseLeave={e => (e.currentTarget.style.color = 'rgba(255,255,255,.35)')}
+              title="Configurações"
             >
               ⚙️
             </button>
           </div>
         )}
 
-        {/* Ações — scrollable */}
-        <div className="flex-1 overflow-y-auto min-h-0" style={{ padding: '12px 14px', borderBottom: '1px solid rgba(255,255,255,.08)' }}>
-          <div style={{ fontSize: 9, color: '#66BB6A', fontWeight: 700, letterSpacing: '0.1em', marginBottom: 8 }}>AÇÕES</div>
+        {/* ── Área rolável ───────────────────────────────────────────── */}
+        <div className="flex-1 overflow-y-auto min-h-0" style={{ padding: '10px 12px' }}>
 
-          {user?.role !== 'cliente' && (
-            <button onClick={onNovaSessao} className="w-full text-left px-3 py-2 rounded-lg bg-white/5 hover:bg-white/10 text-sm transition-colors text-gray-200">
-              🔄 Nova Sessão
-            </button>
+          {/* PROGRESSO MSEF */}
+          {isMSEF && projeto.nome && (
+            <div style={{ marginBottom: 10, paddingBottom: 10, borderBottom: '1px solid rgba(255,255,255,.07)' }}>
+              <div style={{ fontSize: 8, color: '#66BB6A', fontWeight: 700, letterSpacing: '0.1em', marginBottom: 8, textTransform: 'uppercase' }}>
+                Progresso MSEF
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+                {MSEF_STEPS.map(step => {
+                  const done   = currentMsefStep > step.num;
+                  const active = currentMsefStep === step.num;
+                  const future = currentMsefStep < step.num;
+                  return (
+                    <div key={step.num} style={{
+                      display: 'flex', alignItems: 'center', gap: 8,
+                      padding: '4px 8px 4px 6px',
+                      borderRadius: 6,
+                      background: active ? `${step.hex}22` : 'transparent',
+                      borderLeft: active ? `2px solid ${step.hex}` : '2px solid transparent',
+                      transition: 'background var(--t-fast)',
+                    }}>
+                      {/* Icon */}
+                      <div style={{
+                        width: 18, height: 18, borderRadius: '50%', flexShrink: 0,
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        fontSize: done ? 9 : 8, fontWeight: 700,
+                        background: done ? '#2E7D52' : active ? step.hex : 'rgba(255,255,255,.08)',
+                        color: done ? '#fff' : active ? '#fff' : 'rgba(255,255,255,.3)',
+                        border: future ? '1px solid rgba(255,255,255,.15)' : 'none',
+                      }}>
+                        {done ? '✓' : step.num}
+                      </div>
+                      {/* Labels */}
+                      <div style={{ minWidth: 0 }}>
+                        <div style={{
+                          fontSize: 10, lineHeight: 1.2,
+                          fontWeight: active ? 700 : 500,
+                          color: done ? '#A3C9AE' : active ? '#fff' : 'rgba(255,255,255,.35)',
+                          whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+                        }}>
+                          {step.label}
+                        </div>
+                        {active && (
+                          <div style={{ fontSize: 8, color: 'rgba(255,255,255,.5)', marginTop: 1 }}>
+                            ● {step.agent} ativo
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
           )}
 
-          {user?.role !== 'cliente' && (
-            <>
-              <button onClick={onOpenPainel} className="w-full text-left px-3 py-2 rounded-lg text-sm transition-colors mt-2" style={{ background: 'rgba(201,168,76,.12)', border: '1px solid rgba(201,168,76,.25)', color: 'var(--gold-400)' }}>
-                🖥️ Painel KRATOS
+          {/* MODO */}
+          <div style={{ marginBottom: 10, paddingBottom: 10, borderBottom: '1px solid rgba(255,255,255,.07)' }}>
+            <div style={{ fontSize: 8, color: '#66BB6A', fontWeight: 700, letterSpacing: '0.1em', marginBottom: 6, textTransform: 'uppercase' }}>Modo</div>
+            <div style={{ display: 'flex', gap: 4 }}>
+              <button
+                onClick={() => onModeChange('production')}
+                style={{
+                  flex: 1, padding: '5px 0', borderRadius: 6, fontSize: 10, fontWeight: 700,
+                  background: mode === 'production' ? 'rgba(255,255,255,.15)' : 'transparent',
+                  color: mode === 'production' ? '#fff' : 'rgba(255,255,255,.35)',
+                  border: mode === 'production' ? '1px solid rgba(255,255,255,.2)' : '1px solid rgba(255,255,255,.08)',
+                  cursor: 'pointer', transition: 'all var(--t-fast)',
+                }}
+              >
+                Produção
               </button>
-              <button onClick={onGerarRelatorioKratos} className="w-full text-left px-3 py-2 rounded-lg text-sm transition-colors mt-1" style={{ background: 'rgba(0,77,64,.4)', border: '1px solid rgba(128,203,196,.2)', color: '#80CBC4' }}>
-                🤖 Gerar Relatório Agora
+              <button
+                onClick={() => onModeChange('monitoring')}
+                style={{
+                  flex: 1, padding: '5px 0', borderRadius: 6, fontSize: 10, fontWeight: 700,
+                  background: mode === 'monitoring' ? 'rgba(0,77,64,.7)' : 'transparent',
+                  color: mode === 'monitoring' ? '#80CBC4' : 'rgba(255,255,255,.35)',
+                  border: mode === 'monitoring' ? '1px solid rgba(128,203,196,.3)' : '1px solid rgba(255,255,255,.08)',
+                  cursor: 'pointer', transition: 'all var(--t-fast)',
+                }}
+              >
+                KRATOS
               </button>
-            </>
-          )}
+            </div>
+          </div>
 
-          {user?.role === 'admin' && (
-            <>
-              <button onClick={onShowUsers} className="w-full text-left px-3 py-2 rounded-lg text-sm transition-colors mt-2 bg-purple-900/40 hover:bg-purple-900/60 border border-purple-500/30 text-purple-200">
-                👥 Gestão de Usuários
-              </button>
-              <button onClick={onShowBackup} className="w-full text-left px-3 py-2 rounded-lg text-sm transition-colors mt-1 bg-yellow-900/40 hover:bg-yellow-900/60 border border-yellow-500/30 text-yellow-200">
-                💾 Backup do Banco
-              </button>
-            </>
-          )}
+          {/* VISUALIZAÇÃO */}
+          <div style={{ marginBottom: 10, paddingBottom: 10, borderBottom: '1px solid rgba(255,255,255,.07)' }}>
+            <div style={{ fontSize: 8, color: '#66BB6A', fontWeight: 700, letterSpacing: '0.1em', marginBottom: 6, textTransform: 'uppercase' }}>Visualização</div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 4 }}>
+              {[
+                { id: 'etapa',       label: 'Por Etapa' },
+                { id: 'passoapasso', label: 'Passo a Passo' },
+                { id: 'extended',    label: 'Extended' },
+                { id: 'passagem',    label: 'Passagem' },
+              ].map(v => (
+                <button
+                  key={v.id}
+                  onClick={() => onVizModeChange(v.id)}
+                  style={{
+                    padding: '5px 4px', borderRadius: 6, fontSize: 9, fontWeight: 700,
+                    textAlign: 'center',
+                    background: vizMode === v.id ? 'rgba(255,255,255,.15)' : 'transparent',
+                    color: vizMode === v.id ? '#fff' : 'rgba(255,255,255,.3)',
+                    border: vizMode === v.id ? '1px solid rgba(255,255,255,.2)' : '1px solid rgba(255,255,255,.07)',
+                    cursor: 'pointer', transition: 'all var(--t-fast)',
+                  }}
+                >
+                  {v.label}
+                </button>
+              ))}
+            </div>
+          </div>
 
-          {user?.role !== 'cliente' && projeto.nome && (
-            <button onClick={onCopyClientLink} className="w-full text-left px-3 py-2 rounded-lg text-sm transition-colors mt-1 bg-blue-900/40 hover:bg-blue-900/60 border border-blue-500/30 text-blue-200">
-              🔗 Link do Cliente
-            </button>
-          )}
+          {/* AÇÕES */}
+          <div style={{ marginBottom: 10 }}>
+            <div style={{ fontSize: 8, color: '#66BB6A', fontWeight: 700, letterSpacing: '0.1em', marginBottom: 6, textTransform: 'uppercase' }}>Ações</div>
 
-          {/* Revisão Analítica */}
+            {user?.role !== 'cliente' && (
+              <button onClick={onNovaSessao} className="w-full text-left px-3 py-2 rounded-lg bg-white/5 hover:bg-white/10 transition-colors mb-1" style={{ fontSize: 12, color: 'var(--ink-200)' }}>
+                🔄 Nova Sessão
+              </button>
+            )}
+
+            {user?.role !== 'cliente' && (
+              <>
+                <button onClick={onOpenPainel} className="w-full text-left px-3 py-2 rounded-lg transition-colors mb-1" style={{ fontSize: 12, background: 'rgba(201,168,76,.1)', border: '1px solid rgba(201,168,76,.2)', color: 'var(--gold-400)' }}>
+                  🖥️ Painel KRATOS
+                </button>
+                <button onClick={onGerarRelatorioKratos} className="w-full text-left px-3 py-2 rounded-lg transition-colors mb-1" style={{ fontSize: 12, background: 'rgba(0,77,64,.35)', border: '1px solid rgba(128,203,196,.15)', color: '#80CBC4' }}>
+                  🤖 Gerar Relatório KRATOS
+                </button>
+              </>
+            )}
+
+            {user?.role === 'admin' && (
+              <>
+                <button onClick={onShowUsers} className="w-full text-left px-3 py-2 rounded-lg transition-colors mb-1 bg-purple-900/40 hover:bg-purple-900/60 border border-purple-500/30 text-purple-200" style={{ fontSize: 12 }}>
+                  👥 Gestão de Usuários
+                </button>
+                <button onClick={onShowBackup} className="w-full text-left px-3 py-2 rounded-lg transition-colors mb-1 bg-yellow-900/40 hover:bg-yellow-900/60 border border-yellow-500/30 text-yellow-200" style={{ fontSize: 12 }}>
+                  💾 Backup do Banco
+                </button>
+              </>
+            )}
+
+            {user?.role !== 'cliente' && projeto.nome && (
+              <button onClick={onCopyClientLink} className="w-full text-left px-3 py-2 rounded-lg transition-colors mb-1 bg-blue-900/40 hover:bg-blue-900/60 border border-blue-500/30 text-blue-200" style={{ fontSize: 12 }}>
+                🔗 Link do Cliente
+              </button>
+            )}
+          </div>
+
+          {/* REVISÃO ANALÍTICA */}
           {user?.role !== 'cliente' && sessionId && (
-            <div style={{ marginTop: 8, paddingTop: 8, borderTop: '1px solid rgba(255,255,255,.08)' }}>
-              <div style={{ fontSize: 9, color: '#80CBC4', fontWeight: 700, letterSpacing: '0.1em', marginBottom: 6 }}>RIGOR ANALÍTICO</div>
-              <button onClick={onShowReviewModal} className="w-full text-left px-3 py-2 rounded-lg text-sm transition-colors" style={{ background: 'rgba(0,77,64,.4)', border: '1px solid rgba(128,203,196,.2)', color: '#80CBC4' }}>
+            <div style={{ marginBottom: 10, paddingTop: 8, borderTop: '1px solid rgba(255,255,255,.07)' }}>
+              <div style={{ fontSize: 8, color: '#80CBC4', fontWeight: 700, letterSpacing: '0.1em', marginBottom: 6, textTransform: 'uppercase' }}>Rigor Analítico</div>
+              <button onClick={onShowReviewModal} className="w-full text-left px-3 py-2 rounded-lg transition-colors" style={{ fontSize: 12, background: 'rgba(0,77,64,.35)', border: '1px solid rgba(128,203,196,.15)', color: '#80CBC4' }}>
                 {analyticReview
-                  ? `🔍 Revisão: ${analyticReview.status === 'aprovado' ? '✅ Aprovado' : analyticReview.status === 'aprovado_com_ressalvas' ? '⚠️ Com Ressalvas' : analyticReview.status === 'requer_revisao' ? '🔴 Requer Revisão' : '⏳ Pendente'}`
+                  ? `🔍 ${analyticReview.status === 'aprovado' ? '✅ Aprovado' : analyticReview.status === 'aprovado_com_ressalvas' ? '⚠️ Com Ressalvas' : analyticReview.status === 'requer_revisao' ? '🔴 Requer Revisão' : '⏳ Pendente'}`
                   : '🔍 Revisar Qualidade (ICD 203)'}
               </button>
             </div>
           )}
 
-          {/* Exportar */}
+          {/* EXPORTAR */}
           {user?.role !== 'cliente' && (
-            <div style={{ marginTop: 8, paddingTop: 8, borderTop: '1px solid rgba(255,255,255,.08)' }}>
-              <div style={{ fontSize: 9, color: '#66BB6A', fontWeight: 700, letterSpacing: '0.1em', marginBottom: 6 }}>EXPORTAR RELATÓRIO</div>
-              <button onClick={onGerarRelatorioPadrao} disabled={exportingPdf} className="w-full text-left px-3 py-2 rounded-lg bg-white/5 hover:bg-white/10 text-sm transition-colors text-gray-200 mb-1 disabled:opacity-50">
-                🖨️ Padrão — Relatório HERMES (PDF)
+            <div style={{ marginBottom: 10, paddingTop: 8, borderTop: '1px solid rgba(255,255,255,.07)' }}>
+              <div style={{ fontSize: 8, color: '#66BB6A', fontWeight: 700, letterSpacing: '0.1em', marginBottom: 6, textTransform: 'uppercase' }}>Exportar Relatório</div>
+              <button onClick={onGerarRelatorioPadrao} disabled={exportingPdf} className="w-full text-left px-3 py-2 rounded-lg bg-white/5 hover:bg-white/10 transition-colors mb-1 disabled:opacity-50" style={{ fontSize: 11, color: 'var(--ink-200)' }}>
+                🖨️ Padrão — HERMES (PDF)
               </button>
-              <button onClick={onGerarRelatorioEstendido} disabled={exportingPdf} className="w-full text-left px-3 py-2 rounded-lg bg-white/5 hover:bg-white/10 text-sm transition-colors text-gray-200 disabled:opacity-50">
+              <button onClick={onGerarRelatorioEstendido} disabled={exportingPdf} className="w-full text-left px-3 py-2 rounded-lg bg-white/5 hover:bg-white/10 transition-colors disabled:opacity-50" style={{ fontSize: 11, color: 'var(--ink-200)' }}>
                 🖨️ Estendido — Todos os Agentes (PDF)
               </button>
             </div>
           )}
 
-          {/* Histórico */}
-          <div style={{ marginTop: 8 }} ref={sessaoListRef}>
+          {/* HISTÓRICO */}
+          <div style={{ paddingTop: 8, borderTop: '1px solid rgba(255,255,255,.07)' }} ref={sessaoListRef}>
             <button
               onClick={onToggleSessoes}
-              className="w-full px-3 py-2 bg-white/5 hover:bg-white/10 text-sm rounded-lg transition-colors text-left text-gray-200 flex justify-between items-center"
+              className="w-full px-3 py-2 bg-white/5 hover:bg-white/10 rounded-lg transition-colors text-left flex justify-between items-center"
+              style={{ fontSize: 12, color: 'var(--ink-200)' }}
             >
               <span>{showSessoes ? '▲' : '▼'} Histórico de Análises</span>
               {sessoes.length > 0 && (
                 <span style={{
                   background: 'var(--ink-600)', color: 'var(--ink-200)',
                   padding: '1px 6px', borderRadius: 4,
-                  fontSize: 9, fontWeight: 700,
-                  fontFamily: 'var(--font-mono)',
+                  fontSize: 9, fontWeight: 700, fontFamily: 'var(--font-mono)',
                 }}>
                   {sessoes.length}
                 </span>
@@ -275,22 +398,23 @@ export function Sidebar({
                   value={sessionSearch}
                   onChange={e => onSessionSearchChange(e.target.value)}
                   placeholder="🔍 Pesquisar análise..."
-                  className="w-full text-[11px] bg-white/10 text-white placeholder-gray-500 border border-white/10 rounded-lg px-3 py-1.5 mb-2 outline-none focus:border-stratsight-medium/50"
+                  className="w-full bg-white/10 text-white placeholder-gray-500 border border-white/10 rounded-lg px-3 py-1.5 mb-2 outline-none"
+                  style={{ fontSize: 11 }}
                 />
-                <div className="flex gap-2 px-2 py-1 mb-1 border-b border-white/10 pb-2">
-                  <label className="text-[9px] flex items-center gap-1 cursor-pointer text-[#90CAF9]">
+                <div className="flex gap-2 px-1 pb-2 mb-1 border-b border-white/10">
+                  <label style={{ fontSize: 9 }} className="flex items-center gap-1 cursor-pointer text-[#90CAF9]">
                     <input type="checkbox" checked={filterStatus.producao} onChange={e => onFilterChange('producao', e.target.checked)} /> Produção
                   </label>
-                  <label className="text-[9px] flex items-center gap-1 cursor-pointer text-[#66BB6A]">
+                  <label style={{ fontSize: 9 }} className="flex items-center gap-1 cursor-pointer text-[#66BB6A]">
                     <input type="checkbox" checked={filterStatus.ativos} onChange={e => onFilterChange('ativos', e.target.checked)} /> Ativos
                   </label>
-                  <label className="text-[9px] flex items-center gap-1 cursor-pointer text-gray-400">
+                  <label style={{ fontSize: 9 }} className="flex items-center gap-1 cursor-pointer text-gray-400">
                     <input type="checkbox" checked={filterStatus.inativos} onChange={e => onFilterChange('inativos', e.target.checked)} /> Inativos
                   </label>
                 </div>
 
                 {sessoes.length === 0 ? (
-                  <div className="text-xs text-gray-400 px-2 py-1">Nenhuma análise salva.</div>
+                  <div style={{ fontSize: 11, color: 'var(--text-ter)', padding: '4px 8px' }}>Nenhuma análise salva.</div>
                 ) : (
                   <>
                     {filterStatus.producao && (() => {
@@ -300,7 +424,7 @@ export function Sidebar({
                       );
                       return producao.length > 0 ? (
                         <div className="mb-2">
-                          <div style={{ fontSize: 9, color: '#90CAF9', fontWeight: 700, padding: '2px 8px', textTransform: 'uppercase' }}>Em Produção</div>
+                          <div style={{ fontSize: 8, color: '#90CAF9', fontWeight: 700, padding: '2px 8px', textTransform: 'uppercase' }}>Em Produção</div>
                           {producao.map(s => (
                             <SessionCard key={s.id} s={s} onClick={() => onCarregarSessao(s.id)} onDelete={e => onDeletarSessao(s.id, e)} />
                           ))}
@@ -309,7 +433,7 @@ export function Sidebar({
                     })()}
                     {filterStatus.ativos && filter('Ativo').length > 0 && (
                       <div className="mb-2">
-                        <div style={{ fontSize: 9, color: '#66BB6A', fontWeight: 700, padding: '2px 8px', textTransform: 'uppercase' }}>Monitorados (Ativos)</div>
+                        <div style={{ fontSize: 8, color: '#66BB6A', fontWeight: 700, padding: '2px 8px', textTransform: 'uppercase' }}>Monitorados (Ativos)</div>
                         {filter('Ativo').map(s => (
                           <SessionCard key={s.id} s={s} onClick={() => onCarregarSessao(s.id)} onDelete={e => onDeletarSessao(s.id, e)} />
                         ))}
@@ -317,7 +441,7 @@ export function Sidebar({
                     )}
                     {filterStatus.inativos && filter('Inativo').length > 0 && (
                       <div>
-                        <div style={{ fontSize: 9, color: 'var(--text-ter)', fontWeight: 700, padding: '2px 8px', textTransform: 'uppercase' }}>Arquivados (Inativos)</div>
+                        <div style={{ fontSize: 8, color: 'var(--text-ter)', fontWeight: 700, padding: '2px 8px', textTransform: 'uppercase' }}>Arquivados (Inativos)</div>
                         {filter('Inativo').map(s => (
                           <SessionCard key={s.id} s={s} onClick={() => onCarregarSessao(s.id)} onDelete={e => onDeletarSessao(s.id, e)} />
                         ))}
@@ -330,42 +454,29 @@ export function Sidebar({
           </div>
         </div>
 
-        {/* Agentes MSEF */}
-        <div style={{ padding: '12px 16px', borderTop: '1px solid rgba(255,255,255,.08)' }}>
-          <div style={{ fontSize: 9, color: '#66BB6A', fontWeight: 700, letterSpacing: '0.1em', marginBottom: 10 }}>AGENTES MSEF</div>
-          {Object.entries(AGENTS).filter(([k]) => k !== 'ATHENA').map(([key, ag]) => (
-            <div key={key} style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
-              <div style={{ width: 8, height: 8, borderRadius: '50%', background: `var(--agent-${key.toLowerCase()})`, flexShrink: 0 }} />
-              <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--ink-200)', width: 76, fontFamily: 'var(--font-mono)' }}>{key}</span>
-              <span style={{ fontSize: 10, color: 'var(--ink-300)' }}>{ag.label}</span>
-            </div>
-          ))}
-        </div>
-
-        {/* Perfil e Logout */}
+        {/* ── Perfil e Logout ─────────────────────────────────────────── */}
         <div style={{
-          padding: '12px 16px',
+          padding: '10px 14px',
           borderTop: '1px solid rgba(255,255,255,.08)',
           background: 'rgba(0,0,0,.2)',
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'center',
         }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <div style={{
-              width: 30, height: 30,
-              borderRadius: 'var(--r-md)',
+              width: 28, height: 28, borderRadius: 'var(--r-md)',
               background: 'var(--ink-500)',
               display: 'flex', alignItems: 'center', justifyContent: 'center',
-              fontSize: 11, color: '#fff', fontWeight: 700,
+              fontSize: 10, color: '#fff', fontWeight: 700,
             }}>
               {user?.name?.slice(0, 2).toUpperCase()}
             </div>
             <div>
-              <div style={{ fontSize: 12, color: '#fff', fontWeight: 700, maxWidth: 110, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              <div style={{ fontSize: 11, color: '#fff', fontWeight: 700, maxWidth: 110, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                 {user?.name}
               </div>
-              <div style={{ fontSize: 9, color: 'var(--gold-400)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+              <div style={{ fontSize: 8, color: 'var(--gold-400)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
                 {user?.role}
               </div>
             </div>
@@ -374,9 +485,9 @@ export function Sidebar({
             onClick={onLogout}
             style={{
               background: 'none', border: 'none',
-              fontSize: 11, fontWeight: 700,
+              fontSize: 10, fontWeight: 700,
               color: '#ef9a9a', cursor: 'pointer',
-              padding: '6px 8px', borderRadius: 'var(--r-md)',
+              padding: '5px 8px', borderRadius: 'var(--r-md)',
               transition: 'background var(--t-fast)',
             }}
             onMouseEnter={e => (e.currentTarget.style.background = 'rgba(239,154,154,.1)')}
