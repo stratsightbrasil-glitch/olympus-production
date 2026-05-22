@@ -85,36 +85,39 @@ function Semaforo({ status }: { status: string }) {
 }
 
 // ─── Gauge de semicírculo ─────────────────────────────────────────────────────
-// Arc vai de 180° (esquerda) a 0° (direita) passando pelo topo — sweep=0 (anti-horário na tela).
+// Arc vai de 180° (esquerda) a 0° (direita) passando pelo TOPO.
+// sweep=1 = sentido horário no SVG (Y invertido) = arco superior.
+// Usa end=0.1° para evitar ambiguidade do SVG com arcos de exatamente 180°.
 function Gauge({ label, value, color }: { label: string; value: number; color: string }) {
-  const cx = 50, cy = 52, r = 38;
+  const cx = 50, cy = 54, r = 38;
   const toXY = (deg: number) => ({
     x: cx + r * Math.cos(deg * Math.PI / 180),
-    y: cy - r * Math.sin(deg * Math.PI / 180), // y invertido para coordenadas SVG
+    y: cy - r * Math.sin(deg * Math.PI / 180),
   });
-  const start = toXY(180); // esquerda
-  const end   = toXY(0);   // direita
+  const start = toXY(180);   // extremo esquerdo
+  const end   = toXY(0.1);   // extremo direito (0.1° evita ambiguidade de 180° exatos no SVG)
   const v = Math.max(0.5, Math.min(99.5, value));
-  const fillDeg = 180 - 180 * v / 100;
+  const fillDeg = 180 - 180 * v / 100;  // 0%→180° (esq), 100%→0° (dir)
   const fp = toXY(fillDeg);
 
+  // sweep=1 → sentido horário → arco pelo TOPO (comportamento correto)
   const arc = (x1: number, y1: number, x2: number, y2: number, large: number) =>
-    `M${x1.toFixed(1)},${y1.toFixed(1)} A${r},${r} 0 ${large},0 ${x2.toFixed(1)},${y2.toFixed(1)}`;
+    `M${x1.toFixed(2)},${y1.toFixed(2)} A${r},${r} 0 ${large},1 ${x2.toFixed(2)},${y2.toFixed(2)}`;
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, minWidth: 96 }}>
-      <svg width={100} height={66} viewBox="0 0 100 66" style={{ overflow: 'visible' }}>
-        {/* Track */}
+      <svg width={100} height={68} viewBox="0 0 100 68" style={{ overflow: 'visible' }}>
+        {/* Track (fundo cinza) — semicírculo superior completo */}
         <path d={arc(start.x, start.y, end.x, end.y, 0)}
           fill="none" stroke={PANEL2} strokeWidth={7} strokeLinecap="round" />
-        {/* Fill */}
+        {/* Fill — arco colorido proporcional ao valor */}
         {value > 1 && (
           <path d={arc(start.x, start.y, fp.x, fp.y, 0)}
             fill="none" stroke={color} strokeWidth={7} strokeLinecap="round"
             style={{ filter: `drop-shadow(0 0 4px ${color}80)` }} />
         )}
-        {/* Valor */}
-        <text x={50} y={50} textAnchor="middle" fontSize={15} fontWeight={700}
+        {/* Valor numérico */}
+        <text x={50} y={52} textAnchor="middle" fontSize={15} fontWeight={700}
           fill={value > 1 ? color : TEXT3} fontFamily="DM Mono, monospace">{value}%</text>
       </svg>
       <span style={{

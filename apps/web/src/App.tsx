@@ -751,35 +751,39 @@ function App() {
     if (loading || extracting || messages.length === 0) return;
 
     if (tipo === 'padrao') {
+      // O relatório padrão é sempre gerado pelo HERMES (orquestrador).
+      // Mensagens de outros agentes (THEMIS, KLIO, etc.) podem conter o texto
+      // "RELATÓRIO FINAL PADRÃO" como referência — não devem ser selecionadas.
       const patterns = ['RELATÓRIO FINAL PADRÃO', 'RELATÓRIO FINAL', 'RELATÓRIO DE CENÁRIOS', 'RELATÓRIO ESTRATÉGICO', 'RELATÓRIO PROSPECTIVO'];
       let targetMsg: {role: string, content: string, id?: string} | undefined;
-      // 1ª tentativa: padrão + HERMES + mais longa (relatório final é >> mensagens intermediárias)
+
+      // 1ª tentativa: encontra mensagens que contêm o padrão E foram escritas pelo HERMES
+      // (primeiros 100 chars contêm "**HERMES**" mas NÃO "HERMES_REVISOR")
+      const isHermes = (content: string) => {
+        const head = content.slice(0, 120).toUpperCase();
+        return head.includes('**HERMES**') && !head.includes('HERMES_REVISOR');
+      };
       for (const pat of patterns) {
-        const candidates = messages.filter(m =>
-          m.role === 'assistant' && m.content.toUpperCase().includes(pat)
+        const hermesPool = messages.filter(m =>
+          m.role === 'assistant' && isHermes(m.content) && m.content.toUpperCase().includes(pat)
         );
-        if (candidates.length > 0) {
-          const hermesPool = candidates.filter(m =>
-            m.content.toUpperCase().slice(0, 800).includes('HERMES')
-          );
-          const pool = hermesPool.length > 0 ? hermesPool : candidates;
-          // Pega a MAIS LONGA: o relatório final tem muito mais conteúdo que mensagens intermediárias
-          targetMsg = pool.reduce((a, b) => b.content.length > a.content.length ? b : a);
+        if (hermesPool.length > 0) {
+          // Pega a mais longa — o relatório final é sempre >> mensagens de status
+          targetMsg = hermesPool.reduce((a, b) => b.content.length > a.content.length ? b : a);
           break;
         }
       }
-      // 2ª tentativa: última mensagem longa com marcador HERMES
+
+      // 2ª tentativa: maior mensagem HERMES com > 1500 chars (relatório final é muito longo)
       if (!targetMsg) {
         const hermesMsgs = messages.filter(m =>
-          m.role === 'assistant' &&
-          (m.content.includes('**HERMES**') || m.content.includes('HERMES ·') ||
-           m.content.toUpperCase().slice(0, 400).includes('HERMES')) &&
-          m.content.length > 500
+          m.role === 'assistant' && isHermes(m.content) && m.content.length > 1500
         );
         if (hermesMsgs.length > 0)
           targetMsg = hermesMsgs.reduce((a, b) => b.content.length > a.content.length ? b : a);
       }
-      if (!targetMsg) return alert('Nenhum relatório final do HERMES encontrado. Conclua a análise primeiro.');
+
+      if (!targetMsg) return alert('Relatório Final Padrão não encontrado.\n\nCertifique-se de que o HERMES concluiu todas as etapas e gerou o relatório consolidado.');
       await exportSinglePdf(targetMsg.content);
 
     } else {

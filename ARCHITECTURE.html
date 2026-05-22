@@ -178,7 +178,7 @@ footer { background: var(--dark); color: #4A7A5A; text-align: center; padding: 1
   <div class="h-badge">StratSight Brasil · Strategic Foresight</div>
   <h1>OLYMPUS v4.0 — Architecture Map</h1>
   <div class="sub">Monorepo TypeScript · Hono + React · PostgreSQL + pgvector · Docker Compose · Vercel AI SDK v6</div>
-  <div class="meta">Gerado em: Abril 2026 &nbsp;·&nbsp; Referência rápida para desenvolvimento e onboarding</div>
+  <div class="meta">Atualizado em: Maio 2026 (Sprint 9) &nbsp;·&nbsp; Referência rápida para desenvolvimento e onboarding</div>
 </header>
 
 <div class="layout">
@@ -300,7 +300,9 @@ footer { background: var(--dark); color: #4A7A5A; text-align: center; padding: 1
 │       └── src/
 │           ├── App.tsx          → Componente raiz (~1700 linhas)
 │           ├── main.tsx         → Entry Vite
-│           └── constants.ts     → Endpoints, constantes
+│           ├── constants.ts     → Endpoints, constantes
+│           └── data/
+│               └── methodologySteps.ts → Etapas por metodologia · detecção regex · getMethodologySteps()
 ├── packages/
 │   ├── core/             @olympus/core — Motor de IA
 │   │   └── src/
@@ -376,8 +378,9 @@ app.listen(3333)</pre>
     <div class="card blue"><div class="ct">Auth + Roles</div><div class="cd">Login JWT, 2FA TOTP, auto-logout 401. Roles: <code>admin</code>, <code>analista</code>, <code>cliente</code> (read-only).</div></div>
     <div class="card blue"><div class="ct">Chat + SSE</div><div class="cd">SSE streaming via <code>/api/v1/chat/stream</code>. Cursor piscante enquanto o modelo escreve. Indicador de agente ativo.</div></div>
     <div class="card blue"><div class="ct">Sessões + Histórico</div><div class="cd">CRUD de projetos. Modal Nova Sessão (6 campos + upload + metodologia). Filtro de busca no histórico.</div></div>
-    <div class="card blue"><div class="ct">Exportação</div><div class="cd">⬇ Markdown · ⬇ DOCX · ⬇ PDF por mensagem. Relatório Padrão (busca "RELATÓRIO FINAL" do HERMES) + Estendido.</div></div>
-    <div class="card blue"><div class="ct">Painel KRATOS</div><div class="cd">Dashboard de indicadores com badges 🟢/🟡/🔴. Barra de proporção. Cards por severidade.</div></div>
+    <div class="card blue"><div class="ct">Exportação</div><div class="cd">⬇ Markdown · ⬇ DOCX · ⬇ PDF por mensagem. Relatório Padrão (helper <code>isHermes()</code> — busca <code>**HERMES**</code> sem <code>HERMES_REVISOR</code>) + Estendido.</div></div>
+    <div class="card blue"><div class="ct">Painel KRATOS</div><div class="cd">Dashboard de indicadores com badges 🟢/🟡/🔴. Barra de proporção. Cards por severidade. Gauges semicirculares SVG (<code>sweep-flag=1</code> — arco pelo topo).</div></div>
+    <div class="card blue"><div class="ct">Stepper Dinâmico</div><div class="cd">CommandBar e Sidebar exibem <code>{metodologia} · N/Total</code>. Etapa detectada via <code>**AGENTE**</code> nos markers + regex (<code>STEP_DETECTION_PATTERNS</code>). Definições em <code>data/methodologySteps.ts</code>; 6 metodologias cobertas. Prioridade: DB → estático.</div></div>
     <div class="card blue"><div class="ct">🔗 Link do Cliente</div><div class="cd">Copia URL <code>/api/v1/painel/project/:id?token=&lt;jwt&gt;</code>. Visível para admin/analista. Role <code>cliente</code> vê modo leitura.</div></div>
   </div>
 </section>
@@ -489,7 +492,7 @@ app.listen(3333)</pre>
 
   <h3>Painel, Engine e Admin</h3>
   <div class="route"><span class="method GET">GET</span><span class="route-path">/api/v1/painel/project/:id</span><span class="route-desc">Dashboard HTML cliente (auth via <code>?token=</code> ou Bearer)</span></div>
-  <div class="route"><span class="method GET">GET</span><span class="route-path">/api/v1/engine/methodologies</span><span class="route-desc">Listar metodologias do banco</span></div>
+  <div class="route"><span class="method GET">GET</span><span class="route-path">/api/v1/engine/methodologies</span><span class="route-desc">Listar metodologias do banco — retorna campo <code>steps</code> extraído do rich agentsConfig</span></div>
   <div class="route"><span class="method GET">GET</span><span class="route-path">/api/v1/engine/agents</span><span class="route-desc">Listar agentes do banco</span></div>
   <div class="route"><span class="method POST">POST</span><span class="route-path">/api/v1/engine/install</span><span class="route-desc">Instalar novo Motor (JSON) sem deploy</span></div>
   <div class="route"><span class="method POST">POST</span><span class="route-path">/api/v1/export</span><span class="route-desc">Gerar relatório (PDF / DOCX / JSON)</span></div>
@@ -568,7 +571,7 @@ app.listen(3333)</pre>
         <strong>description</strong> <span>text</span><br>
         <strong>category</strong> <span>text</span><br>
         <strong>isDefault</strong> <span>boolean</span><br>
-        <strong>agentsConfig</strong> <span>jsonb (['HERMES', 'SCOPUS', ...])</span><br>
+        <strong>agentsConfig</strong> <span>jsonb — formato rico: <code>{ agents: string[], steps: MethodologyStep[] }</code> ou legado: <code>string[]</code></span><br>
         <strong>createdAt</strong> <span>timestamp</span>
       </div>
     </div>
@@ -875,7 +878,7 @@ docker compose up -d
 </div>
 
 <footer>
-  OLYMPUS v4.0 &nbsp;·&nbsp; StratSight Brasil &nbsp;·&nbsp; Abril 2026 &nbsp;·&nbsp; Confidencial &nbsp;·&nbsp; Architecture Map
+  OLYMPUS v4.0 &nbsp;·&nbsp; StratSight Brasil &nbsp;·&nbsp; Maio 2026 &nbsp;·&nbsp; Confidencial &nbsp;·&nbsp; Architecture Map
 </footer>
 </body>
 </html>

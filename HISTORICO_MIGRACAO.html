@@ -262,7 +262,7 @@
   <div class="header-badge">StratSight Brasil · Strategic Foresight</div>
   <h1>OLYMPUS v4.0 — Histórico Consolidado de Arquitetura e Desenvolvimento</h1>
   <div class="subtitle">IA Agêntica · Motor ATHENA · Motor KRATOS · Monorepo TypeScript</div>
-  <div class="meta">Última atualização: 19 de Maio de 2026 (Sprint 8 — TechniqueEngine · NATO AltA · ICD 203 · Step Streaming) &nbsp;·&nbsp; Versão viva — atualizado a cada sprint</div>
+  <div class="meta">Última atualização: 21 de Maio de 2026 (Sprint 9 — Stepper Dinâmico por Metodologia · Gauge SVG · Seleção HERMES) &nbsp;·&nbsp; Versão viva — atualizado a cada sprint</div>
 </header>
 
 <div class="layout">
@@ -439,7 +439,7 @@
           <tr><td><code>projects</code></td><td>Projetos / sessões de análise</td></tr>
           <tr><td><code>messages</code></td><td>Mensagens do chat (id UUID, role, content, agentName, createdAt)</td></tr>
           <tr><td><code>agents</code></td><td>Definição dinâmica dos agentes (systemPrompt, toolsConfig)</td></tr>
-          <tr><td><code>methodologies</code></td><td>Metodologias disponíveis (agentsConfig como array JSON)</td></tr>
+          <tr><td><code>methodologies</code></td><td>Metodologias disponíveis (agentsConfig: JSONB — formato rico <code>{ agents: string[], steps: MethodologyStep[] }</code> ou legado array simples)</td></tr>
           <tr><td><code>indicators</code></td><td>Indicadores monitorados pelo KRATOS</td></tr>
           <tr><td><code>embeddings</code></td><td>Chunks de documentos indexados para RAG — projectId, chunkText, metadata JSONB, embedding <code>vector(512)</code> (Voyage AI)</td></tr>
           <tr><td><code>tools</code></td><td>Ferramentas registradas no motor</td></tr>
@@ -660,6 +660,15 @@ ITU_PASSWORD=...</pre>
       <li>Botão <code>🔗 Link do Cliente</code> na sidebar (admin/analista + projeto ativo): copia URL permanente com JWT embutido para o clipboard</li>
       <li>Role <code>cliente</code> passa a ser somente-leitura: sem Nova Sessão, sem KRATOS, sem exportação, sem exclusão de mensagens; banner "Modo leitura" no footer</li>
     </ul>
+
+    <h3>Sprint 9 — Stepper Dinâmico + Correções UI (21 Mai 2026)</h3>
+    <ul>
+      <li><strong>methodologySteps.ts:</strong> definições estáticas de etapas para 6 metodologias (MSEF · MACROPLAN · Grumbach · Godet · SIEX/EB · ALTA); padrões de detecção por agente (<code>STEP_DETECTION_PATTERNS</code>); <code>getMethodologySteps()</code> com prioridade DB → estático</li>
+      <li><strong>agentsConfig enriquecido:</strong> formato <code>{ agents: string[], steps: MethodologyStep[] }</code> sem migration (JSONB); retrocompatível em <code>chat.ts</code>; <code>GET /engine/methodologies</code> retorna campo <code>steps</code></li>
+      <li><strong>Stepper dinâmico:</strong> CommandBar e Sidebar removem hardcode MSEF; exibem <code>{metodologia} · N/Total</code>; detecção de etapa ativa por marcadores de agente e padrões regex nas mensagens</li>
+      <li><strong>Gauge SVG corrigido:</strong> <code>sweep-flag 0 → 1</code> (horário = arco pelo topo); endpoint <code>toXY(0.1°)</code> elimina ambiguidade de 180° exatos no SVG</li>
+      <li><strong>Relatório Padrão corrigido:</strong> helper <code>isHermes()</code> filtra estritamente <code>**HERMES**</code> sem <code>HERMES_REVISOR</code>; fallback removido — sem seleção acidental do THEMIS Etapa 6</li>
+    </ul>
   </section>
 
   <!-- 8 -->
@@ -743,6 +752,20 @@ ITU_PASSWORD=...</pre>
       <div class="bug-row"><span class="bug-label">Sintoma</span>Agentes executavam buscas mas entregavam frases de desculpa</div>
       <div class="bug-row"><span class="bug-label">Causa</span><code>maxTokens: 4096</code> não tinha espaço para a síntese final com contexto de busca</div>
       <div class="bug-row"><span class="bug-label">Solução</span><code>maxTokens: 32000</code> para etapa e thinking; <code>16000</code> para passagem</div>
+    </div>
+
+    <div class="bug-entry">
+      <h4>8.12 — Gauge SVG desenhando arco para baixo (fora do viewBox)</h4>
+      <div class="bug-row"><span class="bug-label">Sintoma</span>Semicírculo do gauge renderizado abaixo da viewBox (y&gt;68) — invisível; apenas os endpoints ficavam visíveis</div>
+      <div class="bug-row"><span class="bug-label">Causa</span><code>sweep-flag=0</code> (anti-horário) no SVG Arc percorre da esquerda para a direita passando pelo <em>fundo</em> (y=90), fora do viewBox de 68px de altura</div>
+      <div class="bug-row"><span class="bug-label">Solução</span><code>sweep-flag=1</code> (horário) → arco passa pelo <em>topo</em>. Ponto final em <code>toXY(0.1°)</code> em vez de <code>toXY(0°)</code> para evitar ambiguidade de arco de 180° exatos onde o browser pode escolher qualquer direção</div>
+    </div>
+
+    <div class="bug-entry">
+      <h4>8.13 — Relatório Padrão selecionando mensagem do THEMIS (Etapa 6)</h4>
+      <div class="bug-row"><span class="bug-label">Sintoma</span>Ao gerar "Relatório Padrão", o PDF exportado mostrava o conteúdo do THEMIS (Etapa 6) em vez do relatório consolidado do HERMES</div>
+      <div class="bug-row"><span class="bug-label">Causa</span>O bloco "PONTO DE DECISÃO" do THEMIS Etapa 6 contém a string "RELATÓRIO FINAL PADRÃO" como opção ao usuário. A lógica antiga usava um fallback (<code>hermesPool.length &gt; 0 ? hermesPool : candidates</code>) — quando nenhum relatório HERMES existia na sessão, selecionava qualquer mensagem com a string, incluindo a do THEMIS</div>
+      <div class="bug-row"><span class="bug-label">Solução</span>Helper <code>isHermes(content)</code>: verifica os primeiros 120 chars por <code>**HERMES**</code> excluindo <code>HERMES_REVISOR</code>. Fallback removido — sem HERMES real na sessão, exibe alert pedindo ao usuário concluir todas as etapas</div>
     </div>
   </section>
 
@@ -999,6 +1022,28 @@ swap=2GB</pre>
       <code>apps/api/src/tools/technique-engine.ts</code> <em>(novo)</em> &nbsp;·&nbsp;
       <code>apps/api/src/routes/chat.ts</code> &nbsp;·&nbsp;
       <code>apps/web/src/App.tsx</code>
+    </div>
+
+    <h3 style="margin-top:28px">✅ Sprint 9 — Stepper Dinâmico por Metodologia + Bug Fixes (21 Mai 2026)</h3>
+    <ul class="done-list">
+      <li><strong>apps/web/src/data/methodologySteps.ts (novo):</strong> <code>METHODOLOGY_DEFS</code> com etapas para MSEF · MACROPLAN · Grumbach · Godet · SIEX/EB · ALTA; <code>STEP_DETECTION_PATTERNS</code> com regex por agente; <code>getMethodologySteps()</code> com fallback DB → estático; <code>DEFAULT_STEPS</code> genérico</li>
+      <li><strong>CommandBar.tsx:</strong> prop <code>currentMsefStep</code> substituída por <code>currentStep</code> + <code>methodologyName</code> + <code>methodologySteps</code>; título <code>{metodologia} · N/Total</code> para qualquer metodologia registrada</li>
+      <li><strong>Sidebar.tsx:</strong> array MSEF_STEPS hardcoded removido; importa de <code>methodologySteps.ts</code>; props <code>currentStep</code> + <code>methodologySteps</code> adicionadas (retrocompatível com <code>currentMsefStep</code>)</li>
+      <li><strong>App.tsx:</strong> <code>currentMsefStep</code> substituído por <code>currentStep</code> com detecção genérica via marcadores <code>**AGENTE**</code> e padrões <code>STEP_DETECTION_PATTERNS</code>; passa <code>currentStep</code> e <code>currentMethodologySteps</code> para Sidebar e CommandBar</li>
+      <li><strong>chat.ts (seed MSEF):</strong> <code>agentsConfig</code> salvo como <code>{ agents: [...], steps: [...] }</code> em vez de array plano; parsing retrocompatível com <code>Array.isArray(rawCfg)</code></li>
+      <li><strong>engine.ts (GET /methodologies):</strong> retorna campo <code>steps</code> extraído do rich <code>agentsConfig.steps</code>; null para metodologias com formato legado</li>
+      <li><strong>KratosPanel.tsx (Gauge SVG):</strong> <code>sweep-flag 0 → 1</code>; endpoint <code>toXY(0.1°)</code>; arco agora renderiza pelo topo dentro da viewBox</li>
+      <li><strong>App.tsx (Relatório Padrão):</strong> helper <code>isHermes()</code>; fallback removido; alert informativo quando HERMES não encontrado na sessão</li>
+    </ul>
+    <div class="callout" style="background:#e8f5e9;border-color:#4caf50;margin-top:12px">
+      <strong>Arquivos modificados no Sprint 9:</strong>
+      <code>apps/web/src/data/methodologySteps.ts</code> <em>(novo)</em> &nbsp;·&nbsp;
+      <code>apps/web/src/components/layout/CommandBar.tsx</code> &nbsp;·&nbsp;
+      <code>apps/web/src/components/layout/Sidebar.tsx</code> &nbsp;·&nbsp;
+      <code>apps/web/src/App.tsx</code> &nbsp;·&nbsp;
+      <code>apps/web/src/components/layout/KratosPanel.tsx</code> &nbsp;·&nbsp;
+      <code>apps/api/src/routes/chat.ts</code> &nbsp;·&nbsp;
+      <code>apps/api/src/routes/engine.ts</code>
     </div>
 
     <h3 style="margin-top:28px">⛔ BLOQUEADORES — Caminho Crítico para o Primeiro Contrato</h3>
