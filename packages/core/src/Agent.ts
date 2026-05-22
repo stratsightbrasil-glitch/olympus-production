@@ -1,13 +1,31 @@
 import { generateText, streamText, jsonSchema, tool, stepCountIs } from "ai";
 import { anthropic } from "@ai-sdk/anthropic";
+import { createOpenAI } from "@ai-sdk/openai";
 import { AgentContext, Tool } from "./types";
 
 // ── Provider Factory ──────────────────────────────────────────────────────────
-// Lê LLM_PROVIDER do ambiente para suportar múltiplos provedores no futuro.
-// Adicionar novos providers aqui quando necessário (openai, gemini, ollama).
+// LLM_PROVIDER=anthropic (default) → Claude via Anthropic API
+// LLM_PROVIDER=ollama              → Ollama local via API OpenAI-compatível
+//   OLLAMA_BASE_URL  (default: http://ollama:11434/v1)
+//   OLLAMA_MODEL     (default: llama3.1:8b)
+// Adicionar novos providers aqui quando necessário (gemini, bedrock, etc.).
 function getModel() {
+  const provider = process.env.LLM_PROVIDER || 'anthropic';
+
+  if (provider === 'ollama') {
+    const baseURL  = process.env.OLLAMA_BASE_URL || 'http://ollama:11434/v1';
+    const modelName = process.env.OLLAMA_MODEL   || 'llama3.1:8b';
+    const ollama = createOpenAI({
+      baseURL,
+      apiKey: 'ollama',  // Ollama ignora a chave, mas o SDK exige o campo
+    });
+    console.log(`[Provider] Ollama — ${baseURL} / ${modelName}`);
+    return ollama(modelName);
+  }
+
+  // Default: Anthropic
   const modelName = process.env.ANTHROPIC_MODEL || 'claude-opus-4-7';
-  // Ponto único de expansão: quando LLM_PROVIDER !== 'anthropic', trocar aqui.
+  console.log(`[Provider] Anthropic — ${modelName}`);
   return anthropic(modelName);
 }
 

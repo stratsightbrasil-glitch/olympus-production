@@ -9,6 +9,7 @@
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^3.0.71",
+    "@ai-sdk/openai": "^3.0.65",
     "@anthropic-ai/sdk": "^0.20.1",
     "ai": "^6.0.168",
     "dotenv": "^16.4.5"

@@ -81,6 +81,26 @@ services:
         max-size: "10m"
         max-file: "3"
 
+  # ── Ollama (opcional — ativar com: docker compose --profile ollama up -d) ────
+  ollama:
+    image: ollama/ollama:latest
+    container_name: olympus_ollama
+    profiles: ["ollama"]
+    volumes:
+      - ollama_data:/root/.ollama
+    ports:
+      - "11434:11434"
+    deploy:
+      resources:
+        limits:
+          memory: 8192M   # 8 GB — suficiente para llama3.1:8b (CPU-only)
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
 volumes:
   pgdata:
   olympus_backups:
+  ollama_data:
