@@ -12,6 +12,8 @@ export interface AgentContext {
   /** Emite mensagem de progresso de etapa (ex: "🔧 web_search: query...") */
   onStep?: (msg: string) => void;
   dispatch?: (agentName: string, input: string) => Promise<string>;
+  /** Configuração de LLM ativa — sobrescreve as variáveis de ambiente */
+  llmConfig?: { provider: string; model: string };
 }
 
 export interface Tool<T = any> {

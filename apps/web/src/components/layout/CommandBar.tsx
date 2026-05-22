@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { AgentMark } from '../ui/AgentMark';
 import type { Agent } from '../ui/AgentMark/types';
 import type { MethodologyStep } from '../../data/methodologySteps';
@@ -28,6 +28,12 @@ interface CommandBarProps {
   // Linha 3 — stepper dinâmico
   methodologyName?: string;
   methodologySteps?: MethodologyStep[];
+  // Seletor LLM
+  llmConfig?: { provider: string; model: string };
+  anthropicModels?: { id: string; label: string }[];
+  ollamaModels?: { id: string; size?: number }[];
+  ollamaAvailable?: boolean;
+  onLlmChange?: (config: { provider: string; model: string }) => void;
 }
 
 // ─── Constantes ───────────────────────────────────────────────────────────────
@@ -79,6 +85,161 @@ function EngineChip({ mode }: { mode: string }) {
   );
 }
 
+// ─── Seletor de LLM ──────────────────────────────────────────────────────────
+
+const ANTHROPIC_DEFAULT = [
+  { id: 'claude-opus-4-7',   label: 'Claude Opus 4'     },
+  { id: 'claude-sonnet-4-5', label: 'Claude Sonnet 4.5' },
+  { id: 'claude-haiku-4-5',  label: 'Claude Haiku 4.5'  },
+];
+
+function modelShortLabel(provider: string, model: string): string {
+  if (provider === 'ollama') return `⚡ ${model}`;
+  if (model.includes('opus'))   return '☁ Opus 4';
+  if (model.includes('sonnet')) return '☁ Sonnet';
+  if (model.includes('haiku'))  return '☁ Haiku';
+  return `☁ ${model.split('-').slice(-2).join(' ')}`;
+}
+
+function LlmSelector({
+  llmConfig, anthropicModels, ollamaModels, ollamaAvailable, onLlmChange,
+}: {
+  llmConfig: { provider: string; model: string };
+  anthropicModels: { id: string; label: string }[];
+  ollamaModels: { id: string; size?: number }[];
+  ollamaAvailable: boolean;
+  onLlmChange?: (c: { provider: string; model: string }) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [open]);
+
+  const models = anthropicModels.length > 0 ? anthropicModels : ANTHROPIC_DEFAULT;
+  const isAdmin = !!onLlmChange;
+  const label = modelShortLabel(llmConfig.provider, llmConfig.model);
+
+  const chipStyle: React.CSSProperties = {
+    display: 'flex', alignItems: 'center', gap: 5,
+    padding: '4px 9px',
+    background: 'rgba(255,255,255,.06)',
+    border: '1px solid rgba(255,255,255,.14)',
+    borderRadius: 5,
+    fontSize: 11, color: '#A3C9AE',
+    fontFamily: "'DM Mono','Cascadia Code',monospace",
+    cursor: isAdmin ? 'pointer' : 'default',
+    whiteSpace: 'nowrap' as const,
+    position: 'relative' as const,
+    userSelect: 'none' as const,
+  };
+
+  const select = (provider: string, model: string) => {
+    onLlmChange?.({ provider, model });
+    setOpen(false);
+  };
+
+  return (
+    <div ref={ref} style={{ position: 'relative', flexShrink: 0 }}>
+      <div
+        style={chipStyle}
+        onClick={() => isAdmin && setOpen(o => !o)}
+        title={isAdmin ? 'Alterar provedor LLM' : `Provedor: ${llmConfig.provider} / ${llmConfig.model}`}
+      >
+        {label}
+        {isAdmin && <span style={{ fontSize: 8, opacity: .7, marginLeft: 2 }}>▾</span>}
+      </div>
+
+      {open && (
+        <div style={{
+          position: 'absolute', top: 'calc(100% + 6px)', right: 0,
+          background: '#1B2E23', border: '1px solid rgba(255,255,255,.14)',
+          borderRadius: 8, padding: '6px 0', minWidth: 220, zIndex: 999,
+          boxShadow: '0 8px 24px rgba(0,0,0,.4)',
+        }}>
+          {/* Anthropic */}
+          <div style={{ padding: '4px 12px 4px', fontSize: 9, color: '#6A9A7A', fontFamily: "'DM Mono',monospace", letterSpacing: 1.2, textTransform: 'uppercase' }}>
+            ☁ Anthropic
+          </div>
+          {models.map(m => {
+            const active = llmConfig.provider === 'anthropic' && llmConfig.model === m.id;
+            return (
+              <div
+                key={m.id}
+                onClick={() => select('anthropic', m.id)}
+                style={{
+                  padding: '7px 16px', fontSize: 12, cursor: 'pointer',
+                  color: active ? '#C9A84C' : '#A3C9AE',
+                  fontWeight: active ? 700 : 400,
+                  fontFamily: "'DM Sans',system-ui,sans-serif",
+                  display: 'flex', alignItems: 'center', gap: 8,
+                  background: 'transparent', transition: 'background .1s',
+                }}
+                onMouseEnter={e => (e.currentTarget.style.background = 'rgba(255,255,255,.07)')}
+                onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+              >
+                <span style={{ opacity: active ? 1 : 0, fontSize: 10 }}>●</span>
+                {m.label}
+              </div>
+            );
+          })}
+
+          {/* Divisor */}
+          <div style={{ height: 1, background: 'rgba(255,255,255,.08)', margin: '6px 0' }} />
+
+          {/* Ollama */}
+          <div style={{ padding: '4px 12px 4px', fontSize: 9, color: ollamaAvailable ? '#6A9A7A' : '#4A5A4A', fontFamily: "'DM Mono',monospace", letterSpacing: 1.2, textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: 6 }}>
+            ⚡ Ollama local
+            {!ollamaAvailable && <span style={{ fontSize: 8, color: '#6A5A4A' }}>offline</span>}
+          </div>
+          {ollamaAvailable && ollamaModels.length === 0 && (
+            <div style={{ padding: '6px 16px', fontSize: 11, color: '#6A9A7A', fontStyle: 'italic' }}>
+              Nenhum modelo baixado
+            </div>
+          )}
+          {!ollamaAvailable && (
+            <div style={{ padding: '6px 16px', fontSize: 11, color: '#6A5A4A', fontStyle: 'italic' }}>
+              Execute setup-ollama.ps1 para ativar
+            </div>
+          )}
+          {ollamaAvailable && ollamaModels.map(m => {
+            const active = llmConfig.provider === 'ollama' && llmConfig.model === m.id;
+            const sizeGB = m.size ? `${(m.size / 1e9).toFixed(1)} GB` : '';
+            return (
+              <div
+                key={m.id}
+                onClick={() => select('ollama', m.id)}
+                style={{
+                  padding: '7px 16px', fontSize: 12, cursor: 'pointer',
+                  color: active ? '#C9A84C' : '#A3C9AE',
+                  fontWeight: active ? 700 : 400,
+                  fontFamily: "'DM Mono','Cascadia Code',monospace",
+                  display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                  background: 'transparent', transition: 'background .1s',
+                }}
+                onMouseEnter={e => (e.currentTarget.style.background = 'rgba(255,255,255,.07)')}
+                onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+              >
+                <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span style={{ opacity: active ? 1 : 0, fontSize: 10 }}>●</span>
+                  {m.id}
+                </span>
+                {sizeGB && <span style={{ fontSize: 10, color: '#4A7A5A' }}>{sizeGB}</span>}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── CommandBar ───────────────────────────────────────────────────────────────
 
 export function CommandBar({
@@ -86,6 +247,7 @@ export function CommandBar({
   mainView, onToggleSidebar, onNovaSessao, onGerarRelatorio, onCopyClientLink, onToggleKratos,
   cliente, horizonte, questaoEstrategica, classificacao,
   methodologyName = 'MSEF', methodologySteps,
+  llmConfig, anthropicModels, ollamaModels, ollamaAvailable, onLlmChange,
 }: CommandBarProps) {
   const steps: MethodologyStep[] = methodologySteps ?? METHODOLOGY_DEFS[methodologyName] ?? DEFAULT_STEPS;
   const isCliente = user?.role === 'cliente';
@@ -184,6 +346,17 @@ export function CommandBar({
         )}
 
         <div style={{ flex: 1 }} />
+
+        {/* Seletor LLM — visível para todos, editável apenas para admin */}
+        {llmConfig && (
+          <LlmSelector
+            llmConfig={llmConfig}
+            anthropicModels={anthropicModels || []}
+            ollamaModels={ollamaModels || []}
+            ollamaAvailable={!!ollamaAvailable}
+            onLlmChange={onLlmChange}
+          />
+        )}
 
         {/* Botões de ação */}
         {!isCliente && (

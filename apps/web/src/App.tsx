@@ -231,6 +231,10 @@ function App() {
   const [analyticReview, setAnalyticReview] = useState<any>(null);
   const [showReviewModal, setShowReviewModal] = useState(false);
   const [methodologies, setMethodologies] = useState<any[]>([]);
+  const [llmConfig, setLlmConfig] = useState<{ provider: string; model: string }>({ provider: 'anthropic', model: 'claude-opus-4-7' });
+  const [anthropicModels, setAnthropicModels] = useState<{ id: string; label: string }[]>([]);
+  const [ollamaModels, setOllamaModels] = useState<{ id: string; size?: number }[]>([]);
+  const [ollamaAvailable, setOllamaAvailable] = useState(false);
 
   // ── Auth ─────────────────────────────────────────────────────────────────────
   // NUNCA lemos localStorage no início — o login deve sempre ser feito
@@ -301,6 +305,36 @@ function App() {
         .catch(err => console.error('Erro ao buscar metodologias:', err));
     }
   }, [token]);
+
+  // Busca configuração LLM ativa e modelos Ollama disponíveis
+  useEffect(() => {
+    if (!token) return;
+    fetch('/api/v1/settings', { headers: reqHeaders })
+      .then(r => r.ok ? r.json() : null)
+      .then(d => {
+        if (d?.llm) setLlmConfig(d.llm);
+        if (d?.anthropicModels) setAnthropicModels(d.anthropicModels);
+      })
+      .catch(() => {});
+    fetch('/api/v1/settings/ollama-models', { headers: reqHeaders })
+      .then(r => r.ok ? r.json() : null)
+      .then(d => {
+        if (d) { setOllamaAvailable(d.available); setOllamaModels(d.models || []); }
+      })
+      .catch(() => {});
+  }, [token]);
+
+  const handleLlmChange = async (config: { provider: string; model: string }) => {
+    try {
+      const res = await fetch('/api/v1/settings/llm', {
+        method: 'PATCH',
+        headers: reqHeaders,
+        body: JSON.stringify(config),
+      });
+      if (res.ok) setLlmConfig(config);
+      else alert((await res.json()).error || 'Erro ao alterar provedor LLM');
+    } catch { alert('Erro na requisição'); }
+  };
 
   const carregarIndicadores = async (projectId: string) => {
     try {
@@ -1521,6 +1555,11 @@ function App() {
           questaoEstrategica={projeto.questaoEstrategica}
           methodologyName={projeto.metodologia || 'MSEF'}
           methodologySteps={currentMethodologySteps}
+          llmConfig={llmConfig}
+          anthropicModels={anthropicModels}
+          ollamaModels={ollamaModels}
+          ollamaAvailable={ollamaAvailable}
+          onLlmChange={user?.role === 'admin' ? handleLlmChange : undefined}
         />
 
         <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>

@@ -28,6 +28,7 @@ import docsRoutes from './routes/docs';
 import signalsRouter from './routes/signals';
 import reviewsRouter from './routes/reviews';
 import kratosRoutes from './routes/kratos';
+import settingsRoutes from './routes/settings';
 
 const app = new Hono();
 
@@ -72,6 +73,7 @@ const PROTECTED_PREFIXES = [
   '/api/v1/signals',
   '/api/v1/reviews',
   '/api/v1/kratos',
+  '/api/v1/settings',
   '/api/v1/test-email',
 ];
 for (const prefix of PROTECTED_PREFIXES) {
@@ -92,6 +94,7 @@ app.route('/api/v1/embeddings', embeddingsRoutes);
 app.route('/api/v1/signals', signalsRouter);
 app.route('/api/v1/reviews', reviewsRouter);
 app.route('/api/v1/kratos', kratosRoutes);
+app.route('/api/v1/settings', settingsRoutes);
 app.route('/api/docs', docsRoutes);
 
 // Rota de Teste do Nodemailer (KRATOS Mock) — auth via PROTECTED_PREFIXES
@@ -130,6 +133,22 @@ serve({ fetch: app.fetch, port, hostname: '0.0.0.0' });
     try {
       await db.execute(sql`CREATE EXTENSION IF NOT EXISTS vector`);
       console.log('[pgvector] ✅ Extensão vector habilitada.');
+
+      // Tabela de configurações da plataforma (criada via raw SQL — sem migration)
+      await db.execute(sql`
+        CREATE TABLE IF NOT EXISTS platform_settings (
+          key         TEXT PRIMARY KEY,
+          value       JSONB NOT NULL,
+          updated_at  TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+        )
+      `);
+      await db.execute(sql`
+        INSERT INTO platform_settings (key, value)
+        VALUES ('llm', '{"provider":"anthropic","model":"claude-opus-4-7"}'::jsonb)
+        ON CONFLICT (key) DO NOTHING
+      `);
+      console.log('[Settings] ✅ Tabela platform_settings pronta.');
+
       await reloadCronJobs(app);
       console.log('[KRONOS] ✅ Cron jobs carregados com sucesso.');
       break;

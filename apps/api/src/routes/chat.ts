@@ -7,6 +7,7 @@ import { ragTool } from '../tools/rag';
 import { createSignalTools } from '../tools/signals';
 import { createAnalyticStandardsTools } from '../tools/analytic-standards';
 import { getTechniqueInstructions, getAltATechniquesForSeed } from '../tools/technique-engine';
+import { getLLMConfig } from './settings';
 import { eq, inArray } from 'drizzle-orm';
 
 const chatRoutes = new Hono();
@@ -730,6 +731,7 @@ async function runAnalysis(body: any, jwtPayload: any, cb: AnalysisCallbacks, op
   const vizMode       = body.vizMode || 'etapa';
   const metodologiaName = (body.metodologia as string) || 'MSEF';
   const projectName   = body.projectName || 'Novo Projeto';
+  const llmConfig     = await getLLMConfig();   // lê configuração ativa do banco
 
   const inputMsgStr = typeof rawInputMsg === 'string'
     ? rawInputMsg
@@ -847,6 +849,7 @@ async function runAnalysis(body: any, jwtPayload: any, cb: AnalysisCallbacks, op
     projectId,
     methodology: metodologiaName as any,
     memory: body.messages ? body.messages.slice(0, -1).slice(-12) : [],
+    llmConfig,
     onThinking: (text) => { thinkingContent = text; },
     onToken: cb.onToken,
     onStep: cb.onStep,

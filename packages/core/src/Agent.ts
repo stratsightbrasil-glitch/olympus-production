@@ -9,22 +9,19 @@ import { AgentContext, Tool } from "./types";
 //   OLLAMA_BASE_URL  (default: http://ollama:11434/v1)
 //   OLLAMA_MODEL     (default: llama3.1:8b)
 // Adicionar novos providers aqui quando necessário (gemini, bedrock, etc.).
-function getModel() {
-  const provider = process.env.LLM_PROVIDER || 'anthropic';
+function getModel(config?: { provider: string; model: string }) {
+  const provider = config?.provider || process.env.LLM_PROVIDER || 'anthropic';
 
   if (provider === 'ollama') {
-    const baseURL  = process.env.OLLAMA_BASE_URL || 'http://ollama:11434/v1';
-    const modelName = process.env.OLLAMA_MODEL   || 'llama3.1:8b';
-    const ollama = createOpenAI({
-      baseURL,
-      apiKey: 'ollama',  // Ollama ignora a chave, mas o SDK exige o campo
-    });
+    const baseURL   = process.env.OLLAMA_BASE_URL || 'http://ollama:11434/v1';
+    const modelName = config?.model || process.env.OLLAMA_MODEL || 'llama3.1:8b';
+    const ollama = createOpenAI({ baseURL, apiKey: 'ollama' });
     console.log(`[Provider] Ollama — ${baseURL} / ${modelName}`);
     return ollama(modelName);
   }
 
   // Default: Anthropic
-  const modelName = process.env.ANTHROPIC_MODEL || 'claude-opus-4-7';
+  const modelName = config?.model || process.env.ANTHROPIC_MODEL || 'claude-opus-4-7';
   console.log(`[Provider] Anthropic — ${modelName}`);
   return anthropic(modelName);
 }
@@ -340,7 +337,7 @@ export class Agent {
     };
 
     const sharedParams = {
-      model: getModel(),
+      model: getModel(context.llmConfig),
       system: this.systemPrompt,
       messages,
       tools: hasTools ? aiTools : undefined,
