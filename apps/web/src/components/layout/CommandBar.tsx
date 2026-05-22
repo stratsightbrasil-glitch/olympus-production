@@ -1,6 +1,8 @@
 import React from 'react';
 import { AgentMark } from '../ui/AgentMark';
 import type { Agent } from '../ui/AgentMark/types';
+import type { MethodologyStep } from '../../data/methodologySteps';
+import { METHODOLOGY_DEFS, DEFAULT_STEPS } from '../../data/methodologySteps';
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
 
@@ -10,7 +12,7 @@ interface CommandBarProps {
   projetoNome: string;
   progressAgent: string;
   streamingText: string;
-  currentMsefStep: number;
+  currentStep: number;
   user: { name: string; role: string } | null;
   mainView?: 'chat' | 'kratos';
   onToggleSidebar: () => void;
@@ -23,17 +25,16 @@ interface CommandBarProps {
   horizonte?: string;
   questaoEstrategica?: string;
   classificacao?: string;
+  // Linha 3 — stepper dinâmico
+  methodologyName?: string;
+  methodologySteps?: MethodologyStep[];
 }
 
 // ─── Constantes ───────────────────────────────────────────────────────────────
 
-const MSEF_STEPS: { num: number; agent: Agent; label: string }[] = [
-  { num: 1, agent: 'SCOPUS',    label: 'Escopo'    },
-  { num: 2, agent: 'KLIO',      label: 'Drivers'   },
-  { num: 3, agent: 'PYTHIA',    label: 'Eixos'     },
-  { num: 4, agent: 'MNEMOSYNE', label: 'Narrativas'},
-  { num: 5, agent: 'THEMIS',    label: 'Implicações'},
-];
+// Mantido apenas para retrocompatibilidade com usos externos se houver.
+// O CommandBar usa methodologySteps prop ou fallback via METHODOLOGY_DEFS.
+const _MSEF_STEPS_LEGACY = METHODOLOGY_DEFS['MSEF'] ?? DEFAULT_STEPS;
 
 const CLASSIF_COLORS: Record<string, { bg: string; color: string; border: string }> = {
   confidencial: { bg: '#FFF3E0', color: '#E65100', border: '#FFB74D' },
@@ -81,10 +82,12 @@ function EngineChip({ mode }: { mode: string }) {
 // ─── CommandBar ───────────────────────────────────────────────────────────────
 
 export function CommandBar({
-  mode, projetoNome, progressAgent, streamingText, currentMsefStep, user,
+  mode, projetoNome, progressAgent, streamingText, currentStep, user,
   mainView, onToggleSidebar, onNovaSessao, onGerarRelatorio, onCopyClientLink, onToggleKratos,
   cliente, horizonte, questaoEstrategica, classificacao,
+  methodologyName = 'MSEF', methodologySteps,
 }: CommandBarProps) {
+  const steps: MethodologyStep[] = methodologySteps ?? METHODOLOGY_DEFS[methodologyName] ?? DEFAULT_STEPS;
   const isCliente = user?.role === 'cliente';
   const activeAgent = progressAgent || (streamingText ? 'HERMES' : '');
 
@@ -306,7 +309,7 @@ export function CommandBar({
         </div>
       )}
 
-      {/* ── LINHA 3 · Stepper MSEF ──────────────────────────────────────── */}
+      {/* ── LINHA 3 · Stepper dinâmico por metodologia ──────────────────── */}
       {hasStepper && (
         <div style={{
           height: 46, background: '#F2F7F4',
@@ -319,13 +322,13 @@ export function CommandBar({
             fontSize: 9, letterSpacing: '1.4px', color: '#1B3A2D',
             textTransform: 'uppercase', fontWeight: 700, marginRight: 8, flexShrink: 0,
           }}>
-            MSEF · {Math.max(1, currentMsefStep)}/5
+            {methodologyName} · {Math.max(1, currentStep)}/{steps.length}
           </span>
 
-          {MSEF_STEPS.map((step, idx) => {
-            const done   = currentMsefStep > step.num;
-            const active = currentMsefStep === step.num;
-            const future = currentMsefStep < step.num;
+          {steps.map((step, idx) => {
+            const done   = currentStep > step.num;
+            const active = currentStep === step.num;
+            const future = currentStep < step.num;
             return (
               <React.Fragment key={step.num}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -349,7 +352,7 @@ export function CommandBar({
                     )}
                   </div>
                 </div>
-                {idx < MSEF_STEPS.length - 1 && (
+                {idx < steps.length - 1 && (
                   <div style={{
                     flex: 1, height: 1.5,
                     background: done ? '#5A9E6F' : '#D4E2DA',

@@ -1,16 +1,8 @@
 import React, { useRef, useEffect, useState } from 'react';
 import { AgentMark } from '../ui/AgentMark';
 import type { Agent } from '../ui/AgentMark/types';
-
-// ─── Dados MSEF ──────────────────────────────────────────────────────────────
-
-const MSEF_STEPS: { num: number; agent: Agent; label: string }[] = [
-  { num: 1, agent: 'SCOPUS',    label: 'Escopo'      },
-  { num: 2, agent: 'KLIO',      label: 'Drivers'     },
-  { num: 3, agent: 'PYTHIA',    label: 'Eixos'       },
-  { num: 4, agent: 'MNEMOSYNE', label: 'Narrativas'  },
-  { num: 5, agent: 'THEMIS',    label: 'Implicações' },
-];
+import type { MethodologyStep } from '../../data/methodologySteps';
+import { METHODOLOGY_DEFS, DEFAULT_STEPS } from '../../data/methodologySteps';
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
 
@@ -39,7 +31,9 @@ interface SidebarProps {
   analyticReview: Record<string, string> | null;
   sessionId: string;
   exportingPdf: boolean;
-  currentMsefStep: number;
+  currentMsefStep: number;   // mantido por retrocompatibilidade — use currentStep
+  currentStep?: number;
+  methodologySteps?: MethodologyStep[];
   mode: string;
   vizMode: string;
   onModeChange: (m: string) => void;
@@ -66,21 +60,22 @@ interface SidebarProps {
 
 function getCtaAction(
   projeto: SidebarProps['projeto'],
-  currentMsefStep: number,
+  step: number,
+  steps: MethodologyStep[],
   callbacks: Pick<SidebarProps, 'onNovaSessao' | 'onGerarRelatorioPadrao'>,
 ): { label: string; hint: string; onClick: (() => void) | undefined } {
   if (!projeto.nome) {
     return { label: 'Iniciar nova análise', hint: 'Configure o escopo do projeto.', onClick: callbacks.onNovaSessao };
   }
-  if (currentMsefStep === 0) {
+  if (step === 0) {
     return { label: 'Iniciar análise', hint: 'Pronto para o primeiro agente.', onClick: callbacks.onNovaSessao };
   }
-  if (currentMsefStep < 5) {
-    const next = MSEF_STEPS[currentMsefStep]; // próxima etapa (0-indexed)
+  if (step < steps.length) {
+    const next = steps[step]; // próxima etapa (0-indexed, step já aponta para o próximo)
     return {
-      label: `Avançar para ${next?.label ?? `Etapa ${currentMsefStep + 1}`}`,
-      hint: `Aguardando conclusão da etapa ${currentMsefStep}.`,
-      onClick: undefined, // avança automaticamente quando o agente terminar
+      label: `Avançar para ${next?.label ?? `Etapa ${step + 1}`}`,
+      hint: `Aguardando conclusão da etapa ${step}.`,
+      onClick: undefined,
     };
   }
   return { label: 'Gerar relatório', hint: 'Análise concluída — exporte o PDF.', onClick: callbacks.onGerarRelatorioPadrao };
@@ -142,7 +137,7 @@ function SessionCard({ s, onClick, onDelete }: {
 export function Sidebar({
   open, user, projeto, sessoes, showSessoes, sessionSearch, filterStatus,
   analyticReview, sessionId, exportingPdf,
-  currentMsefStep,
+  currentMsefStep, currentStep, methodologySteps,
   onNovaSessao, onShowUsers, onShowBackup,
   onCopyClientLink, onShowReviewModal, onGerarRelatorioPadrao, onGerarRelatorioEstendido,
   onShowSettings, onToggleSessoes, onSessionSearchChange, onFilterChange,
@@ -157,11 +152,16 @@ export function Sidebar({
     }
   }, [showSessoes]);
 
-  const isMSEF = projeto.metodologia === 'MSEF';
+  // step ativo: prefere currentStep (novo), fallback para currentMsefStep (legado)
+  const activeStep = currentStep ?? currentMsefStep;
+  const steps: MethodologyStep[] = methodologySteps
+    ?? METHODOLOGY_DEFS[projeto.metodologia]
+    ?? DEFAULT_STEPS;
+
   const isAdmin = user?.role === 'admin';
   const isCliente = user?.role === 'cliente';
 
-  const cta = getCtaAction(projeto, currentMsefStep, { onNovaSessao, onGerarRelatorioPadrao });
+  const cta = getCtaAction(projeto, activeStep, steps, { onNovaSessao, onGerarRelatorioPadrao });
 
   // Badge de status do projeto
   const STATUS_MAP: Record<string, { label: string; bg: string; color: string }> = {
@@ -247,7 +247,7 @@ export function Sidebar({
               {projeto.nome}
             </div>
             <div style={{ marginTop: 8, fontFamily: "'DM Mono','Cascadia Code',monospace", fontSize: 9.5, color: '#A3C9AE', letterSpacing: '.5px' }}>
-              {isMSEF ? `MSEF · ETAPA ${Math.max(1, currentMsefStep)} · ` : ''}
+              {projeto.metodologia ? `${projeto.metodologia} · ETAPA ${Math.max(1, activeStep)} · ` : ''}
               <span style={{ background: statusStyle.bg, color: statusStyle.color, padding: '1px 5px', borderRadius: 2, fontWeight: 700, letterSpacing: '1px', fontSize: 9 }}>
                 {statusStyle.label}
               </span>

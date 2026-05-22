@@ -8,6 +8,7 @@ import { AgentMark } from './components/ui/AgentMark';
 import { InputZone } from './components/chat/InputZone';
 import { RightPanel } from './components/layout/RightPanel';
 import { KratosPanel } from './components/layout/KratosPanel';
+import { getMethodologySteps, STEP_DETECTION_PATTERNS } from './data/methodologySteps';
 
 function UsersModal({ onClose, reqHeaders }: { onClose: () => void, reqHeaders: any }) {
   const [usersList, setUsersList] = useState<any[]>([]);
@@ -425,32 +426,28 @@ function App() {
     return foundKey ? { name: foundKey, ...AGENTS[foundKey] } : { name: 'ATHENA', ...AGENTS.ATHENA };
   };
 
-  // ── MSEF step derivado das mensagens ──────────────────────────────────────────
-  const MSEF_AGENT_ORDER = ['SCOPUS', 'KLIO', 'PYTHIA', 'MNEMOSYNE', 'THEMIS'];
-  // Padrões alternativos para sessões antigas (sem marcador "AGENTE ·")
-  const MSEF_FALLBACK_PATTERNS: Record<string, RegExp[]> = {
-    THEMIS:    [/implica[çc][oõ]es\s+estrat[eé]gicas/i, /THEMIS/i],
-    MNEMOSYNE: [/narrativa[s]?\s+de\s+cen[aá]rio/i, /MNEMOSYNE/i],
-    PYTHIA:    [/eixo[s]?\s+(de\s+)?incerteza/i, /matriz\s*2[x×]2/i, /PYTHIA/i],
-    KLIO:      [/driver[s]?\s+da\s+mudan[çc]a/i, /força[s]?\s+motrizes/i, /V[1-5]\s*[—–-]/i, /KLIO/i],
-    SCOPUS:    [/escopo\s+da\s+an[aá]lise/i, /SCOPUS/i],
-  };
-  const currentMsefStep = useMemo(() => {
-    for (let i = MSEF_AGENT_ORDER.length - 1; i >= 0; i--) {
-      const agent = MSEF_AGENT_ORDER[i];
-      const patterns = MSEF_FALLBACK_PATTERNS[agent] ?? [];
+  // ── Etapas da metodologia atual ───────────────────────────────────────────────
+  const currentMethodologySteps = useMemo(
+    () => getMethodologySteps(projeto.metodologia, methodologies),
+    [projeto.metodologia, methodologies],
+  );
+
+  // ── Passo atual derivado do histórico de mensagens ────────────────────────────
+  // Funciona para qualquer metodologia: detecta o agente mais avançado no histórico.
+  const currentStep = useMemo(() => {
+    for (let i = currentMethodologySteps.length - 1; i >= 0; i--) {
+      const agent = currentMethodologySteps[i].agent;
+      const patterns = STEP_DETECTION_PATTERNS[agent] ?? [];
       const found = messages.some(m => {
         if (m.role !== 'assistant') return false;
         const c = m.content;
-        // marcador padrão
         if (c.includes(`${agent} ·`) || c.includes(`**${agent}**`)) return true;
-        // padrões de conteúdo para sessões sem marcador
         return patterns.some(re => re.test(c));
       });
       if (found) return i + 1;
     }
     return messages.length > 0 ? 1 : 0;
-  }, [messages]);
+  }, [messages, currentMethodologySteps]);
 
   // ── Nova Sessão: upload de arquivos de contexto ──────────────────────────────
   const handleScopeFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -1448,7 +1445,9 @@ function App() {
         analyticReview={analyticReview}
         sessionId={sessionId}
         exportingPdf={exportingPdf}
-        currentMsefStep={currentMsefStep}
+        currentMsefStep={currentStep}
+        currentStep={currentStep}
+        methodologySteps={currentMethodologySteps}
         mode={mode}
         vizMode={vizMode}
         onModeChange={m => setMode(m)}
@@ -1495,7 +1494,7 @@ function App() {
           projetoNome={projeto.nome}
           progressAgent={progressAgent}
           streamingText={streamingText}
-          currentMsefStep={currentMsefStep}
+          currentStep={currentStep}
           user={user}
           mainView={mainView}
           onToggleKratos={() => setMainView(v => v === 'kratos' ? 'chat' : 'kratos')}
@@ -1516,6 +1515,8 @@ function App() {
           cliente={projeto.cliente}
           horizonte={projeto.horizonte}
           questaoEstrategica={projeto.questaoEstrategica}
+          methodologyName={projeto.metodologia || 'MSEF'}
+          methodologySteps={currentMethodologySteps}
         />
 
         <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>

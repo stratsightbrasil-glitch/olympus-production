@@ -88,10 +88,17 @@ engineRoutes.post('/install', async (c) => {
 });
 
 // Endpoint para listar as metodologias disponíveis
+// Retorna dados completos incluindo steps (do agentsConfig rico quando disponível)
 engineRoutes.get('/methodologies', async (c) => {
   try {
     const list = await db.query.methodologies.findMany();
-    return c.json(list);
+    return c.json(list.map(m => {
+      const cfg = m.agentsConfig;
+      const steps = (cfg && !Array.isArray(cfg) && Array.isArray((cfg as any).steps))
+        ? (cfg as any).steps
+        : null;
+      return { ...m, steps };
+    }));
   } catch (e: any) {
     return c.json({ error: e.message }, 500);
   }

@@ -441,17 +441,29 @@ IMPORTANTE: Inicie sempre com "**HERMES_REVISOR** · ".`,
       }
     }
 
+    // Configuração rica: inclui agentes E etapas para o stepper do frontend
+    const msefAgentsConfig = {
+      agents: defaultAgents.map(a => a.name),
+      steps: [
+        { num: 1, agent: 'SCOPUS',    label: 'Escopo'      },
+        { num: 2, agent: 'KLIO',      label: 'Drivers'     },
+        { num: 3, agent: 'PYTHIA',    label: 'Cenários'    },
+        { num: 4, agent: 'MNEMOSYNE', label: 'Narrativas'  },
+        { num: 5, agent: 'THEMIS',    label: 'Implicações' },
+      ],
+    };
+
     if (!method) {
       await db.insert(methodologies).values({
         name: 'MSEF',
         description: 'Método Multidimensional de Exploração de Futuros',
         category: 'Cenários Prospectivos',
         isDefault: true,
-        agentsConfig: defaultAgents.map(a => a.name)
+        agentsConfig: msefAgentsConfig,
       });
     } else {
-      // Garante que agentsConfig reflita sempre a lista atualizada
-      await db.update(methodologies).set({ agentsConfig: defaultAgents.map(a => a.name) })
+      // Garante que agentsConfig reflita sempre a lista atualizada (com etapas)
+      await db.update(methodologies).set({ agentsConfig: msefAgentsConfig })
         .where(eq(methodologies.name, 'MSEF'));
     }
 
@@ -751,7 +763,18 @@ async function runAnalysis(body: any, jwtPayload: any, cb: AnalysisCallbacks, op
     throw new Error(`Metodologia '${metodologiaName}' não encontrada ou sem agentes configurados.`);
   }
 
-  const requiredAgentNames = method.agentsConfig as string[];
+  // Suporta dois formatos de agentsConfig:
+  // • Legado: ["HERMES", "SCOPUS", ...] (array de strings)
+  // • Novo:   { agents: ["HERMES", ...], steps: [...] }
+  const rawCfg = method.agentsConfig;
+  let requiredAgentNames: string[];
+  if (Array.isArray(rawCfg)) {
+    requiredAgentNames = rawCfg as string[];
+  } else if (rawCfg && typeof rawCfg === 'object' && Array.isArray((rawCfg as any).agents)) {
+    requiredAgentNames = (rawCfg as any).agents as string[];
+  } else {
+    throw new Error(`agentsConfig inválido para metodologia '${metodologiaName}'.`);
+  }
   const dbAgents = await db.query.agents.findMany({ where: inArray(agentsTable.name, requiredAgentNames) });
   if (dbAgents.length === 0) {
     throw new Error(`Nenhum agente encontrado no banco para a metodologia '${metodologiaName}'.`);
