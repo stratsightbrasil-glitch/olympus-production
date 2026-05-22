@@ -228,7 +228,7 @@ export function Sidebar({
           </div>
           <div>
             <div style={{ fontFamily: "'Fraunces',Georgia,serif", fontWeight: 700, fontSize: 15, letterSpacing: '1px', color: '#fff', lineHeight: 1 }}>OLYMPUS</div>
-            <div style={{ fontFamily: "'DM Mono','Cascadia Code',monospace", fontSize: 9, letterSpacing: '1.4px', color: '#D9BF73', marginTop: 1, fontWeight: 600 }}>v5.0 · STRATSIGHT BR</div>
+            <div style={{ fontFamily: "'DM Mono','Cascadia Code',monospace", fontSize: 9, letterSpacing: '1.4px', color: '#D9BF73', marginTop: 1, fontWeight: 600 }}>v1.0 · STRATSIGHT BR</div>
           </div>
         </div>
 

@@ -20,6 +20,7 @@ interface DashboardData {
   projeto: { id: string; nome: string; kratosCron: string; alertEmails: string };
   indicadores: Indicator[]; sinais: Signal[]; sinalStats: Record<string, number>;
   overallStatus: string; lastKratosAt: string | null; lastKratosExcerpt: string | null;
+  scenarioProbabilities: { q1: number; q2: number; q3: number; q4: number } | null;
 }
 interface KratosPanelProps {
   sessionId: string; reqHeaders: Record<string, string>;
@@ -368,9 +369,21 @@ export function KratosPanel({ sessionId, reqHeaders, onRunKratos, onSettings }: 
     </div>
   );
 
-  const { indicadores, sinais, sinalStats, overallStatus, lastKratosAt, lastKratosExcerpt } = data;
+  const { indicadores, sinais, sinalStats, overallStatus, lastKratosAt, lastKratosExcerpt, scenarioProbabilities } = data;
   const stColor   = CLR[overallStatus] ?? CLR.verde;
-  const scenarios = parseScenarios(lastKratosExcerpt);
+
+  // Usa probabilidades do API (server-side parser, full message); fallback ao parser local do excerpt
+  const scenarios: { label: string; value: number; color: string }[] = (() => {
+    const COLORS  = [CLR.verde, '#2196F3', CLR.amarelo, CLR.vermelho];
+    const LABELS  = ['Q1 — Base', 'Q2 — Alt.', 'Q3 — Adv.', 'Q4 — Crise'];
+    if (scenarioProbabilities) {
+      const sp = scenarioProbabilities;
+      return [sp.q1, sp.q2, sp.q3, sp.q4]
+        .map((v, i) => ({ label: LABELS[i], value: v, color: COLORS[i] }))
+        .filter(g => g.value > 0);
+    }
+    return parseScenarios(lastKratosExcerpt);
+  })();
 
   const RADAR_ORDER = ['materializado', 'amplificando', 'monitorando', 'arquivado'];
   const sinaisFiltrados = radarFilter
@@ -539,20 +552,67 @@ export function KratosPanel({ sessionId, reqHeaders, onRunKratos, onSettings }: 
           </div>
         </div>
 
-        {/* ── Última análise KRATOS ─────────────────────────────────────── */}
-        {lastKratosExcerpt && (
-          <div style={{
-            background: PANEL, border: `1px solid ${BORDER}`, borderRadius: 12,
-            padding: '14px 16px', flexShrink: 0,
-          }}>
-            <div style={{
-              fontSize: 8, letterSpacing: 2, color: GOLD,
-              fontFamily: "'DM Mono', monospace", textTransform: 'uppercase', fontWeight: 700, marginBottom: 8,
-            }}>Última Análise KRATOS</div>
-            <p style={{ fontSize: 11, color: TEXT2, lineHeight: 1.8, margin: 0 }}>
-              {lastKratosExcerpt}
-              {lastKratosExcerpt.length >= 500 && <span style={{ color: TEXT3 }}> …</span>}
-            </p>
+        {/* ── Dossiê — sinais agrupados por Driver/Cluster ───────────────── */}
+        {(() => {
+          const comCluster = sinais.filter(s => (s as any).clusterId);
+          if (comCluster.length === 0) return null;
+          const clusters: Record<string, Signal[]> = {};
+          comCluster.forEach(s => {
+            const k = (s as any).clusterId as string;
+            if (!clusters[k]) clusters[k] = [];
+            clusters[k].push(s);
+          });
+          return (
+            <div style={{ background: PANEL, border: `1px solid ${BORDER}`, borderRadius: 12, overflow: 'hidden', flexShrink: 0 }}>
+              <div style={{ padding: '9px 14px', borderBottom: `1px solid ${BORDER}`, display: 'flex', alignItems: 'center', gap: 10 }}>
+                <span style={{ fontSize: 8, letterSpacing: 2, color: GOLD, fontFamily: "'DM Mono', monospace", textTransform: 'uppercase', fontWeight: 700 }}>Dossiê · Drivers Estratégicos</span>
+                <span style={{ fontSize: 10, color: TEXT3 }}>{Object.keys(clusters).length} drivers</span>
+              </div>
+              {Object.entries(clusters).map(([cluster, clSinais]) => {
+                const worst = clSinais.some(s => s.statusRadar === 'materializado') ? 'vermelho'
+                  : clSinais.some(s => s.statusRadar === 'amplificando') ? 'amarelo' : 'verde';
+                return (
+                  <div key={cluster} style={{ borderBottom: `1px solid ${BORDER}` }}>
+                    <div style={{ padding: '8px 14px', display: 'flex', alignItems: 'center', gap: 8, background: 'rgba(255,255,255,.02)' }}>
+                      <span style={{ width: 8, height: 8, borderRadius: '50%', background: CLR[worst], boxShadow: `0 0 6px ${CLR[worst]}`, flexShrink: 0 }} />
+                      <span style={{ flex: 1, fontSize: 11, fontWeight: 700, color: TEXT1 }}>{cluster}</span>
+                      <span style={{ fontSize: 9, color: TEXT3 }}>{clSinais.length} sinais</span>
+                    </div>
+                    <div style={{ paddingLeft: 22 }}>
+                      {clSinais.slice(0, 3).map(s => (
+                        <div key={s.id} style={{ padding: '5px 14px 5px 0', borderTop: `1px solid ${BORDER}`, display: 'flex', alignItems: 'center', gap: 6 }}>
+                          <span style={{ width: 5, height: 5, borderRadius: '50%', background: RADAR_CLR[s.statusRadar] ?? '#2196F3', flexShrink: 0 }} />
+                          <span style={{ fontSize: 10, color: TEXT2, flex: 1 }}>{s.titulo}</span>
+                        </div>
+                      ))}
+                      {clSinais.length > 3 && <div style={{ padding: '4px 0 6px', fontSize: 9, color: TEXT3 }}>+ {clSinais.length - 3} sinais</div>}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          );
+        })()}
+
+        {/* ── Última análise — botão para abrir relatório completo ───────── */}
+        {lastKratosAt && (
+          <div style={{ background: PANEL, border: `1px solid ${BORDER}`, borderRadius: 12, padding: '12px 16px', flexShrink: 0, display: 'flex', alignItems: 'center', gap: 12 }}>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: 8, letterSpacing: 2, color: GOLD, fontFamily: "'DM Mono', monospace", textTransform: 'uppercase', fontWeight: 700, marginBottom: 3 }}>Última Análise KRATOS</div>
+              <div style={{ fontSize: 10, color: TEXT2 }}>{fmtDate(lastKratosAt)}</div>
+            </div>
+            <button
+              onClick={() => {
+                fetch(`/api/v1/kratos/${sessionId}/report/html`, { headers: reqHeaders })
+                  .then(r => r.text())
+                  .then(html => {
+                    const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
+                    window.open(URL.createObjectURL(blob), '_blank');
+                  })
+                  .catch(() => alert('Erro ao carregar relatório'));
+              }}
+              style={{ background: GOLD, color: DARK, border: 'none', borderRadius: 8, padding: '8px 16px', fontWeight: 700, fontSize: 11, cursor: 'pointer', flexShrink: 0 }}
+            >📄 Ver Relatório</button>
           </div>
         )}
 

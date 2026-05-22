@@ -143,7 +143,7 @@ export function AthenaLockup({
               ATHENA
             </div>
             <div style={{ fontFamily: "'DM Mono','Cascadia Code',monospace", fontSize: px * 0.10, color: '#6B8C7A', letterSpacing: '1.4px', marginTop: 2 }}>
-              v2.0 · MOTOR ATIVO
+              v1.0 · MOTOR ATIVO
             </div>
           </div>
         )}
@@ -161,7 +161,7 @@ export function AthenaLockup({
           </div>
           {size !== 'sm' && (
             <div style={{ fontFamily: "'DM Mono','Cascadia Code',monospace", fontSize: Math.max(7, px * 0.15), color: '#D9BF73', letterSpacing: '1.2px', marginTop: 2 }}>
-              v2.0 · MOTOR
+              v1.0 · MOTOR
             </div>
           )}
         </div>

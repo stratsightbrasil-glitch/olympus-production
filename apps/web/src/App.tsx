@@ -756,31 +756,31 @@ function App() {
     if (tipo === 'padrao') {
       const patterns = ['RELATÓRIO FINAL PADRÃO', 'RELATÓRIO FINAL', 'RELATÓRIO DE CENÁRIOS', 'RELATÓRIO ESTRATÉGICO', 'RELATÓRIO PROSPECTIVO'];
       let targetMsg: {role: string, content: string, id?: string} | undefined;
-      // 1ª tentativa: padrão + assinatura HERMES (evita capturar mensagens intermediárias de outros agentes)
+      // 1ª tentativa: padrão + HERMES + mais longa (relatório final é >> mensagens intermediárias)
       for (const pat of patterns) {
-        targetMsg = [...messages].reverse().find(m =>
-          m.role === 'assistant' &&
-          m.content.toUpperCase().includes(pat) &&
-          m.content.toUpperCase().slice(0, 600).includes('HERMES')
+        const candidates = messages.filter(m =>
+          m.role === 'assistant' && m.content.toUpperCase().includes(pat)
         );
-        if (targetMsg) break;
+        if (candidates.length > 0) {
+          const hermesPool = candidates.filter(m =>
+            m.content.toUpperCase().slice(0, 800).includes('HERMES')
+          );
+          const pool = hermesPool.length > 0 ? hermesPool : candidates;
+          // Pega a MAIS LONGA: o relatório final tem muito mais conteúdo que mensagens intermediárias
+          targetMsg = pool.reduce((a, b) => b.content.length > a.content.length ? b : a);
+          break;
+        }
       }
-      // 2ª tentativa: última mensagem com marcador HERMES explícito
+      // 2ª tentativa: última mensagem longa com marcador HERMES
       if (!targetMsg) {
-        targetMsg = [...messages].reverse().find(m =>
+        const hermesMsgs = messages.filter(m =>
           m.role === 'assistant' &&
           (m.content.includes('**HERMES**') || m.content.includes('HERMES ·') ||
-           m.content.toUpperCase().slice(0, 300).includes('HERMES'))
+           m.content.toUpperCase().slice(0, 400).includes('HERMES')) &&
+          m.content.length > 500
         );
-      }
-      // 3ª tentativa: qualquer mensagem com os padrões (fallback sem filtro de agente)
-      if (!targetMsg) {
-        for (const pat of patterns) {
-          targetMsg = [...messages].reverse().find(m =>
-            m.role === 'assistant' && m.content.toUpperCase().includes(pat)
-          );
-          if (targetMsg) break;
-        }
+        if (hermesMsgs.length > 0)
+          targetMsg = hermesMsgs.reduce((a, b) => b.content.length > a.content.length ? b : a);
       }
       if (!targetMsg) return alert('Nenhum relatório final do HERMES encontrado. Conclua a análise primeiro.');
       await exportSinglePdf(targetMsg.content);
@@ -1369,7 +1369,8 @@ function App() {
       {/* ── MODAL: CONFIGURAÇÕES DO PROJETO ───────────────────────────────────── */}
       {showSettingsModal && (
         <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-8 max-h-[92vh] overflow-y-auto">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md max-h-[92vh] flex flex-col">
+          <div className="p-8 overflow-y-auto flex-1">
             <h2 className="font-bold text-stratsight-dark text-xl mb-4">Configurações do Projeto</h2>
             <div className="space-y-4">
               <div>
@@ -1422,10 +1423,12 @@ function App() {
               <p className="text-[10px] text-blue-700 mb-3">Gera o relatório de monitoramento agora e envia imediatamente para os e-mails configurados acima.</p>
               <button onClick={() => enviarRelatorioKratos()} className="w-full py-2 bg-blue-700 text-white font-bold rounded-lg hover:bg-blue-800 transition-colors text-xs shadow-sm">📊 Gerar e Enviar Relatório Agora</button>
             </div>
-            <div className="mt-8 flex gap-3">
-              <button onClick={() => setShowSettingsModal(false)} className="flex-1 py-3 text-stratsight-medium border-2 border-gray-200 font-bold rounded-xl hover:bg-gray-50 transition-colors">Cancelar</button>
-              <button onClick={salvarConfiguracoes} className="flex-[2] py-3 bg-stratsight-dark text-white font-bold rounded-xl hover:bg-stratsight-medium transition-colors">Salvar Configurações</button>
-            </div>
+          </div>
+          {/* Rodapé fixo — sempre visível */}
+          <div className="px-8 py-5 border-t border-gray-100 flex gap-3 bg-white rounded-b-2xl flex-shrink-0">
+            <button onClick={() => setShowSettingsModal(false)} className="flex-1 py-3 text-stratsight-medium border-2 border-gray-200 font-bold rounded-xl hover:bg-gray-50 transition-colors">Cancelar</button>
+            <button onClick={salvarConfiguracoes} className="flex-[2] py-3 bg-stratsight-dark text-white font-bold rounded-xl hover:bg-stratsight-medium transition-colors">Salvar Configurações</button>
+          </div>
           </div>
         </div>
       )}

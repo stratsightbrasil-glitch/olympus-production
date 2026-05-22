@@ -126,6 +126,23 @@ function buildSnapshotHtml(
 </body></html>`;
 }
 
+// ─── Parser de probabilidades de cenário (Q1-Q4) ─────────────────────────────
+
+function parseScenarioProbabilities(text: string | null): Record<string,number> | null {
+  if (!text) return null;
+  const found: Record<number, number> = {};
+  // Padrões: "Q1... 40%", "Q1 — 40%", "Cenário 1... 40%"
+  const re = /\bQ(\d)\b[^\n%]{0,60}?(\d{1,3})\s*%|\b[Cc]en[aá]rio\s*(\d)\b[^\n%]{0,60}?(\d{1,3})\s*%/g;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(text)) !== null) {
+    const q = parseInt(m[1] || m[3]);
+    const pct = parseInt(m[2] || m[4]);
+    if (q >= 1 && q <= 4 && pct >= 0 && pct <= 100 && !found[q]) found[q] = pct;
+  }
+  if (Object.keys(found).length === 0) return null;
+  return { q1: found[1] ?? 0, q2: found[2] ?? 0, q3: found[3] ?? 0, q4: found[4] ?? 0 };
+}
+
 // ─── GET /api/v1/kratos/:projectId/dashboard ──────────────────────────────────
 // Retorna dados estruturados para o painel KRATOS no frontend.
 
@@ -162,7 +179,8 @@ kratosRoutes.get('/:projectId/dashboard', async (c) => {
     sinalStats: stats,
     overallStatus: overallStatus(inds),
     lastKratosAt:      lastKratosMsgRow?.createdAt ?? null,
-    lastKratosExcerpt: lastKratosMsgRow?.content?.slice(0, 500) ?? null,
+    lastKratosExcerpt: lastKratosMsgRow?.content?.slice(0, 2000) ?? null,
+    scenarioProbabilities: parseScenarioProbabilities(lastKratosMsgRow?.content ?? null),
   });
 });
 
@@ -231,6 +249,32 @@ kratosRoutes.post('/:projectId/report', async (c) => {
     console.error('[KRATOS] Erro no relatório sob demanda:', err.message);
     return c.json({ error: err.message }, 500);
   }
+});
+
+// ─── GET /api/v1/kratos/:projectId/report/html ───────────────────────────────
+// Retorna o HTML do snapshot SEM enviar e-mail — para visualização no painel.
+
+kratosRoutes.get('/:projectId/report/html', async (c) => {
+  const projectId = c.req.param('projectId');
+
+  const [projeto, inds, sinaisRes, lastKratosMsgRow] = await Promise.all([
+    db.query.projects.findFirst({
+      where: and(eq(projects.id, projectId), isNull(projects.deletedAt)),
+    }),
+    db.select().from(indicators).where(eq(indicators.projectId, projectId)),
+    db.select().from(weakSignals).where(eq(weakSignals.projectId, projectId)),
+    db.query.messages.findFirst({
+      where: and(eq(messages.projectId, projectId), like(messages.content, '%KRATOS%')),
+      orderBy: [desc(messages.createdAt)],
+    }),
+  ]);
+
+  if (!projeto) return c.json({ error: 'Projeto não encontrado.' }, 404);
+
+  const html = buildSnapshotHtml(
+    projeto.name, inds, sinaisRes, lastKratosMsgRow?.content ?? null,
+  );
+  return c.text(html, 200, { 'Content-Type': 'text/html;charset=utf-8' });
 });
 
 export default kratosRoutes;

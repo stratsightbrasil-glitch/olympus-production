@@ -71,7 +71,7 @@ function EngineChip({ mode }: { mode: string }) {
           fontSize: 8, color: '#D9BF73', letterSpacing: '1px',
           opacity: .75, marginTop: 1,
         }}>
-          v2.0 · MOTOR
+          v1.0 · MOTOR
         </div>
       </div>
     </div>
@@ -145,7 +145,7 @@ export function CommandBar({
         {/* Wordmark */}
         <div style={{ flexShrink: 0 }}>
           <div style={{ fontFamily: "'Fraunces',Georgia,serif", fontSize: 15, fontWeight: 700, color: '#fff', letterSpacing: '1px', lineHeight: 1 }}>OLYMPUS</div>
-          <div style={{ fontFamily: "'DM Mono','Cascadia Code',monospace", fontSize: 8, color: '#D9BF73', letterSpacing: '1.4px', marginTop: 1 }}>v5.0 · STRATSIGHT BR</div>
+          <div style={{ fontFamily: "'DM Mono','Cascadia Code',monospace", fontSize: 8, color: '#D9BF73', letterSpacing: '1.4px', marginTop: 1 }}>v1.0 · STRATSIGHT BR</div>
         </div>
 
         {/* Divisor */}

@@ -103,6 +103,25 @@ function parseCenarios(text: string): Cenario[] {
 
   if (cenarios.length === 4) return cenarios;
 
+  // ── Padrão alternativo B2: | Q1 – NOME | (tabela pipe do PYTHIA) ────────
+  const pipeRe = /\|\s*(Q[1-4])\s*[·•—–-]\s*([^|\n(]{3,40})/gi;
+  const pipeFound: Record<string, { titulo: string; descricao: string; probabilidade?: number }> = {};
+  while ((m = pipeRe.exec(text)) !== null) {
+    const id = m[1].toUpperCase();
+    if (pipeFound[id]) continue;
+    const rawLabel = m[2].replace(/\([^)]*\)/g, '').trim(); // remove "(alta incerteza)" etc.
+    const titulo = clean(rawLabel);
+    // Probabilidade pode aparecer na mesma célula: Q1 – NOME · ~40%
+    const probM = /~?(\d{1,3})%/.exec(m[0]);
+    pipeFound[id] = { titulo, descricao: clean(m[2]), probabilidade: probM ? parseInt(probM[1]) : undefined };
+  }
+  if (Object.keys(pipeFound).length === 4) {
+    for (const [id, data] of Object.entries(pipeFound)) {
+      cenarios.push({ id, quadrante: parseInt(id[1], 10) as 1|2|3|4, ...data });
+    }
+    return cenarios;
+  }
+
   // ── Padrão alternativo B: **Q1** — NOME ou ## Q1: NOME ──────────────────
   const altRe = /(?:#{1,4}\s*|[\*_]{1,2})(Q[1-4])(?:[\s·•—–:-]+)([^\n*#·•—–]+)(?:~(\d+)%)?/gi;
   const found: Record<string, { titulo: string; descricao: string; probabilidade?: number }> = {};
@@ -138,8 +157,10 @@ export function parseMatriz2x2(text: string): Matriz2x2Data | null {
   try {
     // Detecção: deve ter marcador de Matriz 2×2 E pelo menos um Q seguido de nome
     const hasMatriz = /MATRIZ\s*(?:DE\s*CENÁ?RIOS\s*)?2\s*[×xX]\s*2/i.test(text)
-                   || /ETAPA\s*4\s*[·•]\s*MATRIZ/i.test(text);
-    const hasQs = /Q[1-4]\s*[·•—–]\s*[A-ZÁÉÍÓÚÂÊÎÔÛÃÕÇÀ]/i.test(text);
+                   || /ETAPA\s*4\s*[·•]\s*(?:MATRIZ|CONSTRU)/i.test(text)
+                   // pipe table com ≥4 células Q: | Q1 – | Q2 – | Q3 – | Q4 –
+                   || ((text.match(/\|\s*Q[1-4]\s*[·•—–-]/gi)?.length ?? 0) >= 4);
+    const hasQs = /Q[1-4]\s*[·•—–-]\s*[A-ZÁÉÍÓÚÂÊÎÔÛÃÕÇÀ]/i.test(text);
 
     if (!hasMatriz || !hasQs) return null;
 
