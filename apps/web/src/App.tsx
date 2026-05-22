@@ -788,7 +788,14 @@ function App() {
       // O relatório padrão é sempre gerado pelo HERMES (orquestrador).
       // Mensagens de outros agentes (THEMIS, KLIO, etc.) podem conter o texto
       // "RELATÓRIO FINAL PADRÃO" como referência — não devem ser selecionadas.
-      const patterns = ['RELATÓRIO FINAL PADRÃO', 'RELATÓRIO FINAL', 'RELATÓRIO DE CENÁRIOS', 'RELATÓRIO ESTRATÉGICO', 'RELATÓRIO PROSPECTIVO'];
+      const patterns = [
+        'RELATÓRIO FINAL PADRÃO', 'RELATÓRIO FINAL', 'RELATÓRIO DE CENÁRIOS',
+        'RELATÓRIO ESTRATÉGICO', 'RELATÓRIO PROSPECTIVO',
+        // Metodologias específicas
+        'RAPPORT PROSPECTIF GODET', 'RAPPORT PROSPECTIF',
+        'RELATÓRIO GRUMBACH', 'RELATÓRIO SIEX',
+        'PRODUTO ALTA FINAL', 'PRODUTO ALTA',
+      ];
       let targetMsg: {role: string, content: string, id?: string} | undefined;
 
       // 1ª tentativa: encontra mensagens que contêm o padrão E foram escritas pelo HERMES
