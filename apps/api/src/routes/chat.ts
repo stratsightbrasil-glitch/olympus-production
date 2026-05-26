@@ -768,7 +768,7 @@ async function runAnalysis(body: any, jwtPayload: any, cb: AnalysisCallbacks, op
       agentPrompt = agentPrompt + techniqueBlock;
     }
 
-    sistema.registerAgent(new Agent(ag.name, ag.role, agentPrompt, toolsForAgent));
+    sistema.registerAgent(new Agent(ag.name, ag.role, agentPrompt, toolsForAgent, ag.modelOverride ?? undefined));
   }
 
   // Contexto com callbacks de progresso injetados

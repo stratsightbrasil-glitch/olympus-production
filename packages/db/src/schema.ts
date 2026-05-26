@@ -59,6 +59,7 @@ export const agents = pgTable("agents", {
   systemPrompt: text("system_prompt").notNull(),
   toolsConfig: jsonb("tools_config"), // Array de nomes de ferramentas: ["web_search", "consultar_agente"]
   techniquesConfig: jsonb("techniques_config"), // Array de nomes de técnicas: ["Impacto Cruzado"]
+  modelOverride: text("model_override"), // Override de modelo por agente (ex: 'claude-sonnet-4-6'). NULL = usa o modelo global configurado.
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 

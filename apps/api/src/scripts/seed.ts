@@ -68,7 +68,8 @@ Após entregar: "Para iniciar um novo ciclo, clique em **Nova Sessão** na barra
 ❌ Chamar consultar_agente durante a geração do Relatório Final.
 
 IMPORTANTE: Inicie SEMPRE a resposta final com "**HERMES** · ".`,
-        toolsConfig: ['consultar_agente']
+        toolsConfig: ['consultar_agente'],
+        modelOverride: null,
       },
 
       // ── SCOPUS ────────────────────────────────────────────────────────────────
@@ -97,7 +98,8 @@ Padrões analíticos ICD 203:
 Formato de entrega: análise estruturada com seções delimitadas, tabelas quando útil, conclusões explícitas ao final de cada seção.
 
 IMPORTANTE: Inicie sempre com "**SCOPUS** · ".`,
-        toolsConfig: ['web_search', 'buscar_documentos_internos', 'avaliar_fonte', 'declarar_julgamento', 'registrar_hipotese_alternativa']
+        toolsConfig: ['web_search', 'buscar_documentos_internos', 'avaliar_fonte', 'declarar_julgamento', 'registrar_hipotese_alternativa'],
+        modelOverride: 'claude-sonnet-4-6',
       },
 
       // ── KLIO ──────────────────────────────────────────────────────────────────
@@ -125,7 +127,8 @@ Padrões analíticos ICD 203:
 Formato de entrega: análise por domínio com dados de suporte, tendências identificadas e grau de certeza.
 
 IMPORTANTE: Inicie sempre com "**KLIO** · ".`,
-        toolsConfig: ['web_search', 'buscar_dados_publicos', 'buscar_documentos_internos', 'avaliar_fonte', 'declarar_julgamento', 'registrar_hipotese_alternativa', 'registrar_sinal', 'buscar_sinais']
+        toolsConfig: ['web_search', 'buscar_dados_publicos', 'buscar_documentos_internos', 'avaliar_fonte', 'declarar_julgamento', 'registrar_hipotese_alternativa', 'registrar_sinal', 'buscar_sinais'],
+        modelOverride: 'claude-opus-4-7',
       },
 
       // ── PYTHIA ────────────────────────────────────────────────────────────────
@@ -154,7 +157,8 @@ Padrões analíticos ICD 203:
 Formato de entrega: fichas de cenário com nome, premissas, narrativa, probabilidade, indicadores-sentinela.
 
 IMPORTANTE: Inicie sempre com "**PYTHIA** · ".`,
-        toolsConfig: ['web_search', 'buscar_dados_publicos', 'avaliar_fonte', 'declarar_julgamento', 'registrar_hipotese_alternativa']
+        toolsConfig: ['web_search', 'buscar_dados_publicos', 'avaliar_fonte', 'declarar_julgamento', 'registrar_hipotese_alternativa'],
+        modelOverride: 'claude-opus-4-7',
       },
 
       // ── MNEMOSYNE ─────────────────────────────────────────────────────────────
@@ -181,7 +185,8 @@ Padrões de escrita:
 Formato de entrega: narrativas em prosa fluída, 300-600 palavras por cenário.
 
 IMPORTANTE: Inicie sempre com "**MNEMOSYNE** · ".`,
-        toolsConfig: ['web_search']
+        toolsConfig: ['web_search'],
+        modelOverride: 'claude-opus-4-7',
       },
 
       // ── THEMIS ────────────────────────────────────────────────────────────────
@@ -209,7 +214,8 @@ Padrões analíticos ICD 203:
 Formato de entrega: tabela riscos/oportunidades por cenário + alertas + indicações.
 
 IMPORTANTE: Inicie sempre com "**THEMIS** · ".`,
-        toolsConfig: ['web_search', 'buscar_sinais', 'avaliar_fonte', 'declarar_julgamento', 'registrar_hipotese_alternativa']
+        toolsConfig: ['web_search', 'buscar_sinais', 'avaliar_fonte', 'declarar_julgamento', 'registrar_hipotese_alternativa'],
+        modelOverride: 'claude-opus-4-7',
       },
 
       // ── KRATOS ────────────────────────────────────────────────────────────────
@@ -238,7 +244,8 @@ Formato do Relatório de Acompanhamento (padrão para qualquer metodologia):
 6. RECOMENDAÇÃO: manter curso / revisar cenários / acionar ATHENA
 
 IMPORTANTE: Inicie sempre com "**KRATOS** · ".`,
-        toolsConfig: ['web_search', 'buscar_dados_publicos', 'buscar_sinais', 'registrar_sinal', 'atualizar_sentinela']
+        toolsConfig: ['web_search', 'buscar_dados_publicos', 'buscar_sinais', 'registrar_sinal', 'atualizar_sentinela'],
+        modelOverride: 'claude-sonnet-4-6',
       },
 
       // ── ATHENA ────────────────────────────────────────────────────────
@@ -280,7 +287,8 @@ AVALIAÇÃO FINAL:
 - Recomendação: APROVADO / APROVADO COM RESSALVAS / REQUER REVISÃO
 
 IMPORTANTE: Inicie sempre com "**ATHENA** · ".`,
-        toolsConfig: ['avaliar_fonte', 'declarar_julgamento', 'registrar_hipotese_alternativa']
+        toolsConfig: ['avaliar_fonte', 'declarar_julgamento', 'registrar_hipotese_alternativa'],
+        modelOverride: 'claude-opus-4-7',
       },
 
       // ── OLYMPUS (Orquestrador de Planejamento Estratégico) ───────────────────
@@ -315,7 +323,8 @@ Após entregar: "Para iniciar um novo ciclo, clique em **Nova Sessão** na barra
 ❌ Chamar consultar_agente durante a geração do Relatório Final.
 
 IMPORTANTE: Inicie SEMPRE a resposta final com "**OLYMPUS** · ".`,
-        toolsConfig: ['consultar_agente']
+        toolsConfig: ['consultar_agente'],
+        modelOverride: null,
       },
 
       // ── HERMES_SIPLEX ─────────────────────────────────────────────────────────
@@ -382,14 +391,15 @@ Antes do relatório final, acione ATHENA.
 Produto final — RELATÓRIO SIPLEx — consolidando as 7 fases.
 
 IMPORTANTE: Inicie SEMPRE com "**HERMES** · ".`,
-        toolsConfig: ['consultar_agente']
+        toolsConfig: ['consultar_agente'],
+        modelOverride: null,
       },
     ];
 
     for (const a of defaultAgents) {
       await db.insert(agents).values(a).onConflictDoUpdate({
         target: agents.name,
-        set: { role: a.role, type: a.type, systemPrompt: a.systemPrompt, toolsConfig: a.toolsConfig }
+        set: { role: a.role, type: a.type, systemPrompt: a.systemPrompt, toolsConfig: a.toolsConfig, modelOverride: a.modelOverride }
       });
     }
     console.log(`   ✓ ${defaultAgents.length} agentes processados`);

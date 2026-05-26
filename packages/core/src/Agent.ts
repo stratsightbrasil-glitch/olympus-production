@@ -8,25 +8,31 @@ import { AgentContext, Tool } from "./types";
 // LLM_PROVIDER=ollama              → Ollama local via API OpenAI-compatível
 //   OLLAMA_BASE_URL  (default: http://ollama:11434/v1)
 //   OLLAMA_MODEL     (default: llama3.1:8b)
-// Adicionar novos providers aqui quando necessário (gemini, bedrock, etc.).
+// Adicionar novos providers aqui (gemini, bedrock, etc.) como novos cases no switch.
 function getModel(config?: { provider: string; model: string }) {
   const provider = config?.provider || process.env.LLM_PROVIDER || 'anthropic';
 
-  if (provider === 'ollama') {
-    const baseURL   = process.env.OLLAMA_BASE_URL || 'http://ollama:11434/v1';
-    const modelName = config?.model || process.env.OLLAMA_MODEL || 'llama3.1:8b';
-    // .chat() força OpenAIChatLanguageModel → /v1/chat/completions
-    // A chamada padrão provider(model) usa OpenAIResponsesLanguageModel → /v1/responses
-    // que o Ollama não implementa, causando Headers Timeout Error
-    const ollama = createOpenAI({ baseURL, apiKey: 'ollama' });
-    console.log(`[Provider] Ollama — ${baseURL} / ${modelName}`);
-    return ollama.chat(modelName);
+  switch (provider) {
+    case 'anthropic': {
+      const modelName = config?.model || process.env.ANTHROPIC_MODEL || 'claude-opus-4-7';
+      console.log(`[Provider] Anthropic — ${modelName}`);
+      return anthropic(modelName);
+    }
+    case 'ollama': {
+      const baseURL   = process.env.OLLAMA_BASE_URL || 'http://ollama:11434/v1';
+      const modelName = config?.model || process.env.OLLAMA_MODEL || 'llama3.1:8b';
+      // .chat() força OpenAIChatLanguageModel → /v1/chat/completions
+      // A chamada padrão provider(model) usa OpenAIResponsesLanguageModel → /v1/responses
+      // que o Ollama não implementa, causando Headers Timeout Error
+      const ollama = createOpenAI({ baseURL, apiKey: 'ollama' });
+      console.log(`[Provider] Ollama — ${baseURL} / ${modelName}`);
+      return ollama.chat(modelName);
+    }
+    default:
+      throw new Error(
+        `[Provider] Provedor LLM desconhecido: "${provider}". Providers suportados: anthropic, ollama.`
+      );
   }
-
-  // Default: Anthropic
-  const modelName = config?.model || process.env.ANTHROPIC_MODEL || 'claude-opus-4-7';
-  console.log(`[Provider] Anthropic — ${modelName}`);
-  return anthropic(modelName);
 }
 
 // Agent.ts — motor de execução de agentes individuais via Vercel AI SDK v6
@@ -316,12 +322,61 @@ const FALLBACK_JSON_SCHEMA = {
   required: [] as string[],
 };
 
+// ── P2: Module-scope constants (extracted from run() — allocated once, not per call) ─
+
+const TOOL_ICONS: Record<string, string> = {
+  web_search:                      '🌐',
+  buscar_dados_publicos:           '📊',
+  consultar_agente:                '🤖',
+  buscar_documentos_internos:      '📚',
+  registrar_sinal:                 '📡',
+  buscar_sinais:                   '📡',
+  atualizar_sentinela:             '🎯',
+  declarar_julgamento:             '⚖️',
+  registrar_hipotese_alternativa:  '🔀',
+  avaliar_fonte:                   '🔍',
+};
+
+function stepLabel(toolName: string, args: any): string {
+  const icon = TOOL_ICONS[toolName] || '🔧';
+  if (toolName === 'web_search')                return `${icon} Buscando: "${(args.query || '').slice(0, 60)}"`;
+  if (toolName === 'buscar_dados_publicos')      return `${icon} Dados: ${(args.indicadores || []).slice(0, 3).join(', ')}`;
+  if (toolName === 'consultar_agente')           return `${icon} Consultando ${args.agent_name}...`;
+  if (toolName === 'buscar_documentos_internos') return `${icon} RAG: "${(args.query || '').slice(0, 50)}"`;
+  if (toolName === 'avaliar_fonte')              return `${icon} Avaliando fonte...`;
+  if (toolName === 'declarar_julgamento')        return `${icon} Emitindo julgamento analítico...`;
+  if (toolName === 'registrar_hipotese_alternativa') return `${icon} Hipótese alternativa...`;
+  return `${icon} ${toolName}(${JSON.stringify(args).slice(0, 40)})`;
+}
+
+// Pre-compiled once at module load — not inside run()
+const RAW_TOOL_CALL_RE = /^\*\*[A-Z][A-Z_0-9]*\*\*\s*[·•·\-–—]\s*/u;
+
+function isRawToolCallText(text: string, toolCallCount: number): boolean {
+  if (toolCallCount > 0) return false; // ferramenta foi executada de verdade — OK
+  if (text.length > 900) return false; // texto longo demais para ser só uma tool call
+  const stripped = text.replace(RAW_TOOL_CALL_RE, '').trim();
+  if (!stripped.startsWith('{')) return false;
+  return (
+    (stripped.includes('"name"') || stripped.includes('"tool_name"') || stripped.includes('"tool_call"')) &&
+    (stripped.includes('"parameters"') || stripped.includes('"arguments"') || stripped.includes('"input"'))
+  );
+}
+
+function rawToolCallWarn(agentName: string, modelLabel: string): string {
+  return `\n\n⚠️ **${agentName}** não conseguiu acionar o agente especialista porque o modelo **${modelLabel}** não suporta tool calling estruturado. Ele emitiu a chamada como texto bruto.\n\n**Solução:** troque para Anthropic Claude (recomendado) ou um modelo Ollama maior com suporte a function calling, como **llama3.1:70b**, **llama3.3:70b** ou **qwen2.5:72b**.`;
+}
+
+// ── Agent class ───────────────────────────────────────────────────────────────
+
 export class Agent {
   constructor(
     public name: string,
     public role: string,
     private systemPrompt: string,
     public tools: Tool[] = [],
+    // P3: model routing from DB — null means "use whatever the context provides"
+    public modelOverride?: string | null,
   ) {}
 
   async run(
@@ -405,58 +460,27 @@ export class Agent {
       aiTools[t.name] = myTool;
     }
 
+    // ── P3: Model routing — from DB field, not hardcoded map ─────────────────
+    // this.modelOverride comes from agents.model_override (seed.ts populates it).
+    // Only applied when using Anthropic — Ollama uses its own model selection.
+    const isAnthropic = (context.llmConfig?.provider ?? 'anthropic') === 'anthropic';
+    const effectiveModel = isAnthropic && this.modelOverride ? this.modelOverride : undefined;
+    const effectiveConfig = effectiveModel
+      ? { provider: 'anthropic' as const, model: effectiveModel }
+      : context.llmConfig;
+    if (effectiveModel) console.log(`[${this.name}] Modelo override → ${effectiveModel}`);
+
     // ── vizMode — controla profundidade de orquestração e limite de tokens ────
     // "etapa"    (padrão): análise por etapa de metodologia, maxTokens=32_000
-    // "passos"  : passo-a-passo detalhado — instrução extra injetada em chat.ts,
-    //             maxTokens=32_000
-    // "passagem": processo autônomo completo — instrução de síntese em chat.ts,
-    //             maxTokens=16_000 (reduz custo em sessões de contexto longo)
-    // "thinking": raciocínio estendido — instrução de profundidade em chat.ts,
-    //             maxTokens=32_000. ⚠️ NÃO usa a API ExtendedThinking da Anthropic;
-    //             apenas adiciona instrução de prompt. Compatibilidade com Ollama
-    //             não garantida (depende do suporte do modelo local).
+    // "passos"  : passo-a-passo detalhado — instrução extra injetada em chat.ts
+    // "passagem": processo autônomo completo — maxTokens=16_000 (reduz custo)
+    // "thinking": raciocínio estendido — instrução de profundidade em chat.ts
     const maxTokens =
       vizMode === "thinking" ? 32000
       : vizMode === "passagem" ? 16000
       : 32000;
 
     const hasTools = Object.keys(aiTools).length > 0;
-
-    // ── Formatador de mensagem de progresso por step ──────────────────────────
-    const TOOL_ICONS: Record<string, string> = {
-      web_search: '🌐', buscar_dados_publicos: '📊', consultar_agente: '🤖',
-      buscar_documentos_internos: '📚', registrar_sinal: '📡', buscar_sinais: '📡',
-      atualizar_sentinela: '🎯', declarar_julgamento: '⚖️',
-      registrar_hipotese_alternativa: '🔀', avaliar_fonte: '🔍',
-    };
-    const stepLabel = (toolName: string, args: any): string => {
-      const icon = TOOL_ICONS[toolName] || '🔧';
-      if (toolName === 'web_search') return `${icon} Buscando: "${(args.query || '').slice(0, 60)}"`;
-      if (toolName === 'buscar_dados_publicos') return `${icon} Dados: ${(args.indicadores || []).slice(0, 3).join(', ')}`;
-      if (toolName === 'consultar_agente') return `${icon} Consultando ${args.agent_name}...`;
-      if (toolName === 'buscar_documentos_internos') return `${icon} RAG: "${(args.query || '').slice(0, 50)}"`;
-      if (toolName === 'avaliar_fonte') return `${icon} Avaliando fonte...`;
-      if (toolName === 'declarar_julgamento') return `${icon} Emitindo julgamento analítico...`;
-      if (toolName === 'registrar_hipotese_alternativa') return `${icon} Hipótese alternativa...`;
-      return `${icon} ${toolName}(${JSON.stringify(args).slice(0, 40)})`;
-    };
-
-    const AGENT_MODEL_OVERRIDES: Record<string, string> = {
-      SCOPUS:    'claude-sonnet-4-6',
-      KRATOS:    'claude-sonnet-4-6',
-      KLIO:      'claude-opus-4-7',
-      PYTHIA:    'claude-opus-4-7',
-      MNEMOSYNE: 'claude-opus-4-7',
-      THEMIS:    'claude-opus-4-7',
-      ATHENA:    'claude-opus-4-7',
-    };
-    const agentOverride = (context.llmConfig?.provider ?? 'anthropic') === 'anthropic'
-      ? AGENT_MODEL_OVERRIDES[this.name]
-      : undefined;
-    const effectiveConfig = agentOverride
-      ? { provider: 'anthropic' as const, model: agentOverride }
-      : context.llmConfig;
-    if (agentOverride) console.log(`[${this.name}] Modelo override → ${agentOverride}`);
 
     const sharedParams = {
       model: getModel(effectiveConfig),
@@ -483,24 +507,7 @@ export class Agent {
     } as any;
 
     // ── Detectar tool call emitido como texto bruto (Ollama/modelos pequenos) ──
-    // Modelos que não suportam structured tool calling obedecem o systemPrompt
-    // ("inicie com **HERMES** · ") e depois emitem o JSON da ferramenta como texto.
-    // A detecção simples startsWith('{') falha por causa desse prefixo.
-    const isRawToolCallText = (text: string, toolCallCount: number): boolean => {
-      if (toolCallCount > 0) return false; // ferramenta foi executada de verdade — OK
-      if (text.length > 900) return false;  // texto longo demais para ser só uma tool call
-      // Remove prefixos tipo "**HERMES** · " ou "**OLYMPUS** · " que o modelo adiciona
-      const stripped = text.replace(/^\*\*[A-Z][A-Z_0-9]*\*\*\s*[·•·\-–—]\s*/u, '').trim();
-      if (!stripped.startsWith('{')) return false;
-      // Procura padrões de tool call: {"name":..., "parameters":...} ou {"tool_call":...}
-      return (
-        (stripped.includes('"name"') || stripped.includes('"tool_name"') || stripped.includes('"tool_call"')) &&
-        (stripped.includes('"parameters"') || stripped.includes('"arguments"') || stripped.includes('"input"'))
-      );
-    };
-
-    const RAW_TOOL_CALL_WARN = (agentName: string) =>
-      `\n\n⚠️ **${agentName}** não conseguiu acionar o agente especialista porque o modelo **${context.llmConfig?.model ?? 'Ollama'}** não suporta tool calling estruturado. Ele emitiu a chamada como texto bruto.\n\n**Solução:** troque para Anthropic Claude (recomendado) ou um modelo Ollama maior com suporte a function calling, como **llama3.1:70b**, **llama3.3:70b** ou **qwen2.5:72b**.`;
+    const modelLabel = context.llmConfig?.model ?? 'Ollama';
 
     if (context.onToken) {
       // Token-by-token streaming — used only by the orchestrator (SSE route)
@@ -513,7 +520,7 @@ export class Agent {
         const stepsArr = await result.steps;
         const actualCalls = stepsArr.reduce((n: number, s: any) => n + (s.toolCalls?.length ?? 0), 0);
         if (isRawToolCallText(finalText, actualCalls)) {
-          const warn = RAW_TOOL_CALL_WARN(this.name);
+          const warn = rawToolCallWarn(this.name, modelLabel);
           context.onToken(warn);
           return finalText + warn;
         }
@@ -527,7 +534,7 @@ export class Agent {
     if (hasTools) {
       const actualCalls = response.steps.reduce((n: number, s: any) => n + (s.toolCalls?.length ?? 0), 0);
       if (isRawToolCallText(finalText, actualCalls)) {
-        return RAW_TOOL_CALL_WARN(this.name);
+        return rawToolCallWarn(this.name, modelLabel);
       }
     }
     return finalText;
