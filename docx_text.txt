@@ -1,0 +1,518 @@
+OLYMPUS
+Revisão de Design Arquitetural
+Motor de Metodologias — v2.1 (+ Equipes)
+Atualizado com base no HISTÓRICO_MIGRACAO.md (Sprint 8)
+StratSight Brasil
+Maio 2026
+Legenda de status:
+✔ Já existe no código    ◑ Existe parcialmente / requer ajuste    ✦ Novo — não existe ainda
+1. Visão Geral e Estado Atual
+O Olympus v4 está na Sprint 8. O Motor de Metodologias dinâmico já existe — agentes e prompts são gerenciados via banco de dados desde a Sprint 3. Este documento atualiza o design original para refletir o que já foi construído e o que ainda precisa ser feito.
+1.1 O que já existe (Sprints 3–8)
+Motor Dinâmico: getOrSeedMethodology() popula banco a cada requisição
+7 metodologias no banco (MSEF, GRUMBACH, GODET, MACROPLAN, MPO, ASPLAN, FUTURES)
+Prompts MSEF v2 completos para todos os 7 agentes especialistas
+HERMES_GRUMBACH (4 fases), HERMES_GODET (5 fases MICMAC/MACTOR), HERMES_ALTA (4 fases)
+12 técnicas SAT AltA + TechniqueEngine (injeção dinâmica em prompts)
+ICD 203: declarar_julgamento, registrar_hipotese_alternativa, avaliar_fonte
+HERMES_REVISOR + tabela analytic_reviews
+RAG com pgvector (512 dims, Voyage AI), 51 indicadores em buscar_dados_publicos
+Provider Factory: Anthropic + Ollama (llama3.1:8b instalado)
+SSE streaming + step streaming (TOOL_ICONS, stepLabel, onStep)
+Docker completo (3 containers + Nginx) + scripts Railway + PoC offline prontos
+1.2 O que ainda não existe (alvo das Sprints 1–6)
+Tabelas normalizadas: methodology_types, methodology_phases, phase_techniques, agent_method_prompts
+platform_settings no schema Drizzle (ainda é raw SQL no startup)
+Agentes com prompt BASE agnóstico + extra_instructions por metodologia separados
+HERMES_GRUMBACH com as 5 fases CEEEx corretas (atual tem 4 fases militares genéricas)
+HERMES_SIPLEX e metodologia SIPLEx/EB no banco
+messageType no SSE e na tabela messages
+Exportação lendo fases do banco (PHASE_LABELS ainda hardcoded em export.ts)
+Memória por token budget (ainda é slice(-12))
+HERMES_REVISOR para todas as metodologias (atualmente só MSEF)
+1.3 MSEF — posição arquitetural
+A MSEF não é uma metodologia clássica — é a abordagem agêntica multimodal do Olympus. Os prompts MSEF v2 já implementam essa visão: HERMES direciona o raciocínio conforme as características da pergunta estratégica. Permanece no catálogo como metodologia par para Cenários Prospectivos, com sua lógica preservada.
+2. Taxonomia de Metodologias
+Relação N:N entre metodologia e categoria — GRUMBACH aparece em Planejamento Estratégico (M-02) e Cenários Prospectivos (M-07). SIPLEx é novo. Status indica o que existe hoje no banco.
+ID
+Categoria
+Nome
+Notas
+Status
+M-01
+Planejamento Estratégico
+ASPLAN/MD
+Análise Estratégica do MD
+✔ Existe
+M-02
+Planejamento Estratégico
+GRUMBACH
+Instância PE — fases a definir
+◑ Parcial
+M-03
+Planejamento Estratégico
+MPO
+✔ Existe
+M-04
+Planejamento Estratégico
+SIPLEx/EB
+Novo — material carregado (Sprint 4)
+✦ Novo
+M-05
+Produção do Conhecimento
+SIEx/EB
+Metodologia mãe da Estimativa
+✔ Existe
+M-06
+Cenários Prospectivos
+MSEF
+Prompts v2 completos — abordagem agêntica multimodal
+✔ Existe
+M-07
+Cenários Prospectivos
+GRUMBACH
+Instância CEEEx — prompt a corrigir (Sprint 4)
+◑ Parcial
+M-08
+Cenários Prospectivos
+GODET
+HERMES_GODET operacional — 5 fases MICMAC/MACTOR
+✔ Existe
+M-09
+Cenários Prospectivos
+ALTA/OTAN
+HERMES_ALTA + 12 técnicas SAT operacionais
+✔ Existe
+M-10
+Cenários Prospectivos
+MACROPLAN
+Categoria corrigida (era Planejamento Estratégico)
+◑ Parcial
+M-11
+Cenários Prospectivos
+FUTURES
+Categoria corrigida (era Inovação e Futuros)
+◑ Parcial
+M-12
+Cenários Prospectivos
+SIEx/EB
+Estimativa Estratégica como sub-metodologia
+◑ Parcial
+3. Schema do Banco de Dados
+Tabelas com status de implementação. Verde = nova. Azul = já existe. Âmbar = requer alteração.
+Tabela
+Status
+Colunas-chave / Alterações
+Notas
+methodologies
+✔ Existe
+id, name, slug, description, sourceDoc
+Já existe — adicionar slug e sourceDoc se ausentes
+methodology_types
+✦ Nova
+id, methodology_id (FK), category
+N:N — GRUMBACH em PE e Cenários
+methodology_phases
+✦ Nova
+id, methodology_id, phaseNum, label, agentRole, description
+Fases por metodologia
+phase_techniques
+✦ Nova
+phaseId (FK), techniqueId (FK), priority
+Pool livre — associação recomendada
+agent_method_prompts
+✦ Nova
+id, agentId (FK), methodologyId (FK), extraInstructions
+Injeção em runtime
+agents
+✔ Existe
+base_prompt separado de extra_instructions
+system_prompt atual = base agnóstico
+techniques
+✔ Existe
+12 técnicas AltA já no banco
+TechniqueEngine já injeta em runtime
+messages
+◑ Alterar
+Adicionar: messageType text default parcial
+Valores: relatorio_final|parcial|monitoramento|revisao
+platform_settings
+◑ Alterar
+Migrar raw SQL startup → schema Drizzle
+Já funciona — formalizar no schema
+analytic_reviews
+✔ Existe
+sessionId, status, atsCompliance JSONB
+Criada no Sprint 8 — manter
+teams
+✦ Nova
+id, name, description, createdAt
+Equipes de analistas — Sprint 1
+team_members
+✦ Nova
+teamId (FK), userId (FK), role (lider|analista|revisor)
+N:N users × teams — Sprint 1
+projects (alter)
+◑ Alterar
+Adicionar: teamId (FK nullable), analystId (FK nullable)
+Campo texto analyst mantido por compatibilidade
+3.1 Fluxo de ativação (novo vs atual)
+Atual — getOrSeedMethodology()
+POST /api/v1/chat → runAnalysis()
+  └─ getOrSeedMethodology(name)
+       ├─ if MSEF → upsert agentes MSEF
+       ├─ if ALTA → upsert agentes AltA + técnicas SAT
+       ├─ if GODET → upsert agentes GODET
+       └─ (GRUMBACH/SIEx → só no seed.ts)
+Novo — loadMethodology() — Sprint 1
+POST /api/v1/chat → runAnalysis()
+  └─ loadMethodology(slug)        ← leitura pura, sem upsert
+       ├─ methodology_phases       ← fases ordenadas do banco
+       └─ agent_method_prompts     ← extra_instructions por agente
+  └─ Agent.run()
+       └─ systemPrompt = base_prompt + extra_instructions
+⚑ ATENÇÃO  getOrSeedMethodology() permanece comentado como fallback até Sprint 3 confirmar estabilidade.
+4. Fases por Metodologia
+Verde = fases novas a criar. Âmbar = fases existentes com prompt a corrigir. Azul = operacional.
+#
+Metodologia
+Categoria
+Fase
+Agente
+Status
+1
+MSEF
+Cenários
+Enquadramento Estratégico
+SCOPUS
+✔
+2
+MSEF
+Cenários
+Análise Ambiental
+KLIO
+✔
+3
+MSEF
+Cenários
+Cenários Prospectivos
+PYTHIA
+✔
+4
+MSEF
+Cenários
+Narrativas de Cenários
+MNEMOSYNE
+✔
+5
+MSEF
+Cenários
+Implicações e Alertas
+THEMIS
+✔
+6
+MSEF
+Cenários
+Monitoramento Contínuo
+KRATOS
+✔
+7
+MSEF
+Cenários
+Síntese e Conclusão
+HERMES (orq)
+✔
+1
+GRUMBACH
+Cenários (CEEEx)
+Planejamento Inicial
+HERMES_GRUMBACH (orq)
+◑
+2
+GRUMBACH
+Cenários (CEEEx)
+Diagnóstico Estratégico
+SCOPUS
+◑
+3
+GRUMBACH
+Cenários (CEEEx)
+Elaboração de Cenários (Delphi)
+PYTHIA
+◑
+4
+GRUMBACH
+Cenários (CEEEx)
+Indicações Estratégicas
+THEMIS
+◑
+5
+GRUMBACH
+Cenários (CEEEx)
+Divulgação e Monitoramento
+KRATOS
+◑
+1
+GODET
+Cenários
+Delimitação do Sistema
+SCOPUS
+✔
+2
+GODET
+Cenários
+MICMAC — Variáveis-chave
+KLIO
+✔
+3
+GODET
+Cenários
+MACTOR — Análise de Atores
+THEMIS
+✔
+4
+GODET
+Cenários
+Morfologia + SMIC
+PYTHIA
+✔
+5
+GODET
+Cenários
+Opções Estratégicas
+HERMES_GODET (orq)
+✔
+1
+ALTA
+Análise Alt.
+Iniciação
+HERMES_ALTA (orq)
+✔
+2
+ALTA
+Análise Alt.
+Preparação — Técnicas SAT
+SCOPUS + KLIO
+✔
+3
+ALTA
+Análise Alt.
+Aplicação das Técnicas
+PYTHIA + THEMIS
+✔
+4
+ALTA
+Análise Alt.
+Encerramento e Produto
+HERMES_ALTA (orq)
+✔
+1
+SIPLEx
+PE
+Missão do Exército
+SCOPUS
+✦
+2
+SIPLEx
+PE
+AAE — Ambiente Estratégico (20 anos)
+KLIO
+✦
+3
+SIPLEx
+PE
+Política Militar Terrestre (PMT)
+HERMES_SIPLEX (orq)
+✦
+4
+SIPLEx
+PE
+Estratégia Militar Terrestre (EMT)
+THEMIS
+✦
+5
+SIPLEx
+PE
+Confecção dos Planos Estratégicos
+HERMES_SIPLEX (orq)
+✦
+6
+SIPLEx
+PE
+Orçamentação
+KRATOS
+✦
+7
+SIPLEx
+PE
+Medição do Desempenho e Gestão de Riscos
+KRATOS
+✦
+⚑ ATENÇÃO  HERMES_GRUMBACH: prompt atual tem 4 fases militares genéricas. Substituir pelas 5 fases CEEEx na Sprint 4.
+◑ PARCIAL  SIPLEx Fase 2 (AAE): usa metodologia CEEEx/Grumbach internamente para produção de cenários.
+5. Agentes — Estado e Modelo de Prompts
+A separação base_prompt/extra_instructions é nova. Os prompts existentes (MSEF v2, AltA) serão divididos — não reescritos — na Sprint 2.
+Agente
+Status e Prompt Base
+Extra Instructions por Metodologia
+SCOPUS
+✔ Existe — Prompts MSEF v2 completos
+◑ Separar: base agnóstico + MSEF em agent_method_prompts
+MSEF: STEEP + eixos Matriz 2x2 + Ficha Escopo 8 campos
+GRUMBACH/CEEEx: FPF + eventos binários + probabilidades
+GODET: delimitação sistema + variáveis MICMAC
+AltA: premissas-chave + vieses cognitivos
+SIPLEx: contexto AAE + horizonte 20 anos
+KLIO
+✔ Existe — Prompts MSEF v2 completos
+◑ Separar: base agnóstico + MSEF em agent_method_prompts
+MSEF: PESTEL + Matriz Impacto×Incerteza
+GODET: matriz MICMAC — influências entre variáveis
+SIPLEx: AAE com foco em defesa e segurança
+PYTHIA
+✔ Existe — Prompts MSEF v2 completos
+◑ Separar: base agnóstico + MSEF em agent_method_prompts
+MSEF: Matriz 2x2 Q1-Q4 + probabilidades (soma 100%)
+GRUMBACH/CEEEx: 4 cenários (Mais Provável/Ideal/Alvo/Tendência)
+GODET: análise morfológica + SMIC
+MNEMOSYNE
+✔ Existe — Prompts MSEF v2 completos
+◑ Separar: base agnóstico + MSEF em agent_method_prompts
+MSEF: narrativas Q1-Q4, 7 componentes, mín. 400 palavras
+GRUMBACH/CEEEx: narrativas "Estamos em [ano]..."
+THEMIS
+✔ Existe — Prompts MSEF v2 completos
+◑ Separar: base agnóstico + MSEF em agent_method_prompts
+MSEF: implicações × quadrante + hedges/bets + tabela alertas
+GRUMBACH/CEEEx: indicações por evento
+GODET: estratégias por cenário morfológico
+KRATOS
+✔ Existe — Prompt de monitoramento agnóstico
+✔ Sem necessidade de extra_instructions por metodologia
+Agnóstico — Relatório de Acompanhamento padronizado funciona para qualquer metodologia
+HERMES_REVISOR
+✔ Existe — focado em MSEF
+◑ Generalizar para todas as metodologias (Sprint 4)
+Base: ICD 203 / ATS / McMahon 2024 — agnóstico de metodologia
+Adicionar instrução de chamar em todos os orquestradores
+HERMES_GRUMBACH
+◑ Existe — 4 fases militares genéricas
+✦ Atualizar para 5 fases CEEEx (Sprint 4)
+5 fases CEEEx: Planejamento → Diagnóstico → Cenários (Delphi) → Indicações → Monitoramento
+HERMES_GODET
+✔ Existe — 5 fases MICMAC/MACTOR/Morfologia/SMIC/Estratégias
+✔ Não requer alteração
+Operacional — manter prompt atual
+HERMES_ALTA
+✔ Existe — 4 fases AltA + 12 técnicas SAT via TechniqueEngine
+✔ Não requer alteração
+Operacional — TechniqueEngine injeta técnicas dinamicamente
+HERMES_SIPLEX
+✦ Novo — criar no Sprint 4
+7 fases SIPLEx: Missão → AAE → PMT → EMT → Planos → Orçamento → MDO+Riscos
+5.1 Estrutura do prompt composto em runtime
+[IDENTIDADE E PAPEL]
+  {base_prompt — agnóstico, sem referência a metodologia}
+[METODOLOGIA ATIVA: {methodology.name}]
+  {extra_instructions de agent_method_prompts}
+[FASE ATUAL: {phaseNum} — {phase.label}]
+  {phase.description}
+[TÉCNICAS DISPONÍVEIS]
+  {TechniqueEngine.getTechniqueInstructions(names[])}  ← já existe
+[CONTEXTO DO PROJETO]
+  {projectName, client, horizon, questão estratégica}
+◑ PARCIAL  TechniqueEngine já injeta técnicas SAT dinamicamente. A injeção de extra_instructions via agent_method_prompts é o novo componente.
+6. Débitos Técnicos — Status
+Itens resolvidos nas Sprints anteriores marcados como ✔ OK. Itens pendentes com sprint alvo.
+Item
+Status
+Situação / Ação
+Zod no Agent.ts
+✔ OK
+✔ Resolvido no Sprint 3. TOOL_JSON_SCHEMAS são objetos JS puros com jsonSchema(). Nunca reverter.
+maxSteps silencioso (SDK v6)
+✔ OK
+✔ Resolvido. Usar stopWhen: stepCountIs(N). maxSteps é ignorado silenciosamente.
+toolChoice bloqueando síntese
+✔ OK
+✔ Resolvido. prepareStep aplica required apenas no step 0.
+CMD tsx em produção
+✔ OK
+✔ Resolvido. CMD aponta para dist/index.js. Nunca usar tsx no Dockerfile.
+Prompt HERMES contraditório
+✔ OK
+✔ Resolvido no Sprint 3. Regra única sem blocos de isenção.
+Histórico ilimitado (context bloat)
+✔ OK
+✔ Resolvido com slice(-12). Substituir por token budget na Sprint 3.
+platform_settings fora do Drizzle
+Sprint 1
+◑ Sprint 1 — migrar raw SQL do startup para schema.ts
+getOrSeedMethodology() if/else
+Sprint 1
+◑ Sprint 1 — substituir por loadMethodology() + tabelas normalizadas
+PHASE_LABELS hardcoded (export.ts)
+Sprint 3
+◑ Sprint 3 — resolveAgentPhases() lê do banco
+detectAgent() por regex
+Sprint 3
+◑ Sprint 3 — usar message.agentName direto
+methodologySteps.ts estático
+Sprint 3
+◑ Sprint 3 — eliminar após popular methodology_phases no banco
+isHermes() + reportPatterns
+Sprint 3
+◑ Sprint 3 — substituir por messageType === relatorio_final
+Parser markdown duplicado
+Sprint 3
+◑ Sprint 3 — unificar em utils/markdown.ts
+slice(-12) arbitrário
+Sprint 3
+◑ Sprint 3 — substituir por token budget (80k tokens)
+Rate limit KRONOS hardcoded
+Sprint 3
+◑ Sprint 3 — configurável via platform_settings
+HERMES_GRUMBACH — fases erradas
+Sprint 4
+◑ Sprint 4 — atualizar para 5 fases CEEEx
+HERMES_REVISOR só no MSEF
+Sprint 4
+◑ Sprint 4 — generalizar para todas as metodologias
+Prompts agentes MSEF-específicos
+Sprint 2
+◑ Sprint 2 — separar base agnóstico + agent_method_prompts
+TOOL_JSON_SCHEMAS duplicados
+⚑ Risco
+⚑ Risco de divergência. Mitigar com testes de regressão a cada sprint.
+7. Roadmap — 6 Sprints
+Sprint
+Foco
+Entregas principais
+1
+Motor Normalizado
+Tabelas methodology_types, methodology_phases, phase_techniques, agent_method_prompts, messageType em messages. Tabelas teams e team_members. Colunas teamId e analystId em projects. platform_settings no Drizzle. Seed declarativo + idempotente para todas as 10 metodologias. loadMethodology() substituindo getOrSeedMethodology(). HERMES_SIPLEX criado.
+2
+Agentes Agnósticos
+Backup obrigatório. base_prompt agnóstico para 6 especialistas. agent_method_prompts populados para MSEF, GRUMBACH/CEEEx, GODET, AltA. Validação de regressão MSEF obrigatória.
+3
+Exportação + Débitos
+resolveAgentPhases() do banco. Eliminar PHASE_LABELS hardcoded, detectAgent() e methodologySteps.ts. messageType no frontend. Parser markdown unificado. Memória por token budget. KRONOS rate limit configurável. UI de equipes e atribuição a projetos (API + modal Nova Sessão + painel admin).
+4
+SIPLEx + CEEEx + Ollama
+HERMES_GRUMBACH atualizado para 5 fases CEEEx. HERMES_SIPLEX com 7 fases. HERMES_REVISOR generalizado. Ollama configurado e testado (llama3.1:8b instalado).
+5
+Dados + Dashboard + Playbook
+FRED API + dados Legislativo (Câmara/Senado). Dashboard KRATOS com gráficos Chart.js. Playbook MSEF automatizado (DOCX). Sinais fracos integrados com indicadores KRATOS.
+6
+PoC
+Deploy Railway. PoC offline testada em máquina limpa. Logs de auditoria. Marca d'água em exportações. Seed de demonstração. ARCHITECTURE.html e AGENT_CONTEXT.json atualizados.
+7.1 Regras críticas — nunca violar (do HISTÓRICO)
+Zod não entra no Agent.ts — schemas são TOOL_JSON_SCHEMAS (objetos JS puros)
+stopWhen: stepCountIs(N) — nunca maxSteps (ignorado silenciosamente no SDK v6)
+prepareStep para toolChoice — nunca toolChoice: required global (bloqueia síntese)
+CMD em produção aponta para dist/index.js — nunca tsx no Dockerfile
+Prompt do HERMES sem blocos de isenção de ferramentas
+docker compose down -v apaga o banco e os modelos Ollama — usar sem -v em operação normal
+Ferramentas que importam @olympus/db ficam em apps/api/src/tools/ — não em packages/tools/
+Rebuild obrigatório após alterar packages/core: docker compose build --no-cache api
+StratSight Brasil — Documento interno — v2.0 — Maio 2026
