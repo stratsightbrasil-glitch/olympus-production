@@ -1,7 +1,7 @@
 # ESTADO ATUAL DO OLYMPUS v4
-**Documento técnico para revisão de design — atualizado em 23/05/2026 (Sprint 11)**
+**Documento técnico para revisão de design — atualizado em 26/05/2026 (Sprint Final Fase 1)**
 **Gerado por:** Claude Code (análise estática do código-fonte + execução do seed)
-**Destinatário:** Claude Chat — análise arquitetural e produção de guia de refatoração
+**Destinatário:** Claude Chat — análise arquitetural e continuidade do desenvolvimento
 
 ---
 
@@ -14,7 +14,7 @@ Olympus_v4/
 │   │   └── src/
 │   │       ├── index.ts            # Entry point, CORS, JWT, rotas, startup SQL (148 linhas)
 │   │       ├── mailer.ts           # Nodemailer — envio de e-mails SMTP
-│   │       ├── cron.ts             # KRONOS — agendador de análises autônomas (149 linhas)
+│   │       ├── cron.ts             # KRATOS scheduler — agendador de análises autônomas (KratosOrchestrator)
 │   │       ├── routes/
 │   │       │   ├── chat.ts         # Motor principal de análise — Motor Dinâmico ⚠️
 │   │       │   ├── export.ts       # Exportação DOCX/PDF/HTML/Estimativa (marca d'água CONFIDENCIAL)
@@ -40,13 +40,15 @@ Olympus_v4/
 │   │       ├── utils/
 │   │       │   └── audit.ts        # logAudit() — helper silencioso para audit_logs
 │   │       ├── tools/
-│   │       │   ├── technique-engine.ts  # SAT Engine — injeção de prompts (262 linhas)
-│   │       │   ├── analytic-standards.ts # Ferramentas ICD 203 (196 linhas)
-│   │       │   ├── signals.ts      # Ferramentas de sinais fracos (161 linhas)
-│   │       │   └── rag.ts          # Retrieval-Augmented Generation (68 linhas)
+│   │       │   ├── technique-engine.ts     # SAT Engine — injeção de prompts
+│   │       │   ├── analytic-standards.ts   # Ferramentas ICD 203
+│   │       │   ├── analytical-engines.ts   # 7 ferramentas analíticas Fase 1 (JSON Schema puro)
+│   │       │   ├── signals.ts              # Ferramentas de sinais fracos
+│   │       │   └── rag.ts                  # Retrieval-Augmented Generation
 │   │       └── scripts/
-│   │           ├── seed.ts         # Seed manual do banco — agentes/metodologias (303 linhas)
-│   │           └── seed-demo.ts    # Seed de demonstração (PoC) — idempotente
+│   │           ├── seed.ts         # Seed declarativo — 10 metodologias · 73 fases · slug/node_slug
+│   │           ├── seed-demo.ts    # Seed de demonstração (PoC) — idempotente
+│   │           └── backup-prompts.ts # Exporta prompts do banco para JSON (auditoria)
 │   │
 │   └── web/                        # Frontend React + Vite + TailwindCSS
 │       └── src/
@@ -117,6 +119,10 @@ Tabelas em PostgreSQL via Drizzle ORM:
 | `indicators` | Indicadores de monitoramento | id, projectId, name, source, thresholdYellow/Red, lastValue, status, **valueHistory** (jsonb, 90 dias) |
 | `platform_settings` | Config da plataforma | key (PK TEXT), value (JSONB) — **agora no schema Drizzle** (corrigido Sprint 4) |
 | `audit_logs` | Logs de auditoria imutáveis | id, userId, userName, action, resourceType, resourceId, metadata (jsonb), ipAddress, createdAt |
+| `project_events` | Eventos analíticos — tendências, incertezas, FPFs | id, projectId, name, description, type, status (proposed/approved/rejected), reliability A-F, credibility 1-6 |
+| `project_scenarios` | Cenários narrativos derivados de eventos aprovados | id, projectId, name, narrative, probability |
+| `matrix_direct_impacts` | Matriz MICMAC — impacto direto entre eventos | fromEventId, toEventId, impactScore 0-3 |
+| `technique_execution_outputs` | Saídas matemáticas de técnicas SAT | projectId, techniqueId, outputJson (resultados nunca calculados em prompt) |
 
 ---
 
@@ -135,7 +141,9 @@ Tabelas em PostgreSQL via Drizzle ORM:
 | **MNEMOSYNE** | expert | MSEF, GRUMBACH, FUTURES | web_search |
 | **THEMIS** | expert | Todas | web_search, buscar_sinais, avaliar_fonte, declarar_julgamento, registrar_hipotese_alternativa |
 | **KRATOS** | expert | MSEF, GRUMBACH | web_search, buscar_dados_publicos |
-| **HERMES_REVISOR** | expert | Todas (chamado pelo orquestrador) | avaliar_fonte, declarar_julgamento, registrar_hipotese_alternativa |
+| **ATHENA** | expert | Todas (chamado pelo orquestrador) | avaliar_fonte, declarar_julgamento, registrar_hipotese_alternativa |
+
+> **✅ Renomeado Sprint Final:** `HERMES_REVISOR` → `ATHENA` (Deusa da Sabedoria). ATHENA é a revisora de qualidade analítica — avalia entregas dos especialistas antes de apresentar ao usuário. No futuro fará revisão para todos os sistemas da suíte, não apenas o Sistema de Cenários.
 
 > **✅ Resolvido Sprint 11:** Os 4 orquestradores obsoletos foram eliminados — `HERMES_ALTA`, `HERMES_GODET`, `HERMES_GRUMBACH`, `HERMES_SIEX`. Todos os agentes são agora gerenciados exclusivamente pelo `seed.ts` declarativo (idempotente). A assimetria entre chat.ts e seed.ts foi corrigida.
 
@@ -257,6 +265,18 @@ anthropic(modelName)         createOpenAI({baseURL, apiKey:'ollama'})(modelName)
 
 - **Anthropic:** `claude-opus-4-7`, `claude-sonnet-4-5`, `claude-haiku-4-5` (hardcoded em settings.ts)
 - **Ollama:** dinâmico — GET /ollama-models → proxy para `http://ollama:11434/api/tags`
+
+### 5.5 Routing de modelo por agente (Sprint Final)
+
+Quando `provider === 'anthropic'`, cada agente usa um modelo específico independentemente do setting global do LLM Selector:
+
+| Modelo | Agentes |
+|--------|---------|
+| `claude-sonnet-4-6` | SCOPUS, KRATOS (análise leve, resposta rápida) |
+| `claude-opus-4-7` | KLIO, PYTHIA, MNEMOSYNE, THEMIS, ATHENA (análise profunda) |
+| *(global do setting)* | Qualquer agente não mapeado + todos os agentes quando provider=ollama |
+
+Override aplicado em `Agent.run()` via `AGENT_MODEL_OVERRIDES`. Log emitido: `[AGENTE] Modelo override → <model>`.
 
 ---
 
@@ -442,9 +462,9 @@ await new Promise(r => setTimeout(r, 15000)); // 15s entre projetos
 ```
 Não configurável sem alterar o código.
 
-### 8.12 Prompt do HERMES_REVISOR faz revisão apenas do MSEF
+### 8.12 Prompt da ATHENA faz revisão apenas do MSEF
 
-O HERMES_REVISOR é definido no Motor Dinâmico do MSEF e acoplado ao fluxo MSEF. Outras metodologias não têm revisão integrada de qualidade analítica.
+A ATHENA (ex-HERMES_REVISOR) é invocada pelo orquestrador MSEF. Outras metodologias não têm revisão integrada de qualidade analítica. Expansão planejada para Fase 2.
 
 ### 8.13 `vizMode` (`etapa`/`thinking`/`passagem`) sem documentação
 
@@ -495,10 +515,10 @@ Deploy alvo: Railway (padrão de produção) ou docker-compose local.
 
 ## 11. ESTADO DO TYPESCRIPT
 
-- `packages/db` — ✅ compilado, `alertEmails` presente no `.d.ts`
-- `packages/core` — ✅ compilado, `llmConfig` presente no `.d.ts`
-- `apps/api` — ✅ zero erros
-- `apps/web` — ✅ zero erros
+- `packages/db` — ✅ compilado (source)
+- `packages/core` — ✅ zero erros (`tsc --noEmit`)
+- `apps/web` — ✅ zero erros (`tsc --noEmit`)
+- `apps/api` — ⚠️ erros de tipo pré-existentes relacionados ao schema: `projectEvents`, `projectScenarios`, `matrixDirectImpacts`, `techniqueExecutionOutputs` e `connectivity_mode` existem em `schema.ts` mas o **pacote compilado** `@olympus/db` ainda não foi reconstruído com `docker compose build --no-cache api`. Após rebuild, os tipos resolverão automaticamente. Não são erros novos — schema foi aplicado via SQL direto sem rebuild do container.
 
 ---
 
@@ -649,4 +669,79 @@ DELETE FROM methodology_phases
 
 ---
 
-*Documento atualizado por análise estática + execução do seed em 23/05/2026.*
+## 15. FUNCIONALIDADES ADICIONADAS — SPRINT FINAL FASE 1 (26 Mai 2026)
+
+### Parte A — Preparação LangGraph JS
+
+**Schema (aplicado via SQL direto — rebuild do container pendente para compilar tipos):**
+- `projects.connectivity_mode` TEXT DEFAULT `'ONLINE'` — controla acesso externo (ONLINE / SOBERANO / AIR_GAPPED)
+- `methodology_phases.slug` TEXT UNIQUE — identificador canônico por fase
+- `methodology_phases.node_slug` TEXT — aponta para o nó LangGraph que executará a fase
+- 4 novas tabelas: `project_events`, `project_scenarios`, `matrix_direct_impacts`, `technique_execution_outputs`
+
+**`apps/api/src/tools/analytical-engines.ts` (arquivo novo):**
+7 ferramentas analíticas com JSON Schema puro (sem Zod):
+
+| Ferramenta | Função |
+|-----------|--------|
+| `tool_unified_search_engine` | Busca unificada respeitando `connectivityMode` |
+| `tool_register_event` | Registra evento analítico (tendência/incerteza/FPF) com MPC A-F × 1-6 |
+| `tool_mpc_source_evaluator` | Avalia e atribui confiabilidade MPC a um evento existente |
+| `tool_register_impact_relation` | Relacionamento de impacto entre eventos (para MICMAC) |
+| `tool_grumbach_expert_simulation` | Simulação de 7 personas especialistas (método Grumbach) |
+| `tool_mactor_analysis` | Análise de influência entre atores |
+| `tool_mpo_backcasting` | Backcasting MPO com horizontes intermediários |
+
+**AgentContext anti-bloat:**
+- `connectivityMode: 'ONLINE' | 'SOBERANO' | 'AIR_GAPPED'` adicionado a `AgentContext`
+- `anchorContext?: string` — âncora de contexto injetada no `systemPrompt` **antes** da janela de memória
+- `chat.ts` injeta eventos aprovados (`status='approved'`) como âncora para evitar Context Bloat
+
+**Hardening Ollama embed (`packages/tools/src/embed.ts`):**
+- `chunkTextSafe()` — quebra em parágrafo/sentença, fragmentos < 100 chars descartados
+- `runWithLimit()` — controle de concorrência MAX_CONCURRENT=2 com pausa 150ms entre batches
+- `generateEmbeddingsOllama()` — embeddings locais via `nomic-embed-text` com backpressure
+
+**Seed declarativo:**
+- 10 metodologias normalizadas com slugs canônicos
+- 73 fases com `slug` único e `nodeSlug` mapeado
+- Upsert por `target: methodologies.slug` (idempotente)
+- node_slug mapeados: `node_framing` → SCOPUS, `node_scanning_macro/forces/retrospective` → KLIO, `node_modeling/matrix_design` → PYTHIA, `node_narrative` → MNEMOSYNE, `node_integration` → THEMIS
+
+**Regras arquiteturais permanentes (`.claude/rules/langgraph.md`):**
+- Zod absolutamente proibido em ferramentas analíticas e nós do grafo
+- `packages/tools` não pode importar `@olympus/db`
+- Prompts por metodologia via `agentMethodPrompts`, nunca hardcoded
+- HITL: `project_events status='proposed'` aguarda aprovação antes de Pythia
+
+### Parte B — Correções de Nomenclatura e UX
+
+**Nomenclatura:**
+- `KronosOrchestrator` → `KratosOrchestrator` em `cron.ts` (logs, e-mail footer, variável). DB key `kronos_cooldown_ms` mantido.
+- `HERMES_REVISOR` → `ATHENA` em `seed.ts` (42×) e `chat.ts` (9×). ATHENA adicionada ao tipo `Agent` e ao GLYPHS registry.
+
+**LLM routing por agente (`Agent.ts`):**
+```
+SCOPUS, KRATOS       → claude-sonnet-4-6
+KLIO, PYTHIA,
+MNEMOSYNE, THEMIS,
+ATHENA               → claude-opus-4-7
+(Ollama/não mapeado) → modelo global do LLM Selector
+```
+
+**UX (`CommandBar.tsx`, `Sidebar.tsx`):**
+- QEC box: `maxWidth: 260` removido → wrapper `flex: 1; minWidth: 0` — texto nunca truncado
+- Chip de agente no topbar: exibe `"SCOPUS · Enquadramento Estratégico analisando"` (label derivado de `methodologySteps`)
+- Sidebar admin: dois botões separados — `Usuários` (`onShowUsers`) e `Backup` (`onShowBackup`)
+
+### Próximo sprint — Fase 2 LangGraph JS
+
+1. `packages/core/src/state.ts` — `OlympusStateAnnotation` com campos do domínio
+2. Nós TypeScript puros mapeados por `node_slug`
+3. `PostgresSaver` para checkpointing
+4. `interruptBefore: ['pythia_node']` — HITL nativo
+5. `docker compose build --no-cache api` — resolve erros de tipo pendentes do schema Fase 1
+
+---
+
+*Documento atualizado em 26/05/2026 — Sprint Final Fase 1 concluído.*

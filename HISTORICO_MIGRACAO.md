@@ -1,6 +1,6 @@
 # OLYMPUS v4.0 — Histórico Consolidado de Arquitetura e Desenvolvimento
 **StratSight Brasil · Strategic Foresight · IA Agêntica**
-**Última atualização:** 23 de Maio de 2026 (Sprint 10 — FRED + Legislativo · Playbook · Audit · Rate Limiting · Ollama Hardening · PoC Seed) · **Confidencial**
+**Última atualização:** 26 de Maio de 2026 (Sprint Final Fase 1 — Schema LangGraph · Ferramentas Analíticas · Seed Declarativo · Nomenclatura · LLM Routing por Agente · UX) · **Confidencial**
 
 > Este documento é a memória técnica do projeto. Registra a arquitetura, as justificativas de cada decisão, tudo o que foi feito e funcionou, tudo o que foi feito errado e precisou ser revertido, e o estado atual do backlog. Deve ser lido antes de qualquer intervenção no código.
 
@@ -151,6 +151,10 @@ SQLite foi o plano original (item A1 do roadmap v2). A decisão de pular direto 
 | `embeddings` | Chunks de documentos indexados para RAG — id UUID, projectId, chunkText, metadata JSONB, embedding vector(512) |
 | `tools` | Ferramentas registradas no motor |
 | `techniques` | Técnicas SAT disponíveis |
+| `project_events` | Eventos analíticos: tendências, incertezas, FPFs, fatores de inflexão — status proposed/approved/rejected, confiabilidade MPC (A-F × 1-6) |
+| `project_scenarios` | Cenários narrativos derivados de eventos aprovados |
+| `matrix_direct_impacts` | Matriz de impacto direto entre eventos (MICMAC M^k) — fromEventId × toEventId × impactScore 0-3 |
+| `technique_execution_outputs` | Saídas matemáticas de técnicas (MICMAC, SMIC, MACTOR) — persistidas e lidas pelos agentes, nunca calculadas em prompt |
 
 ---
 
@@ -824,7 +828,7 @@ Se o Docker travar com `input/output error` ou `EOF` durante o build: `wsl --shu
 | **Fix pgvector NOTICE** | `packages/db/src/db.ts`: `onnotice: () => {}` no cliente postgres.js. Suprime mensagens NOTICE do PostgreSQL (pgvector "extension already exists, skipping") que eram impressas como JSON nos logs do container — visual confuso na inicialização. |
 | **Fix Ollama Headers Timeout** | `apps/api/src/index.ts`: `setGlobalDispatcher(new Agent({headersTimeout:15min, bodyTimeout:30min}))` via `undici` no topo do arquivo, antes de qualquer import. Corrige `UND_ERR_HEADERS_TIMEOUT` que ocorria quando o modelo Llama precisava de >30s para carregar na memória antes de enviar o primeiro byte de resposta. **Causa raiz:** Em Node.js 20, `globalThis.fetch` usa o mesmo módulo undici interno — `setGlobalDispatcher` de `npm undici` afeta ambos. Complementado por Ollama pre-warm no startup: `POST /api/generate` com `keep_alive:-1` carrega o modelo na GPU/RAM antes da primeira requisição de usuário. |
 
-**Arquivos modificados no Sprint 10:**
+**Arquivos modificados no Sprint 10 (23 Mai 2026):**
 - `packages/tools/src/dados-publicos.ts` — `fetchFRED()`, `fetchCamara()`, `fetchSenado()`, 11 novos indicadores em `ALL_INDICATORS` e `execute()`
 - `packages/db/src/schema.ts` — `valueHistory` em `indicators`; tabela `audit_logs`; export de `AuditLog`/`NewAuditLog`
 - `packages/db/src/db.ts` — `onnotice: () => {}`
@@ -841,6 +845,62 @@ Se o Docker travar com `input/output error` ou `EOF` durante o build: `wsl --shu
 - `apps/web/src/components/layout/KratosPanel.tsx` — `Sparkline`, `IndicadorRow`, `classifFilter`
 - `apps/web/src/components/layout/CommandBar.tsx` — `onGerarPlaybook` prop + botão Playbook
 - `apps/web/src/App.tsx` — `gerarPlaybook()` function, `onGerarPlaybook` passado ao CommandBar
+
+### ✅ Sprint Final — Fase 1: LangGraph Preps + Nomenclatura + LLM Routing (26 Mai 2026)
+
+Sprint em duas partes executadas na mesma semana. Objetivo: preparar o motor para migração LangGraph JS (Fase 2) e fechar débitos de nomenclatura/UX.
+
+#### Parte A — Preparação LangGraph (Fase 1 do Guia de Implantação Revisado)
+
+| Passo | O que foi feito |
+|-------|----------------|
+| **Passo 0 — Backup** | `backup_pre_fase1_20260525.sql` (2.1 MB) criado antes de qualquer mudança |
+| **Passo 1 — Schema** | `projects.connectivity_mode` TEXT DEFAULT 'ONLINE' (ONLINE/SOBERANO/AIR_GAPPED); `methodology_phases.slug` TEXT UNIQUE; `methodology_phases.node_slug` TEXT; 4 novas tabelas: `project_events`, `project_scenarios`, `matrix_direct_impacts`, `technique_execution_outputs`. Aplicado via SQL direto (drizzle-kit push exige TTY interativo). |
+| **Passo 2 — Ferramentas analíticas** | `apps/api/src/tools/analytical-engines.ts` criado com 7 ferramentas (JSON Schema puro, sem Zod): `tool_unified_search_engine`, `tool_register_event`, `tool_mpc_source_evaluator`, `tool_register_impact_relation`, `tool_grumbach_expert_simulation`, `tool_mactor_analysis`, `tool_mpo_backcasting`. Schemas adicionados a `TOOL_JSON_SCHEMAS` em `Agent.ts`. |
+| **Passo 3 — Contexto anti-bloat** | `AgentContext` ganhou `connectivityMode` e `anchorContext`. `chat.ts` injeta âncora de eventos aprovados no `systemPrompt` antes da execução. `CONNECTIVITY_MODE=ONLINE` adicionado ao `.env`. |
+| **Passo 4 — Hardening Ollama embed** | `packages/tools/src/embed.ts`: `chunkTextSafe()` (quebra em parágrafo/sentença), `runWithLimit()` (MAX_CONCURRENT=2 para proteger CPU/VRAM), `generateEmbeddingsOllama()`. Pausas de 150ms entre batches. |
+| **Passo 5 — Seed declarativo** | 10 metodologias normalizadas (slugs canônicos), 73 fases com `slug` único e `nodeSlug` preenchido (mapeamento para futuros nós LangGraph). Upsert usa `onConflictDoUpdate({ target: methodologies.slug })`. |
+| **Passo 6 — Regras Claude Code** | `.claude/rules/langgraph.md` criado: Zod proibido, isolamento de pacotes, HITL gate, ferramentas matemáticas, modos de soberania. |
+| **Passo 7 — Validação** | Typecheck zero erros em `packages/core` e `apps/api`. Docker build sem erros. Seed executado com sucesso. Smoke test: event insert + HITL approve OK. |
+
+**node_slug mappings (para Fase 2 LangGraph JS):**
+
+| node_slug | Nó LangGraph | Função |
+|-----------|-------------|--------|
+| `node_framing` | SCOPUS | KAC, escopo, filtro Hendrikson |
+| `node_scanning_macro` | KLIO | PESTEL, megatendências, FPFs |
+| `node_scanning_forces` | KLIO | Atores, capacidades, eixos de inflexão |
+| `node_retrospective` | KLIO | Trajetória histórica, Cones de Janus, RAG |
+| `node_modeling` | PYTHIA | MICMAC M^k, probabilidades, ACH |
+| `node_matrix_design` | PYTHIA | Matriz 2×2, morfologia, cenário alvo |
+| `node_narrative` | MNEMOSYNE | Narrativas com travas probabilísticas |
+| `node_integration` | THEMIS | Hedges/bets, backcasting, alertas |
+
+#### Parte B — Correções de Nomenclatura e UX
+
+| Correção | Detalhe |
+|----------|---------|
+| **KRONOS → KRATOS** (`cron.ts`) | `KronosOrchestrator` → `KratosOrchestrator`; `const kronos` → `const kratos`; todos os `[KRONOS]` nos logs → `[KRATOS]`; footer do e-mail atualizado. DB key `kronos_cooldown_ms` mantido para não quebrar settings existentes. |
+| **HERMES_REVISOR → ATHENA** | 42 ocorrências em `seed.ts` e 9 em `chat.ts` substituídas. ATHENA adicionada ao tipo `Agent` em `AgentMark/types.ts` e ao registro de glyphs em `AgentMark/index.tsx` (reutiliza glyph do HERMES). `EngineChip` no CommandBar agora passa `'ATHENA'` em vez de `'HERMES'` ao AgentMark. |
+| **LLM routing por agente** (`Agent.ts`) | `AGENT_MODEL_OVERRIDES` mapeamento em `Agent.run()`: Sonnet 4.6 → SCOPUS, KRATOS; Opus 4.7 → KLIO, PYTHIA, MNEMOSYNE, THEMIS, ATHENA. Override só ativo quando `provider === 'anthropic'`; Ollama usa modelo único configurado. Log `[AGENTE] Modelo override → <model>` emitido a cada execução. |
+| **QEC box sem truncamento** (`CommandBar.tsx`) | Substituído `maxWidth: 260` fixo por wrapper `flex: 1; minWidth: 0`. Questão Estratégica Central ocupa todo o espaço disponível na subbar antes do badge de classificação. |
+| **Chip de agente com label completo** (`CommandBar.tsx`) | Chip do topbar agora mostra `"SCOPUS · Enquadramento Estratégico analisando"` em vez de `"SCOPUS analisando"`. Label derivado de `methodologySteps.find(s => s.agent === activeAgent)`. |
+| **Sidebar admin** (`Sidebar.tsx`) | Botão único `"Usuários · Backup · Engine"` → dois botões separados: `Usuários` (→ `onShowUsers`) e `Backup` (→ `onShowBackup`). |
+
+**Arquivos modificados no Sprint Final (26 Mai 2026):**
+- `packages/db/src/schema.ts` — `connectivity_mode`, `slug`/`node_slug` em `methodology_phases`, 4 novas tabelas
+- `packages/core/src/Agent.ts` — `TOOL_JSON_SCHEMAS` (7 novas entradas), `AGENT_MODEL_OVERRIDES`, `effectiveConfig`
+- `packages/core/src/types.ts` — `connectivityMode`, `anchorContext` em `AgentContext`
+- `packages/tools/src/embed.ts` — `chunkTextSafe`, `runWithLimit`, `generateEmbeddingsOllama`
+- `apps/api/src/tools/analytical-engines.ts` — **arquivo novo** — 7 ferramentas analíticas
+- `apps/api/src/routes/chat.ts` — injeção do `anchorContext`, renomeação ATHENA
+- `apps/api/src/scripts/seed.ts` — 10 metodologias normalizadas, 73 fases com slug/nodeSlug, ATHENA
+- `apps/api/src/cron.ts` — `KratosOrchestrator`, `[KRATOS]` logs, `getKratosCooldown`
+- `apps/web/src/components/layout/CommandBar.tsx` — QEC flex, chip com label, `EngineChip` ATHENA
+- `apps/web/src/components/layout/Sidebar.tsx` — botões Usuários + Backup separados
+- `apps/web/src/components/ui/AgentMark/types.ts` — `Agent` type inclui `'ATHENA'`
+- `apps/web/src/components/ui/AgentMark/index.tsx` — `GLYPHS.ATHENA` (reutiliza HERMES)
+- `.claude/rules/langgraph.md` — **arquivo novo** — regras arquiteturais permanentes
 
 ---
 
@@ -873,6 +933,23 @@ Se o Docker travar com `input/output error` ou `EOF` durante o build: `wsl --shu
 - **Sem 3–5:** Primeira PoC formal — CEEx ou CIE — relatório entregue + NPS ≥ 8
 - **Sem 5–8:** Pipeline para primeiro contrato (R$ 60K–120K)
 
+### ✅ Sprint Final Fase 1 — Concluídos (26 Mai 2026)
+
+| Item | Concluído |
+|------|-----------|
+| **Schema LangGraph (connectivity_mode, slug, node_slug, 4 tabelas)** | Sprint Final |
+| **7 ferramentas analíticas JSON Schema puro** | Sprint Final |
+| **Âncora de contexto anti-bloat (anchorContext)** | Sprint Final |
+| **Hardening Ollama embed (chunkTextSafe + runWithLimit)** | Sprint Final |
+| **Seed declarativo 10 metodologias normalizadas, 73 fases** | Sprint Final |
+| **Regras Claude Code (.claude/rules/langgraph.md)** | Sprint Final |
+| **KRONOS → KRATOS em cron.ts** | Sprint Final |
+| **HERMES_REVISOR → ATHENA (seed.ts + chat.ts + AgentMark)** | Sprint Final |
+| **LLM routing por agente (Sonnet/Opus por especialidade)** | Sprint Final |
+| **QEC box flex:1 — sem truncamento** | Sprint Final |
+| **Chip do agente mostra label completo do passo** | Sprint Final |
+| **Sidebar admin: Usuários + Backup separados** | Sprint Final |
+
 ### ✅ Sprints 9–10 — Concluídos (adicionados ao backlog)
 
 | Item | Concluído em |
@@ -895,6 +972,16 @@ Se o Docker travar com `input/output error` ou `EOF` durante o build: `wsl --shu
 | **Sliding window por tokens** | Substituir `.slice(-12)` (arbitrário) por janela baseada em token count (tiktoken). Previne degradação em análises longas. | Mês 6 |
 | **API pública + Swagger (C5)** | Rate limiting por plano (Redis) na API docs. Swagger UI já existe (`GET /api/docs`). Falta documentação de parceiros. | Mês 7–8 |
 | **Audit frontend** | Modal de visualização de audit_logs para admins — exportação CSV. Backend já implementado. | Mês 7 |
+
+### 🔲 Fase 2 — LangGraph JS (próximo sprint)
+
+| Item | Descrição |
+|------|-----------|
+| **`packages/core/src/state.ts`** | `OlympusStateAnnotation` com campos derivados de `project_events`, `project_scenarios`, `connectivityMode` |
+| **Nós TypeScript puros** | Um arquivo por `node_slug`: `scopus_node.ts`, `klio_node.ts`, `pythia_node.ts`, etc. |
+| **`PostgresSaver`** | Checkpointing no banco — permite retomar análises interrompidas |
+| **`interruptBefore: ['pythia_node']`** | HITL nativo do LangGraph — Pythia só processa eventos `status='approved'` |
+| **Rota SSE LangGraph** | Substituir `streamText` por streaming de eventos do grafo via `streamEvents()` |
 
 ### 🔮 Futuro (Fase D)
 
