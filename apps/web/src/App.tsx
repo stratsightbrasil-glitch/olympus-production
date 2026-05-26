@@ -1,1906 +1,406 @@
-import React, { useState, useRef, useEffect, useMemo } from 'react';
+import React, { useRef, useEffect, useMemo, useState } from 'react';
 import { AGENTS } from './constants';
 import { MessageBubble } from './components/chat/MessageBubble';
 import { AgentWorking } from './components/chat/AgentWorking';
 import { CommandBar } from './components/layout/CommandBar';
 import { Sidebar } from './components/layout/Sidebar';
-import { AgentMark } from './components/ui/AgentMark';
 import { InputZone } from './components/chat/InputZone';
 import { RightPanel } from './components/layout/RightPanel';
 import { KratosPanel } from './components/layout/KratosPanel';
+import { LoginPage } from './components/auth/LoginPage';
+import { NewSessionModal } from './components/modals/NewSessionModal';
+import { ProjectSettingsModal } from './components/modals/ProjectSettingsModal';
+import { UsersModal } from './components/modals/UsersModal';
+import { BackupModal } from './components/modals/BackupModal';
+import { ReviewModal } from './components/modals/ReviewModal';
 import { getMethodologySteps, STEP_DETECTION_PATTERNS } from './data/methodologySteps';
+import { useAuth } from './hooks/useAuth';
+import { useSessionManager } from './hooks/useSessionManager';
+import { useProjectState } from './hooks/useProjectState';
+import { useProjectData } from './hooks/useProjectData';
+import { useLlmConfig } from './hooks/useLlmConfig';
+import { useAttachments, ACCEPTED_TYPES } from './hooks/useAttachments';
+import { useChat } from './hooks/useChat';
+import { useExport } from './hooks/useExport';
+import type { ActiveModal } from './types';
 
-function UsersModal({ onClose, reqHeaders }: { onClose: () => void, reqHeaders: any }) {
-  const [usersList, setUsersList] = useState<any[]>([]);
-  const [form, setForm] = useState({ name: '', email: '', password: '', role: 'analista' });
-  const [methodologiesList, setMethodologiesList] = useState<any[]>([]);
-
-  const loadUsers = async () => {
-    try {
-      const res = await fetch('/api/v1/users', { headers: reqHeaders });
-      if (res.ok) setUsersList(await res.json());
-      else console.error('Erro ao carregar usuários:', await res.text());
-    } catch (e) { console.error(e); }
-  };
-
-  const loadMethodologies = async () => {
-    try {
-      const res = await fetch('/api/v1/engine/methodologies', { headers: reqHeaders });
-      if (res.ok) setMethodologiesList(await res.json());
-    } catch (e) { console.error(e); }
-  };
-
-  useEffect(() => { loadUsers(); loadMethodologies(); }, []);
-
-  const handleCreate = async (e: React.FormEvent) => {
-    e.preventDefault();
-    try {
-      const res = await fetch('/api/v1/users', { method: 'POST', headers: reqHeaders, body: JSON.stringify(form) });
-      if (res.ok) { setForm({ name: '', email: '', password: '', role: 'analista' }); loadUsers(); }
-      else alert((await res.json()).error || 'Erro ao criar usuário');
-    } catch (err) { alert('Erro na requisição'); }
-  };
-
-  const handleUpdateRole = async (id: string, newRole: string) => {
-    try {
-      await fetch(`/api/v1/users/${id}`, { method: 'PATCH', headers: reqHeaders, body: JSON.stringify({ role: newRole }) });
-      loadUsers();
-    } catch (err) { alert('Erro ao atualizar'); }
-  };
-
-  const handleDelete = async (id: string) => {
-    if (!window.confirm('Tem certeza que deseja excluir este usuário do sistema?')) return;
-    try {
-      const res = await fetch(`/api/v1/users/${id}`, { method: 'DELETE', headers: reqHeaders });
-      if (res.ok) loadUsers(); else alert((await res.json()).error || 'Erro ao excluir');
-    } catch (err) { alert('Erro ao excluir'); }
-  };
-
-  return (
-    <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl p-8 max-h-[90vh] flex flex-col">
-        <div className="flex justify-between items-center mb-6">
-          <h2 className="font-bold text-stratsight-dark text-xl">Gestão de Usuários</h2>
-          <button onClick={onClose} className="text-gray-500 hover:text-red-500 font-bold text-xl">✕</button>
-        </div>
-        <form onSubmit={handleCreate} autoComplete="off" className="flex gap-2 mb-6 bg-gray-50 p-4 rounded-xl border border-gray-200">
-          <input type="text" autoComplete="new-password" placeholder="Nome" required value={form.name} onChange={e => setForm({...form, name: e.target.value})} className="flex-1 px-3 py-2 rounded-lg border outline-none focus:border-stratsight-medium" />
-          <input type="email" autoComplete="new-password" placeholder="E-mail" required value={form.email} onChange={e => setForm({...form, email: e.target.value})} className="flex-1 px-3 py-2 rounded-lg border outline-none focus:border-stratsight-medium" />
-          <input type="password" autoComplete="new-password" placeholder="Senha" required value={form.password} onChange={e => setForm({...form, password: e.target.value})} className="flex-1 px-3 py-2 rounded-lg border outline-none focus:border-stratsight-medium" />
-          <select value={form.role} onChange={e => setForm({...form, role: e.target.value})} className="px-3 py-2 rounded-lg border outline-none focus:border-stratsight-medium bg-white">
-            <option value="admin">Admin</option><option value="analista">Analista</option><option value="cliente">Cliente</option>
-          </select>
-          <button type="submit" className="bg-stratsight-dark text-white px-4 py-2 rounded-lg font-bold hover:bg-stratsight-medium">Criar</button>
-        </form>
-        <div className="overflow-y-auto flex-1 border rounded-xl">
-          <table className="w-full text-left text-sm">
-            <thead className="bg-stratsight-dark text-white sticky top-0"><tr><th className="p-3">Nome</th><th className="p-3">E-mail</th><th className="p-3">2FA</th><th className="p-3">Perfil</th><th className="p-3 text-right">Ações</th></tr></thead>
-            <tbody>{usersList.map(u => (
-              <tr key={u.id} className="border-b hover:bg-gray-50">
-                <td className="p-3 font-medium">{u.name}</td><td className="p-3 text-gray-600">{u.email}</td><td className="p-3">{u.isTwoFactorEnabled ? '✅ Ativo' : '❌ Não'}</td>
-                <td className="p-3"><select value={u.role} onChange={e => handleUpdateRole(u.id, e.target.value)} className="bg-transparent font-bold outline-none cursor-pointer border-b border-dashed border-gray-400"><option value="admin">Admin</option><option value="analista">Analista</option><option value="cliente">Cliente</option></select></td>
-                <td className="p-3 text-right"><button onClick={() => handleDelete(u.id)} className="text-red-500 hover:text-red-700 font-bold px-2 py-1 bg-red-50 rounded">Excluir</button></td>
-              </tr>))}
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// fmt moved to src/lib/fmt.ts — imported above
-
-function BackupModal({ onClose, reqHeaders }: { onClose: () => void, reqHeaders: any }) {
-  const [backups, setBackups] = useState<any[]>([]);
-  const [generating, setGenerating] = useState(false);
-  const [msg, setMsg] = useState('');
-
-  const loadBackups = async () => {
-    try {
-      const res = await fetch('/api/v1/backup/list', { headers: reqHeaders });
-      if (res.ok) setBackups((await res.json()).backups || []);
-    } catch (_) {}
-  };
-
-  useEffect(() => { loadBackups(); }, []);
-
-  const generateBackup = async () => {
-    setGenerating(true); setMsg('');
-    try {
-      const res = await fetch('/api/v1/backup/generate', { method: 'POST', headers: reqHeaders });
-      const data = await res.json();
-      if (res.ok) { setMsg(`✅ ${data.message}`); loadBackups(); }
-      else setMsg(`❌ ${data.error || 'Erro ao gerar backup'}`);
-    } catch (e: any) { setMsg(`❌ ${e.message}`); }
-    setGenerating(false);
-  };
-
-  const downloadBackup = async (filename: string) => {
-    try {
-      const res = await fetch(`/api/v1/backup/download/${encodeURIComponent(filename)}`, { headers: reqHeaders });
-      if (!res.ok) { alert('Erro ao baixar o backup.'); return; }
-      const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url; a.download = filename; a.click();
-      URL.revokeObjectURL(url);
-    } catch (e: any) { alert('Erro ao baixar: ' + e.message); }
-  };
-
-  return (
-    <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl p-8 max-h-[90vh] flex flex-col">
-        <div className="flex justify-between items-center mb-5">
-          <h2 className="font-bold text-stratsight-dark text-xl">💾 Backup do Banco de Dados</h2>
-          <button onClick={onClose} className="text-gray-500 hover:text-red-500 font-bold text-xl">✕</button>
-        </div>
-        <div className="mb-4 p-3 bg-stratsight-light rounded-xl border border-stratsight-medium/20 text-xs text-stratsight-dark leading-relaxed">
-          Backups são gerados via <code className="bg-white px-1 rounded">pg_dump</code> e armazenados no volume <code className="bg-white px-1 rounded">/backups/</code> do container da API. Copie os arquivos para fora do container após gerar.
-        </div>
-        <button onClick={generateBackup} disabled={generating} className="mb-3 px-5 py-3 bg-stratsight-dark text-white font-bold rounded-xl hover:bg-stratsight-medium transition-colors disabled:opacity-50 text-sm">
-          {generating ? '⏳ Gerando backup...' : '💾 Gerar Backup Agora'}
-        </button>
-        {msg && <div className={`mb-3 text-sm font-medium px-3 py-2 rounded-lg ${msg.startsWith('✅') ? 'bg-green-50 text-green-800' : 'bg-red-50 text-red-800'}`}>{msg}</div>}
-        <div className="overflow-y-auto flex-1 border rounded-xl">
-          {backups.length === 0 ? (
-            <div className="p-6 text-center text-gray-400 text-sm">Nenhum backup encontrado.</div>
-          ) : (
-            <table className="w-full text-left text-sm">
-              <thead className="bg-stratsight-dark text-white sticky top-0">
-                <tr><th className="p-3">Arquivo</th><th className="p-3">Tamanho</th><th className="p-3">Data</th><th className="p-3"></th></tr>
-              </thead>
-              <tbody>
-                {backups.map((b: any, i: number) => (
-                  <tr key={i} className="border-b hover:bg-gray-50">
-                    <td className="p-3 font-mono text-xs text-gray-700">{b.name}</td>
-                    <td className="p-3 text-gray-600">{b.size}</td>
-                    <td className="p-3 text-gray-500">{new Date(b.createdAt).toLocaleString('pt-BR')}</td>
-                    <td className="p-3"><button onClick={() => downloadBackup(b.name)} className="text-xs font-bold text-stratsight-medium hover:text-stratsight-dark transition-colors">⬇ Baixar</button></td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-        </div>
-        <button onClick={onClose} className="mt-4 py-2 text-stratsight-medium border-2 border-gray-200 font-bold rounded-xl hover:bg-gray-50 transition-colors text-sm">Fechar</button>
-      </div>
-    </div>
-  );
-}
+const ATHENA_SLUGS = new Set(['msef', 'godet', 'grumbach', 'macroplan', 'futures', 'siex', 'alta']);
 
 function App() {
-  // ── Mensagens e estado da conversa ──────────────────────────────────────────
-  const [messages, setMessages] = useState<{role: string, content: string, id?: string, messageType?: string}[]>([]);
-  const [input, setInput] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [progressAgent, setProgressAgent] = useState('');
-  const [streamingText, setStreamingText] = useState('');
-  const [stepLog, setStepLog] = useState<string[]>([]);
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const auth = useAuth();
+  const { token, user, logout } = auth;
 
-  // ── Projeto / Sessão ─────────────────────────────────────────────────────────
-  const [projeto, setProjeto] = useState<any>({
-    nome: '', metodologia: 'MSEF', status: 'Em produção', kratosCron: '0 6 * * *',
-    alertEmails: '',
-    horizonte: '', elaborador: '', cliente: '', questaoEstrategica: '', mudancaIdentificada: '',
-    teamId: null
-  });
-  const [vizMode, setVizMode] = useState('passos');
-  const [mode, setMode] = useState('production');
+  const [activeModal, setActiveModal] = useState<ActiveModal>(null);
   const [mainView, setMainView] = useState<'chat' | 'kratos'>('chat');
-  const [sessionId, setSessionId] = useState(() => `sess_${Date.now()}`);
-  const [sessoes, setSessoes] = useState<any[]>([]);
-  const [showSessoes, setShowSessoes] = useState(false);
-
-  // ── Modais ───────────────────────────────────────────────────────────────────
-  const [showNovaSessaoModal, setShowNovaSessaoModal] = useState(false);
-  const [showSettingsModal, setShowSettingsModal] = useState(false);
-  const [showUsersModal, setShowUsersModal] = useState(false);
-  const [showBackupModal, setShowBackupModal] = useState(false);
-
-  // ── Formulário de Nova Sessão ────────────────────────────────────────────────
-  const [scopeForm, setScopeForm] = useState({
-    tema: '', horizonte: '', elaborador: '', cliente: '',
-    questaoEstrategica: '', mudancaIdentificada: '', instrucoes: ''
-  });
-  const [scopeFiles, setScopeFiles] = useState<{name: string, text: string}[]>([]);
-  const [scopeExtracting, setScopeExtracting] = useState(false);
-  const scopeFileInputRef = useRef<HTMLInputElement>(null);
-
-  // ── Extended Thinking ────────────────────────────────────────────────────────
-  const [thinkingBlocks, setThinkingBlocks] = useState<Record<number, string>>({});
-  const [thinkingOpen, setThinkingOpen] = useState<Record<number, boolean>>({});
-
-  // ── Anexos (chat) ────────────────────────────────────────────────────────────
-  const [attachedFiles, setAttachedFiles] = useState<{name: string, text: string, isImage?: boolean, dataUrl?: string}[]>([]);
-  const [extracting, setExtracting] = useState(false);
-  const [fileError, setFileError] = useState('');
-  const ACCEPTED_TYPES = '.txt,.md,.csv,.json,.rtf,.pdf,.doc,.docx,.xlsx,.xls,.png,.jpg,.jpeg,.webp';
-
-  // ── Export ───────────────────────────────────────────────────────────────────
-  const [exportingDocx, setExportingDocx] = useState(false);
-  const [exportingPdf, setExportingPdf] = useState(false);
-  const [exportingEstimativa, setExportingEstimativa] = useState(false);
-
-  // ── Sidebar filtro ───────────────────────────────────────────────────────────
-  const [filterStatus, setFilterStatus] = useState({ producao: true, ativos: true, inativos: false });
-  const [sessionSearch, setSessionSearch] = useState('');
-  const [indicadores, setIndicadores] = useState<any[]>([]);
-  const [weakSignals, setWeakSignals] = useState<any[]>([]);
-  const [signalStats, setSignalStats] = useState<any>(null);
-  const [analyticReview, setAnalyticReview] = useState<any>(null);
-  const [showReviewModal, setShowReviewModal] = useState(false);
+  const [mode, setMode] = useState('production');
+  const [vizMode, setVizMode] = useState('passos');
+  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [input, setInput] = useState('');
   const [methodologies, setMethodologies] = useState<any[]>([]);
   const [teams, setTeams] = useState<any[]>([]);
-  const [selectedTeamId, setSelectedTeamId] = useState<string>('');
-  const [llmConfig, setLlmConfig] = useState<{ provider: string; model: string }>({ provider: 'anthropic', model: 'claude-opus-4-7' });
-  const [anthropicModels, setAnthropicModels] = useState<{ id: string; label: string }[]>([]);
-  const [ollamaModels, setOllamaModels] = useState<{ id: string; size?: number }[]>([]);
-  const [ollamaAvailable, setOllamaAvailable] = useState(false);
-
-  // ── Auth ─────────────────────────────────────────────────────────────────────
-  // NUNCA lemos localStorage no início — o login deve sempre ser feito
-  const [token, setToken] = useState<string | null>(null);
-  const [user, setUser] = useState<any>(null);
-  const [authMode, setAuthMode] = useState<'login' | 'register'>('login');
-  const [authForm, setAuthForm] = useState({ name: '', email: '', password: '' });
-  const [showPassword, setShowPassword] = useState(false);
-  const [requires2FA, setRequires2FA] = useState(false);
-  const [totpToken, setTotpToken] = useState('');
-  const [setup2FA, setSetup2FA] = useState<{qrCodeUrl?: string, userId?: string} | null>(null);
-  const [isFirstRun, setIsFirstRun] = useState(false);
 
   const bottomRef = useRef<HTMLDivElement>(null);
-  const authHeader = { 'Authorization': `Bearer ${token}` };
+
   const reqHeaders = { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` };
 
-  // ── Interceptador Global de Fetch para Auto-Logout no 401 ────────────────────
-  useEffect(() => {
-    const originalFetch = window.fetch;
-    window.fetch = async (...args) => {
-      const response = await originalFetch(...args);
-      if (response.status === 401) {
-        console.warn('Sessão expirada (401). Deslogando usuário...');
-        localStorage.removeItem('olympus_token');
-        localStorage.removeItem('olympus_user');
-        setToken(null);
-        setUser(null);
-      }
-      return response;
-    };
-    return () => { window.fetch = originalFetch; };
-  }, []);
+  // ── Domain hooks ──────────────────────────────────────────────────────────
+  const sessions = useSessionManager(token);
+  const projectData = useProjectData(token);
+  const llm = useLlmConfig(token);
+  const attachments = useAttachments(token);
 
-  useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages, loading]);
+  const projectState = useProjectState({
+    token,
+    onSessionLoaded: (id, msgs) => { chat.setMessages(msgs); sessions.setShowSessoes(false); },
+    onSessionsRefresh: sessions.carregarSessoes,
+    onIndicatorsRefresh: projectData.carregarIndicadores,
+    onSignalsRefresh: projectData.carregarSinais,
+    onReviewRefresh: projectData.carregarRevisao,
+  });
 
-  useEffect(() => {
-    if (!token) {
-      fetch('/api/v1/auth/setup-status')
-        .then(res => res.json())
-        .then(data => {
-          if (data.hasUsers === false) {
-            setIsFirstRun(true);
-            setAuthMode('register');
-            setAuthForm(prev => ({ ...prev, name: 'Administrador' }));
-          }
-        })
-        .catch(console.error);
-    }
-  }, [token]);
+  const chat = useChat({
+    token,
+    sessionId: projectState.sessionId,
+    projeto: projectState.projeto,
+    vizMode,
+    onIndicatorsRefresh: projectData.carregarIndicadores,
+    onSignalsRefresh: projectData.carregarSinais,
+    onSessionsRefresh: sessions.carregarSessoes,
+  });
 
-  const carregarSessoes = async () => {
-    try {
-      const r = await fetch('/api/v1/sessions?t=' + Date.now(), { headers: authHeader });
-      if (r.ok) setSessoes(await r.json());
-    } catch (_) {}
-  };
+  const exports = useExport(token, projectState.projeto, chat.messages);
 
-  useEffect(() => { if (token) carregarSessoes(); }, [token]);
+  // ── Effects ──────────────────────────────────────────────────────────────
+  useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [chat.messages, chat.loading]);
 
-  useEffect(() => {
-    if (token) {
-      fetch('/api/v1/engine/methodologies', { headers: reqHeaders })
-        .then(res => res.ok ? res.json() : [])
-        .then(data => setMethodologies(Array.isArray(data) ? data : []))
-        .catch(err => console.error('Erro ao buscar metodologias:', err));
-      fetch('/api/v1/teams', { headers: reqHeaders })
-        .then(res => res.ok ? res.json() : [])
-        .then(data => setTeams(Array.isArray(data) ? data : []))
-        .catch(() => {});
-    }
-  }, [token]);
-
-  // Busca configuração LLM ativa e modelos Ollama disponíveis
   useEffect(() => {
     if (!token) return;
-    fetch('/api/v1/settings', { headers: reqHeaders })
-      .then(r => r.ok ? r.json() : null)
-      .then(d => {
-        if (d?.llm) setLlmConfig(d.llm);
-        if (d?.anthropicModels) setAnthropicModels(d.anthropicModels);
-      })
+    fetch('/api/v1/engine/methodologies', { headers: reqHeaders })
+      .then(r => r.ok ? r.json() : [])
+      .then(d => setMethodologies(Array.isArray(d) ? d : []))
       .catch(() => {});
-    fetch('/api/v1/settings/ollama-models', { headers: reqHeaders })
-      .then(r => r.ok ? r.json() : null)
-      .then(d => {
-        if (d) { setOllamaAvailable(d.available); setOllamaModels(d.models || []); }
-      })
+    fetch('/api/v1/teams', { headers: reqHeaders })
+      .then(r => r.ok ? r.json() : [])
+      .then(d => setTeams(Array.isArray(d) ? d : []))
       .catch(() => {});
+    sessions.carregarSessoes();
   }, [token]);
 
-  const handleLlmChange = async (config: { provider: string; model: string }) => {
-    try {
-      const res = await fetch('/api/v1/settings/llm', {
-        method: 'PATCH',
-        headers: reqHeaders,
-        body: JSON.stringify(config),
-      });
-      if (res.ok) setLlmConfig(config);
-      else alert((await res.json()).error || 'Erro ao alterar provedor LLM');
-    } catch { alert('Erro na requisição'); }
-  };
-
-  const carregarIndicadores = async (projectId: string) => {
-    try {
-      const r = await fetch(`/api/v1/indicators/project/${projectId}`, { headers: authHeader });
-      if (r.ok) setIndicadores(await r.json());
-    } catch { setIndicadores([]); }
-  };
-
-  const carregarSinais = async (projectId: string) => {
-    try {
-      const r = await fetch(`/api/v1/signals/${projectId}`, { headers: authHeader });
-      if (r.ok) {
-        const data = await r.json();
-        setWeakSignals(data.sinais || []);
-        setSignalStats(data.stats || null);
-      }
-    } catch { setWeakSignals([]); setSignalStats(null); }
-  };
-
-  const carregarRevisao = async (projectId: string) => {
-    try {
-      const r = await fetch(`/api/v1/reviews/${projectId}`, { headers: authHeader });
-      if (r.ok) { const d = await r.json(); setAnalyticReview(d.review); }
-    } catch { /* silencioso */ }
-  };
-
-  const carregarSessao = async (id: string) => {
-    try {
-      const r = await fetch('/api/v1/sessions/' + id + '?t=' + Date.now(), { headers: authHeader });
-      if (!r.ok) { alert('Erro ao carregar análise.'); return; }
-      const s = await r.json();
-      setProjeto({
-        nome: s.name || '',
-        metodologia: s.methodology || 'MSEF',
-        status: s.status || 'Em produção',
-        kratosCron: s.kratosCron || '0 6 * * *',
-        alertEmails: s.alertEmails || '',
-        horizonte: s.horizon || '',
-        elaborador: s.analyst || '',
-        cliente: s.client || '',
-        questaoEstrategica: '',
-        mudancaIdentificada: '',
-        teamId: s.teamId || null
-      });
-      setSessionId(s.id);
-      setMainView('chat');
-      const msgs = s.mensagens || [];
-      setMessages(msgs.map((m: any) => ({ role: m.role, content: m.content, id: m.id, messageType: m.messageType ?? m.message_type })));
-      setShowSessoes(false);
-      carregarIndicadores(s.id);
-      carregarSinais(s.id);
-      carregarRevisao(s.id);
-    } catch (e: any) { alert('Erro ao carregar análise: ' + e.message); }
-  };
-
-  const deletarSessao = async (id: string, e: React.MouseEvent) => {
-    e.stopPropagation();
-    if (!window.confirm('Deseja realmente excluir esta análise?')) return;
-    try {
-      const r = await fetch('/api/v1/sessions/' + id, { method: 'DELETE', headers: authHeader });
-      if (r.ok) setSessoes(prev => prev.filter(s => s.id !== id));
-    } catch (e: any) { console.warn('deletarSessao falhou:', e.message); }
-  };
-
-  const deletarMensagem = async (msgId: string | undefined, msgIdx: number) => {
-    if (!window.confirm('Deseja remover esta mensagem da análise?')) return;
-
-    // Captura contexto antes de remover
-    const deletedMsg = messages[msgIdx];
-    const wasAssistant = deletedMsg?.role === 'assistant';
-    const prevUserMsg = wasAssistant
-      ? [...messages].slice(0, msgIdx).reverse().find(m => m.role === 'user')
-      : null;
-
-    if (msgId) {
-      try {
-        await fetch(`/api/v1/sessions/${sessionId}/messages/${msgId}`, {
-          method: 'DELETE',
-          headers: authHeader
-        });
-      } catch (e: any) { console.warn('deletarMensagem falhou:', e.message); }
-    }
-    setMessages(prev => prev.filter((_, i) => i !== msgIdx));
-
-    // Oferece reexecutar a fase somente se for resposta do assistente
-    if (wasAssistant && prevUserMsg && window.confirm('Deseja reexecutar esta fase com a mesma entrada?')) {
-      const content = typeof prevUserMsg.content === 'string' ? prevUserMsg.content : 'CONFIRMAR';
-      await sendMessage(content);
-    }
-  };
-
-  const enviarRelatorioKratos = async (overrideEmails?: string[]) => {
-    if (!sessionId) { alert('Nenhum projeto ativo.'); return; }
-    const destinos = overrideEmails || (projeto.alertEmails ? projeto.alertEmails.split(',').map((e: string) => e.trim()).filter(Boolean) : []);
-    if (destinos.length === 0) {
-      const manual = window.prompt('Nenhum e-mail configurado neste projeto.\nDigite o(s) e-mail(s) de destino (separados por vírgula):');
-      if (!manual?.trim()) return;
-      destinos.push(...manual.split(',').map(e => e.trim()).filter(Boolean));
-    }
-    try {
-      const res = await fetch(`/api/v1/kratos/${sessionId}/report`, {
-        method: 'POST', headers: reqHeaders,
-        body: JSON.stringify({ emails: destinos })
-      });
-      const data = await res.json();
-      if (res.ok && data.success) alert(`✅ Relatório KRATOS gerado e enviado para:\n${destinos.join('\n')}`);
-      else alert(data.error || data.message || 'Erro ao gerar relatório. Verifique o terminal do Docker.');
-    } catch (e: any) { alert('Erro na requisição: ' + e.message); }
-  };
-
-  const salvarConfiguracoes = async () => {
-    try {
-      const r = await fetch('/api/v1/sessions/' + sessionId, {
-        method: 'PATCH',
-        headers: reqHeaders,
-        body: JSON.stringify({ name: projeto.nome, status: projeto.status, kratosCron: projeto.kratosCron, alertEmails: projeto.alertEmails, methodology: projeto.metodologia })
-      });
-      if (r.ok) { setShowSettingsModal(false); carregarSessoes(); }
-    } catch (e: any) { alert('Erro ao salvar configurações: ' + e.message); }
-  };
-
-  const getAgentInfo = (text: string) => {
-    const foundKey = Object.keys(AGENTS).find(key => text.includes(`${key} ·`) || text.includes(`**${key}**`));
-    return foundKey ? { name: foundKey, ...AGENTS[foundKey] } : { name: 'ATHENA', ...AGENTS.ATHENA };
-  };
-
-  // ── Metodologias filtradas por módulo ────────────────────────────────────────
-  // Athena exibe metodologias de produção de cenários, independente do módulo de origem.
-  // SIEx/EB e ALTA são visíveis pois seus componentes de cenários são usados em Athena
-  // mesmo antes de seus módulos-pai (Produção do Conhecimento / Análise Estratégica) serem ativados.
-  // Filtro por slug (não por category) para não alterar a semântica dos módulos no banco.
-  const ATHENA_SLUGS = new Set(['msef', 'godet', 'grumbach', 'macroplan', 'futures', 'siex', 'alta']);
+  // ── Derived values ───────────────────────────────────────────────────────
   const cenariosMethodologies = useMemo(
-    () => methodologies.filter((m: any) => ATHENA_SLUGS.has((m.slug ?? '').toLowerCase())),
+    () => methodologies.filter(m => ATHENA_SLUGS.has((m.slug ?? '').toLowerCase())),
     [methodologies],
   );
 
-  const currentTeamName = useMemo(() => {
-    if (!projeto.teamId || teams.length === 0) return undefined;
-    return teams.find((t: any) => t.id === projeto.teamId)?.name;
-  }, [projeto.teamId, teams]);
-
-  // ── Etapas da metodologia atual ───────────────────────────────────────────────
-  const currentMethodologySteps = useMemo(
-    () => getMethodologySteps(projeto.metodologia, methodologies),
-    [projeto.metodologia, methodologies],
+  const currentTeamName = useMemo(
+    () => teams.find(t => t.id === projectState.projeto.teamId)?.name,
+    [projectState.projeto.teamId, teams],
   );
 
-  // ── Passo atual derivado do histórico de mensagens ────────────────────────────
-  // Funciona para qualquer metodologia: detecta o agente mais avançado no histórico.
+  const currentMethodologySteps = useMemo(
+    () => getMethodologySteps(projectState.projeto.metodologia, methodologies),
+    [projectState.projeto.metodologia, methodologies],
+  );
+
   const currentStep = useMemo(() => {
     for (let i = currentMethodologySteps.length - 1; i >= 0; i--) {
       const agent = currentMethodologySteps[i].agent;
       const patterns = STEP_DETECTION_PATTERNS[agent] ?? [];
-      const found = messages.some(m => {
+      const found = chat.messages.some(m => {
         if (m.role !== 'assistant') return false;
-        const c = m.content;
+        const c = typeof m.content === 'string' ? m.content : '';
         if (c.includes(`${agent} ·`) || c.includes(`**${agent}**`)) return true;
         return patterns.some(re => re.test(c));
       });
       if (found) return i + 1;
     }
-    return messages.length > 0 ? 1 : 0;
-  }, [messages, currentMethodologySteps]);
+    return chat.messages.length > 0 ? 1 : 0;
+  }, [chat.messages, currentMethodologySteps]);
 
-  // ── Nova Sessão: upload de arquivos de contexto ──────────────────────────────
-  const handleScopeFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = Array.from(e.target.files || []);
-    if (!files.length) return;
-    setScopeExtracting(true);
-    try {
-      const fd = new FormData();
-      files.forEach(f => fd.append('files', f));
-      const res = await fetch('/api/v1/extract', { method: 'POST', headers: authHeader, body: fd });
-      if (!res.ok) throw new Error(`Erro ${res.status}`);
-      const result = await res.json();
-      const ok: {name: string, text: string}[] = [];
-      result.files.forEach((f: any) => {
-        if (f.text?.trim()) ok.push({ name: f.name, text: f.text });
-      });
-      if (ok.length) setScopeFiles(prev => [...prev, ...ok]);
-    } catch (err: any) { alert('Erro ao processar arquivo: ' + err.message); }
-    setScopeExtracting(false);
-    if (scopeFileInputRef.current) scopeFileInputRef.current.value = '';
+  // ── Helpers ──────────────────────────────────────────────────────────────
+  const getAgentInfo = (text: string) => {
+    const foundKey = Object.keys(AGENTS).find(key => text.includes(`${key} ·`) || text.includes(`**${key}**`));
+    return foundKey ? { name: foundKey, ...AGENTS[foundKey] } : { name: 'ATHENA', ...AGENTS.ATHENA };
   };
 
-  // ── SSE Chat — progresso e token streaming em tempo real ────────────────────
-  const callChatStream = async (
-    payload: object,
-    onDone: (data: { text: string; agentName: string; thinking: string; messageType: string }) => void
-  ): Promise<void> => {
-    setStreamingText('');
-    setStepLog([]);
-    const res = await fetch('/api/v1/chat/stream', {
-      method: 'POST',
-      headers: reqHeaders,
-      body: JSON.stringify(payload),
-    });
-
-    if (!res.ok || !res.body) {
-      const errData = await res.json().catch(() => ({}));
-      throw new Error((errData as any).error?.message || (errData as any).error || `Erro HTTP ${res.status}`);
-    }
-
-    const reader = res.body.getReader();
-    const decoder = new TextDecoder();
-    let buffer = '';
-
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      buffer += decoder.decode(value, { stream: true });
-
-      // SSE delimita eventos por linha em branco dupla
-      const parts = buffer.split('\n\n');
-      buffer = parts.pop() ?? '';
-
-      for (const part of parts) {
-        const dataLine = part.split('\n').find(l => l.startsWith('data: '));
-        if (!dataLine) continue;
-        try {
-          const event = JSON.parse(dataLine.slice(6));
-          if (event.type === 'agent') {
-            setProgressAgent(event.agent);
-            setStepLog([]);
-          } else if (event.type === 'step') {
-            setStepLog(prev => [...prev.slice(-6), event.text]);
-          } else if (event.type === 'token') {
-            setStreamingText(prev => prev + event.text);
-          } else if (event.type === 'status') {
-            // mantém o último agente visível durante status intermediários
-          } else if (event.type === 'done') {
-            setProgressAgent('');
-            setStreamingText('');
-            setStepLog([]);
-            onDone({ text: event.text, agentName: event.agentName, thinking: event.thinking || '', messageType: event.messageType || 'parcial' });
-          } else if (event.type === 'error') {
-            throw new Error(event.message || 'Erro no servidor');
-          }
-        } catch (parseErr: any) {
-          // se o erro veio do throw acima, propaga
-          if (parseErr.message !== 'Unexpected token') throw parseErr;
-        }
-      }
-    }
-    setProgressAgent('');
-    setStreamingText('');
+  const openNewSession = () => {
+    projectState.setProjeto(p => ({ ...p, metodologia: 'MSEF' }));
+    setActiveModal('newSession');
   };
 
-  // ── Iniciar Sessão (Nova Análise) ────────────────────────────────────────────
-  const iniciarSessao = async () => {
-    setShowNovaSessaoModal(false);
-    setLoading(true);
+  const handleStartSession = async (opts: Parameters<typeof NewSessionModal>[0]['onStart'] extends (o: infer O) => void ? O : never) => {
+    setActiveModal(null);
 
+    const { scopeForm, scopeFiles, selectedTeamId, metodologia, vizMode: newVizMode } = opts;
     const campos: string[] = [];
-    if (scopeForm.tema)               campos.push(`Tema / Objeto de Análise: ${scopeForm.tema}`);
-    if (scopeForm.horizonte)          campos.push(`Horizonte Temporal: ${scopeForm.horizonte}`);
-    if (scopeForm.elaborador)         campos.push(`Equipe / Quem Elabora: ${scopeForm.elaborador}`);
-    if (scopeForm.cliente)            campos.push(`Usuário / Cliente: ${scopeForm.cliente}`);
-    if (scopeForm.questaoEstrategica) campos.push(`Questão Estratégica Central: ${scopeForm.questaoEstrategica}`);
+    if (scopeForm.tema)                campos.push(`Tema / Objeto de Análise: ${scopeForm.tema}`);
+    if (scopeForm.horizonte)           campos.push(`Horizonte Temporal: ${scopeForm.horizonte}`);
+    if (scopeForm.elaborador)          campos.push(`Equipe / Quem Elabora: ${scopeForm.elaborador}`);
+    if (scopeForm.cliente)             campos.push(`Usuário / Cliente: ${scopeForm.cliente}`);
+    if (scopeForm.questaoEstrategica)  campos.push(`Questão Estratégica Central: ${scopeForm.questaoEstrategica}`);
     if (scopeForm.mudancaIdentificada) campos.push(`Mudança Específica Já Identificada: ${scopeForm.mudancaIdentificada}`);
 
-    let fileContext = '';
-    if (scopeFiles.length > 0) {
-      fileContext = '\n\n' + scopeFiles.map(f =>
-        `--- DOCUMENTO DE CONTEXTO: ${f.name} ---\n${f.text}\n--- FIM DO DOCUMENTO ---`
-      ).join('\n\n');
-    }
-
-    const instrucaoExtra = scopeForm.instrucoes?.trim()
-      ? `\n\nInstruções adicionais do usuário: ${scopeForm.instrucoes.trim()}`
+    const fileContext = scopeFiles.length > 0
+      ? '\n\n' + scopeFiles.map(f => `--- DOCUMENTO DE CONTEXTO: ${f.name} ---\n${f.text}\n--- FIM DO DOCUMENTO ---`).join('\n\n')
       : '';
+    const instrucaoExtra = scopeForm.instrucoes?.trim() ? `\n\nInstruções adicionais do usuário: ${scopeForm.instrucoes.trim()}` : '';
 
     const nome = scopeForm.tema || 'Nova Análise';
     const newSessionId = `sess_${Date.now()}`;
 
-    setProjeto((prev: any) => ({ ...prev, nome, ...scopeForm }));
-    setSessionId(newSessionId);
-    setMessages([]);
-    setThinkingBlocks({});
-    setThinkingOpen({});
+    projectState.setProjeto(p => ({ ...p, nome, ...scopeForm, metodologia }));
+    projectState.setSessionId(newSessionId);
+    setVizMode(newVizMode);
+    setMainView('chat');
 
     const initMsg = campos.length > 0
       ? `Iniciar\n\nDados de escopo fornecidos pelo usuário:\n${campos.map(c => `- ${c}`).join('\n')}${fileContext}${instrucaoExtra}\n\nNão solicite essas informações novamente. Confirme o recebimento, apresente as etapas da metodologia e pergunte por onde iniciamos.`
       : `Iniciar${instrucaoExtra}`;
 
-    const newMessages = [{ role: 'user', content: initMsg }];
-    setMessages(newMessages);
-
-    try {
-      await callChatStream(
-        { projectId: newSessionId, projectName: nome, metodologia: projeto.metodologia || 'MSEF', vizMode, messages: newMessages, teamId: selectedTeamId || undefined },
-        ({ text, thinking: thinkingText, messageType }) => {
-          setMessages(prev => {
-            const next = [...prev, { role: 'assistant', content: text, messageType }];
-            if (thinkingText) setThinkingBlocks(tb => ({ ...tb, [next.length - 1]: thinkingText }));
-            return next;
-          });
-          carregarSessoes();
-          carregarIndicadores(newSessionId);
-          carregarSinais(newSessionId);
-        }
-      );
-    } catch (error: any) {
-      console.error("Erro ao iniciar:", error);
-      setMessages(prev => [...prev, { role: 'assistant', content: '⚠️ Erro ao conectar com o servidor.' }]);
-    } finally {
-      setLoading(false);
-      setStreamingText('');
-      setScopeFiles([]);
-    }
+    await chat.iniciarSessao({ newSessionId, initMsg, nome, metodologia, selectedTeamId, onDone: () => {} });
   };
 
-  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    setFileError('');
-    const files = Array.from(e.target.files || []);
-    if (!files.length) return;
-    setExtracting(true);
-    try {
-      const fd = new FormData();
-      files.forEach(f => fd.append('files', f));
-      const res = await fetch('/api/v1/extract', { method: 'POST', headers: authHeader, body: fd });
-      if (!res.ok) throw new Error(`Erro ${res.status}`);
-      const result = await res.json();
-      const ok: any[] = [];
-      result.files.forEach((f: any) => {
-        if (f.error) setFileError(prev => `${prev} | ${f.name}: ${f.error}`);
-        else if (!f.text?.trim()) setFileError(prev => `${prev} | ${f.name}: Vazio`);
-        else ok.push({ name: f.name, text: f.text, isImage: f.isImage, dataUrl: f.dataUrl });
-      });
-      if (ok.length) setAttachedFiles(prev => [...prev, ...ok]);
-    } catch (err: any) { setFileError(err.message); }
-    setExtracting(false);
+  const handleKratosMode = () => {
+    setMode('monitoring');
+    if (!projectState.projeto.nome || chat.messages.length < 3) {
+      setSidebarOpen(true);
+      sessions.setShowSessoes(true);
+      sessions.carregarSessoes();
+    }
   };
 
   const openPainel = () => {
-    if (!projeto.nome || projeto.nome === 'Nova Análise' || messages.length < 3) {
-      setMode('monitoring');
-      setSidebarOpen(true);
-      setShowSessoes(true);
-      carregarSessoes();
-      setMessages(prev => [
-        ...prev,
-        { role: 'assistant', content: '**HERMES** · \n\nPara visualizar o **Painel KRATOS**, é necessário carregar um projeto com cenários já definidos.\n\nAbri o **Histórico de Análises** na barra lateral. Por favor, **selecione um projeto existente** para carregar os dados no dashboard.' }
-      ]);
+    if (!projectState.projeto.nome || projectState.projeto.nome === 'Nova Análise' || chat.messages.length < 3) {
+      handleKratosMode();
+      chat.sendMessage('Para visualizar o Painel KRATOS, carregue um projeto com cenários já definidos.');
       return;
     }
-
-    const kratosMessages = messages.filter(m =>
-      m.role === 'assistant' && m.content && m.content.toUpperCase().includes('KRATOS')
-    );
-
-    let cenarioAtual = 'Aguardando avaliação KRATOS';
-    let statusGeral = 'verde';
-    const indicadoresExtraidos: any[] = [];
-
-    if (kratosMessages.length > 0) {
-      const lastKratos = kratosMessages[kratosMessages.length - 1].content;
-      const cenarioMatch = lastKratos.match(/cen[aá]rio\s*(atual[:\s]*)?\*?\*?(Q[1-4][^*\n]*)/i);
-      if (cenarioMatch) cenarioAtual = cenarioMatch[2].trim();
-
-      const lowerKratos = lastKratos.toLowerCase();
-      if (lowerKratos.includes('alerta') || lowerKratos.includes('crítico') || lowerKratos.includes('vermelho')) statusGeral = 'vermelho';
-      else if (lowerKratos.includes('atenção') || lowerKratos.includes('monitorar') || lowerKratos.includes('amarelo')) statusGeral = 'amarelo';
-
-      const tableRows = lastKratos.match(/\|([^|\n]+)\|([^|\n]+)\|([^|\n]+)\|([^|\n]*)\|/g) || [];
-      for (const row of tableRows) {
-        const cols = row.split('|').map(c => c.trim()).filter(Boolean);
-        if (cols.length >= 3 && !/^[-:]+$/.test(cols[0])) {
-          const statusCell = (cols[2] || '').toLowerCase();
-          const indStatus = statusCell.includes('verde') || statusCell.includes('ok') || statusCell.includes('normal') ? 'verde'
-            : statusCell.includes('amarelo') || statusCell.includes('atenção') || statusCell.includes('monitorar') ? 'amarelo'
-            : statusCell.includes('vermelho') || statusCell.includes('alerta') || statusCell.includes('crítico') ? 'vermelho'
-            : 'verde';
-          indicadoresExtraidos.push({ nome: cols[0], valor: cols[1] || '—', status: indStatus, fonte: cols[3] || '—' });
-        }
-      }
-    }
-
-    const dados = {
-      projeto, cenario: cenarioAtual, status: statusGeral,
-      indicadores: indicadoresExtraidos, geradoEm: new Date().toLocaleString('pt-BR'),
-    };
+    const kratosMsg = chat.messages.filter(m => m.role === 'assistant' && typeof m.content === 'string' && m.content.toUpperCase().includes('KRATOS')).slice(-1)[0];
+    const dados = { projeto: projectState.projeto, cenario: 'Aguardando avaliação KRATOS', status: 'verde', indicadores: [], geradoEm: new Date().toLocaleString('pt-BR') };
     const encoded = btoa(unescape(encodeURIComponent(JSON.stringify(dados))));
     window.open(`/api/v1/painel?d=${encoded}`, '_blank');
   };
 
-  const removeFile = (i: number) => setAttachedFiles(prev => prev.filter((_, j) => j !== i));
-
-  const sendMessage = async (textOverride?: any) => {
-    const isDirectCommand = typeof textOverride === 'string';
-    const textToProcess = isDirectCommand ? textOverride : input;
-
-    if ((!textToProcess.trim() && attachedFiles.length === 0) || loading || extracting) return;
-
-    let fullContent: any = textToProcess.trim();
-    const upper = textToProcess.toUpperCase();
-
-    if (upper === 'KRATOS' || upper === 'ACOMPANHAMENTO' || upper.includes('KRATOS') || upper.includes('ACOMPANHAMENTO')) {
-      setMode('monitoring');
-      if (!projeto.nome || messages.length < 3) {
-        setSidebarOpen(true);
-        setShowSessoes(true);
-        carregarSessoes();
-        setMessages(prev => [
-          ...prev,
-          { role: 'user', content: textToProcess.trim() || 'ACOMPANHAMENTO' },
-          { role: 'assistant', content: '**HERMES** · \n\nPara ativar o módulo **KRATOS** (Monitoramento), é necessário ter um projeto com cenários já definidos.\n\nAbri o **Histórico de Análises** na barra lateral. Por favor, **selecione um projeto existente** para carregá-lo e iniciar o acompanhamento, ou conduza uma Nova Produção de Cenários primeiro.' }
-        ]);
-        if (!isDirectCommand) setInput('');
-        setAttachedFiles([]);
-        return;
-      }
-    }
-
-    if (upper.includes('PRODUÇÃO') || upper.includes('PRODUCAO')) setMode('production');
-
-    if (attachedFiles.length > 0) {
-      const textFiles = attachedFiles.filter(f => !f.isImage);
-      const imageFiles = attachedFiles.filter(f => f.isImage);
-
-      if (textFiles.length > 0) {
-        const fb = textFiles.map(f => `\n\n--- DOCUMENTO DE REFERÊNCIA/MODELO: ${f.name} ---\n${f.text}\n--- FIM DO DOCUMENTO ---`).join('\n');
-        fullContent = fullContent ? `${fullContent}\n${fb}` : `Documentos em anexo:\n${fb}`;
-      }
-
-      if (imageFiles.length > 0) {
-        const contentArray: any[] = [{ type: 'text', text: fullContent || 'Analise a imagem em anexo como referência ou modelo de formato.' }];
-        imageFiles.forEach(img => { contentArray.push({ type: 'image', image: img.dataUrl }); });
-        fullContent = contentArray;
-      }
-    }
-
-    const newMessages = [...messages, { role: 'user', content: fullContent }];
-    setMessages(prev => [...prev, { role: 'user', content: textToProcess || '(documentos em anexo)' }]);
-    if (!isDirectCommand) setInput('');
-    setAttachedFiles([]);
-    setLoading(true);
-
-    try {
-      await callChatStream(
-        { projectId: sessionId, projectName: projeto.nome, metodologia: projeto.metodologia, vizMode, messages: newMessages },
-        ({ text, thinking: thinkingText, messageType }) => {
-          setMessages(prev => {
-            const next = [...prev, { role: 'assistant', content: text, messageType }];
-            if (thinkingText) setThinkingBlocks(tb => ({ ...tb, [next.length - 1]: thinkingText }));
-            return next;
-          });
-          // Recarrega indicadores/sinais quando KRATOS ou KLIO respondem
-          if (text.toUpperCase().includes('KRATOS')) { carregarIndicadores(sessionId); carregarSinais(sessionId); }
-          if (text.toUpperCase().includes('KLIO'))   carregarSinais(sessionId);
-        }
-      );
-    } catch (error: any) {
-      console.error("Erro ao enviar:", error);
-      setMessages([...newMessages, { role: 'assistant', content: `⚠️ Erro ao conectar com o servidor: ${error.message}` }]);
-    } finally {
-      setLoading(false);
-      setStreamingText('');
-    }
+  const copyClientLink = () => {
+    const url = `${window.location.origin}/api/v1/painel/project/${projectState.sessionId}?token=${token}`;
+    navigator.clipboard.writeText(url)
+      .then(() => alert('✅ Link do cliente copiado!\n\nCompartilhe este link com o cliente para acesso ao Painel de Monitoramento.'))
+      .catch(() => prompt('Copie o link abaixo:', url));
   };
 
-  // ── Relatórios ───────────────────────────────────────────────────────────────
-  const gerarRelatorio = async (tipo: 'padrao' | 'estendido') => {
-    if (loading || extracting || messages.length === 0) return;
+  // ── Auth gate ─────────────────────────────────────────────────────────────
+  if (!token) return <LoginPage auth={auth} />;
 
-    if (tipo === 'padrao') {
-      // 1ª tentativa: messageType explícito (mensagens da sessão atual ou carregadas do banco)
-      let targetMsg = messages.find(m => m.messageType === 'relatorio_final');
-
-      // 2ª tentativa: maior mensagem assistant com > 1500 chars (fallback para sessões antigas)
-      if (!targetMsg) {
-        const candidates = messages.filter(m => m.role === 'assistant' && m.content.length > 1500);
-        if (candidates.length > 0)
-          targetMsg = candidates.reduce((a, b) => b.content.length > a.content.length ? b : a);
-      }
-
-      if (!targetMsg) return alert('Relatório Final Padrão não encontrado.\n\nCertifique-se de que o HERMES concluiu todas as etapas e gerou o relatório consolidado.');
-      await exportSinglePdf(targetMsg.content);
-
-    } else {
-      // Relatório Estendido: todas as mensagens dos agentes (sem mensagens do usuário)
-      const agentMsgs = messages.filter(m => m.role === 'assistant');
-      if (agentMsgs.length === 0) return alert('Nenhuma análise disponível.');
-      setExportingPdf(true);
-      try {
-        const res = await fetch('/api/v1/export/pdf', {
-          method: 'POST',
-          headers: reqHeaders,
-          body: JSON.stringify({ projeto, messages: agentMsgs, tipo: 'estendido' }),
-        });
-        if (!res.ok) throw new Error('Erro ao gerar PDF estendido');
-        const html = await res.text();
-        const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
-        const url = URL.createObjectURL(blob);
-        window.open(url, '_blank');
-        setTimeout(() => URL.revokeObjectURL(url), 30000);
-      } catch (e: any) { alert('Erro ao gerar relatório estendido: ' + e.message); }
-      setExportingPdf(false);
-    }
-  };
-
-  const gerarRelatorioKratos = async () => {
-    if (loading || extracting) return;
-    if (!projeto.nome || messages.length < 3) {
-      alert('É necessário ter um projeto com cenários já definidos para acionar o KRATOS.');
-      return;
-    }
-
-    setMode('monitoring');
-    const prompt = `COMANDO DO SISTEMA: Acione o agente KRATOS para o projeto de nome oficial "${projeto.nome}". \nREGRAS ESTRITAS DE OPERAÇÃO MÁQUINA:\n1. Não converse, vá direto à análise baseada no histórico desta sessão.\n2. Se houver falha na busca, prossiga com os dados conhecidos.\n3. Gere EXCLUSIVAMENTE o Relatório de Acompanhamento padronizado.\n4. IMPORTANTE: O usuário pode ter alterado o nome, fatores, eventos e indicadores ao longo da análise. Baseie-se SEMPRE nas últimas decisões do histórico e use o título atualizado do projeto ("${projeto.nome}").\nInicie a geração agora.`;
-
-    const newMessages = [...messages, { role: 'user', content: prompt }];
-    setMessages(prev => [...prev, { role: 'user', content: `⚡ Comando Manual: Gerar Relatório de Monitoramento Atualizado` }]);
-    setLoading(true);
-
-    try {
-      await callChatStream(
-        { projectId: sessionId, projectName: projeto.nome, metodologia: projeto.metodologia, vizMode: 'etapa', messages: newMessages },
-        ({ text, thinking: thinkingText }) => {
-          setMessages(prev => {
-            const next = [...prev, { role: 'assistant', content: text }];
-            if (thinkingText) setThinkingBlocks(tb => ({ ...tb, [next.length - 1]: thinkingText }));
-            return next;
-          });
-        }
-      );
-    } catch (error: any) {
-      console.error("Erro ao gerar relatório KRATOS:", error);
-      setMessages(prev => [...prev, { role: 'assistant', content: `⚠️ Erro ao conectar com o servidor: ${error.message}` }]);
-    } finally {
-      setLoading(false);
-      setStreamingText('');
-    }
-  };
-
-  const downloadMarkdown = (content: string) => {
-    const blob = new Blob([content], { type: 'text/markdown;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `StratSight_Relatorio_${projeto.nome ? projeto.nome.replace(/\s+/g,'_') : 'Analise'}_${new Date().toISOString().slice(0,10)}.md`;
-    a.click();
-    URL.revokeObjectURL(url);
-  };
-
-  const exportDocx = async () => {
-    if (!messages || messages.length === 0) return alert('Nenhuma mensagem para exportar.');
-    setExportingDocx(true);
-    try {
-      const res = await fetch('/api/v1/export/docx', {
-        method: 'POST',
-        headers: reqHeaders,
-        body: JSON.stringify({ projeto, messages }),
-      });
-      if (!res.ok) throw new Error('Erro ao gerar DOCX');
-      const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `StratSight_${(projeto.nome || 'Cenarios').replace(/\s+/g,'_')}_${new Date().toISOString().slice(0,10)}.docx`;
-      a.click();
-      URL.revokeObjectURL(url);
-    } catch (e: any) { alert('Erro ao gerar DOCX: ' + e.message); }
-    setExportingDocx(false);
-  };
-
-  const exportPdf = async () => {
-    if (!messages || messages.length === 0) return alert('Nenhuma mensagem para exportar.');
-    setExportingPdf(true);
-    try {
-      const res = await fetch('/api/v1/export/pdf', {
-        method: 'POST',
-        headers: reqHeaders,
-        body: JSON.stringify({ projeto, messages }),
-      });
-      if (!res.ok) throw new Error('Erro ao gerar PDF');
-      const html = await res.text();
-      const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
-      const url = URL.createObjectURL(blob);
-      window.open(url, '_blank');
-      setTimeout(() => URL.revokeObjectURL(url), 30000);
-    } catch (e: any) { alert('Erro ao gerar PDF: ' + e.message); }
-    setExportingPdf(false);
-  };
-
-  const exportSingleDocx = async (content: string) => {
-    try {
-      const res = await fetch('/api/v1/export/docx', {
-        method: 'POST',
-        headers: reqHeaders,
-        body: JSON.stringify({ projeto, messages: [{ role: 'assistant', content }] }),
-      });
-      if (!res.ok) throw new Error('Erro ao gerar DOCX');
-      const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `StratSight_${(projeto.nome || 'Fase').replace(/\s+/g,'_')}_${new Date().toISOString().slice(0,10)}.docx`;
-      a.click();
-      URL.revokeObjectURL(url);
-    } catch (e: any) { alert('Erro ao gerar DOCX: ' + e.message); }
-  };
-
-  const exportSinglePdf = async (content: string) => {
-    try {
-      const res = await fetch('/api/v1/export/pdf', {
-        method: 'POST',
-        headers: reqHeaders,
-        body: JSON.stringify({ projeto, messages: [{ role: 'assistant', content }], tipo: 'padrão' }),
-      });
-      if (!res.ok) throw new Error('Erro ao gerar PDF');
-      const html = await res.text();
-      const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
-      const url = URL.createObjectURL(blob);
-      window.open(url, '_blank');
-      setTimeout(() => URL.revokeObjectURL(url), 30000);
-    } catch (e: any) { alert('Erro ao gerar PDF: ' + e.message); }
-  };
-
-  // ── Playbook DOCX ────────────────────────────────────────────────────────────
-  const gerarPlaybook = async () => {
-    try {
-      const lastMsg = messages.filter(m => m.role === 'assistant').slice(-1)[0];
-      const res = await fetch('/api/v1/playbook/gerar', {
-        method: 'POST',
-        headers: reqHeaders,
-        body: JSON.stringify({
-          projectId: projeto.id,
-          projeto,
-          excerpt: lastMsg?.content?.slice(0, 3000) || '',
-        }),
-      });
-      if (!res.ok) throw new Error('Erro ao gerar Playbook');
-      const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `Playbook_${(projeto.nome || 'Projeto').replace(/\s+/g, '_')}_${new Date().toISOString().slice(0, 10)}.docx`;
-      a.click();
-      URL.revokeObjectURL(url);
-    } catch (e: any) { alert('Erro ao gerar Playbook: ' + e.message); }
-  };
-
-  // ── Estimativa EB — SIEx/EB (EB70-MT-10.401) ────────────────────────────────
-  const exportEstimativa = async () => {
-    if (messages.length === 0) return alert('Nenhuma análise disponível para formalizar como Estimativa.');
-    setExportingEstimativa(true);
-    try {
-      const res = await fetch('/api/v1/export/estimativa', {
-        method: 'POST',
-        headers: reqHeaders,
-        body: JSON.stringify({ projeto, messages }),
-      });
-      if (!res.ok) throw new Error('Erro ao gerar Estimativa');
-      const html = await res.text();
-      const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
-      const url = URL.createObjectURL(blob);
-      window.open(url, '_blank');
-      setTimeout(() => URL.revokeObjectURL(url), 30000);
-    } catch (e: any) { alert('Erro ao gerar Estimativa EB: ' + (e as any).message); }
-    setExportingEstimativa(false);
-  };
-
-  // ── TELA DE LOGIN ─────────────────────────────────────────────────────────────
-  if (!token) {
-    return (
-      <div style={{
-        background: '#0D1612', minHeight: '100vh',
-        display: 'flex', flexDirection: 'column',
-        fontFamily: "'DM Sans', system-ui, sans-serif",
-      }}>
-
-        {/* Selo de classificação */}
-        <div style={{
-          textAlign: 'center', padding: '9px 16px',
-          fontFamily: "'DM Mono', 'Cascadia Code', monospace",
-          fontSize: 9.5, letterSpacing: '2px', fontWeight: 700,
-          color: '#E65100', background: 'rgba(230,81,0,.08)',
-          borderBottom: '1px solid rgba(230,81,0,.18)',
-          textTransform: 'uppercase' as const,
-        }}>
-          ⬢ CONFIDENCIAL — SISTEMA DE ACESSO RESTRITO
-        </div>
-
-        {/* Área central */}
-        <div style={{
-          flex: 1, display: 'flex', alignItems: 'center',
-          justifyContent: 'center', padding: '32px 40px', gap: 64,
-          flexWrap: 'wrap' as const,
-        }}>
-
-          {/* Coluna esquerda — Branding + Engine cards */}
-          <div style={{ maxWidth: 460, flex: 1, minWidth: 280 }}>
-            <div style={{
-              fontFamily: "'Fraunces', Georgia, serif",
-              fontSize: 64, fontWeight: 700, color: '#fff',
-              letterSpacing: '-1px', lineHeight: 1,
-            }}>OLYMPUS</div>
-            <div style={{
-              fontFamily: "'DM Mono', 'Cascadia Code', monospace",
-              fontSize: 11, color: '#C9A84C',
-              letterSpacing: '2.5px', marginTop: 10,
-              textTransform: 'uppercase' as const,
-            }}>
-              StratSight BR · Strategic Foresight
-            </div>
-            <div style={{ fontSize: 13, color: '#6B8C7A', lineHeight: 1.6, marginTop: 12, maxWidth: 380 }}>
-              Plataforma de inteligência prospectiva para análise e monitoramento estratégico de cenários futuros.
-            </div>
-
-            {/* Engine cards */}
-            <div style={{ display: 'flex', gap: 12, marginTop: 36 }}>
-              {([
-                { agent: 'HERMES' as const, label: 'ATHENA', sub: 'Motor de Produção', detail: '7 metodologias · MSEF ativo' },
-                { agent: 'KRATOS' as const, label: 'KRATOS', sub: 'Monitoramento Contínuo', detail: 'Varredura periódica · Alertas' },
-              ]).map(card => (
-                <div key={card.label} style={{
-                  flex: 1, background: 'rgba(255,255,255,.05)',
-                  border: '1px solid rgba(255,255,255,.1)',
-                  borderRadius: 12, padding: '18px 16px',
-                }}>
-                  <AgentMark name={card.agent} scale="compact" size={28} />
-                  <div style={{
-                    fontWeight: 700, color: '#fff', marginTop: 10,
-                    fontSize: 12, letterSpacing: '1.2px',
-                    fontFamily: "'DM Sans', sans-serif",
-                  }}>{card.label}</div>
-                  <div style={{ fontSize: 11, color: '#6B8C7A', marginTop: 4 }}>{card.sub}</div>
-                  <div style={{ fontSize: 10, color: '#5A9E6F', marginTop: 3 }}>{card.detail}</div>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Coluna direita — Formulário */}
-          <div style={{ width: 360, flexShrink: 0, minWidth: 300 }}>
-            <div style={{
-              background: 'rgba(255,255,255,.04)',
-              border: '1px solid rgba(255,255,255,.1)',
-              borderRadius: 16, padding: '32px',
-              position: 'relative' as const, overflow: 'hidden',
-            }}>
-              {/* Faixa top */}
-              <div style={{
-                position: 'absolute' as const, top: 0, left: 0, right: 0, height: 3,
-                background: 'linear-gradient(90deg, #C9A84C 0%, #5A9E6F 100%)',
-              }} />
-
-              {/* Header do card */}
-              <div style={{ marginBottom: 24 }}>
-                <div style={{
-                  fontFamily: "'DM Mono', monospace", fontSize: 9.5,
-                  letterSpacing: '2px', color: '#6B8C7A',
-                  textTransform: 'uppercase' as const, marginBottom: 6,
-                }}>
-                  {authMode === 'login' ? 'Autenticação · Acesso Restrito' : 'Cadastro de Usuário'}
-                </div>
-                <div style={{
-                  fontFamily: "'Fraunces', Georgia, serif",
-                  fontSize: 22, fontWeight: 700, color: '#fff',
-                }}>
-                  {authMode === 'login' ? 'Entrar no sistema' : 'Novo usuário'}
-                </div>
-              </div>
-
-              {isFirstRun && authMode === 'register' && (
-                <div style={{
-                  marginBottom: 16,
-                  background: 'rgba(167,139,250,.1)',
-                  border: '1px solid rgba(167,139,250,.3)',
-                  color: '#c4b5fd', fontSize: 12,
-                  padding: '12px', borderRadius: 8, textAlign: 'center' as const,
-                }}>
-                  <strong>Sistema não configurado.</strong><br/>
-                  O primeiro usuário receberá automaticamente o perfil de <strong>Administrador</strong>.
-                </div>
-              )}
-
-              <form onSubmit={async (e) => {
-                e.preventDefault();
-                try {
-                  if (setup2FA) {
-                    const res = await fetch('/api/v1/auth/2fa/enable', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ userId: setup2FA.userId, token: totpToken }) });
-                    if (!res.ok) { const txt = await res.text(); try { alert(JSON.parse(txt).error); } catch { alert('Erro 2FA: ' + txt.slice(0, 100)); } return; }
-                    alert('2FA configurado com sucesso! Faça login.');
-                    setSetup2FA(null); setAuthMode('login'); setTotpToken(''); setAuthForm({...authForm, password: ''});
-                    return;
-                  }
-
-                  if (authMode === 'login') {
-                    const res = await fetch('/api/v1/auth/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({...authForm, token: requires2FA ? totpToken : undefined}) });
-                    if (!res.ok) { const txt = await res.text(); try { alert(JSON.parse(txt).error || 'Erro na autenticação'); } catch { alert('Falha no Servidor (500/502). O Backend pode estar offline.\n\nDetalhes: ' + txt.slice(0, 100)); } return; }
-                    const data = await res.json();
-                    if (data.requires2FA) { setRequires2FA(true); return; }
-                    localStorage.setItem('olympus_token', data.token);
-                    localStorage.setItem('olympus_user', JSON.stringify(data.user));
-                    setToken(data.token);
-                    setUser(data.user);
-                  } else {
-                    const res = await fetch('/api/v1/auth/register', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(authForm) });
-                    if (!res.ok) { const txt = await res.text(); try { alert(JSON.parse(txt).error || 'Erro no cadastro'); } catch { alert('Falha no Servidor (500/502). O Backend pode estar offline.\n\nDetalhes: ' + txt.slice(0, 100)); } return; }
-                    const data = await res.json();
-                    setIsFirstRun(false);
-                    if (window.confirm('Cadastro realizado! Deseja configurar a Autenticação em Duas Etapas (2FA) agora para maior segurança?')) {
-                      const res2fa = await fetch('/api/v1/auth/2fa/generate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ userId: data.user.id }) });
-                      if (!res2fa.ok) { alert('Erro ao gerar QR Code'); return; }
-                      const data2fa = await res2fa.json();
-                      setSetup2FA({ qrCodeUrl: data2fa.qrCodeUrl, userId: data.user.id });
-                    } else {
-                      alert('Faça login para continuar.'); setAuthMode('login'); setAuthForm({...authForm, password: ''});
-                    }
-                  }
-                } catch (err: any) { alert('Erro Crítico de Conexão: ' + err.message); }
-              }} className="space-y-4">
-                {setup2FA ? (
-                  <div className="flex flex-col items-center text-center">
-                    <p className="text-sm mb-4" style={{ color: '#A3C9AE' }}>Escaneie o QR Code abaixo com seu app autenticador e insira o código gerado.</p>
-                    <img src={setup2FA.qrCodeUrl} alt="QR Code 2FA" className="w-48 h-48 mb-4 border p-2 rounded-xl" style={{ background: '#fff' }} />
-                    <input type="text" placeholder="Código de 6 dígitos" required value={totpToken} onChange={e => setTotpToken(e.target.value)} className="w-full border-2 border-gray-200 rounded-xl px-4 py-3 outline-none focus:border-stratsight-medium transition-colors text-center tracking-widest text-lg font-mono" maxLength={6} />
-                    <button type="submit" className="w-full bg-stratsight-dark text-white font-bold py-3.5 rounded-xl hover:bg-stratsight-medium transition-colors shadow-lg shadow-green-900/20 mt-4">Confirmar 2FA</button>
-                    <button type="button" onClick={() => { setSetup2FA(null); setAuthMode('login'); setAuthForm({...authForm, password: ''}); }} style={{ marginTop: 12, background: 'none', border: 'none', color: '#6B8C7A', fontSize: 12, cursor: 'pointer' }}>Pular por enquanto</button>
-                  </div>
-                ) : requires2FA ? (
-                  <div className="flex flex-col items-center text-center">
-                    <p className="text-sm mb-4" style={{ color: '#A3C9AE' }}>Esta conta está protegida por 2FA. Insira o código do seu aplicativo.</p>
-                    <input type="text" placeholder="Código de 6 dígitos" required value={totpToken} onChange={e => setTotpToken(e.target.value)} className="w-full border-2 border-gray-200 rounded-xl px-4 py-3 outline-none focus:border-stratsight-medium transition-colors text-center tracking-widest text-lg font-mono" maxLength={6} />
-                    <button type="submit" className="w-full bg-stratsight-dark text-white font-bold py-3.5 rounded-xl hover:bg-stratsight-medium transition-colors shadow-lg shadow-green-900/20 mt-4">Verificar e Entrar</button>
-                    <button type="button" onClick={() => { setRequires2FA(false); setTotpToken(''); }} style={{ marginTop: 12, background: 'none', border: 'none', color: '#6B8C7A', fontSize: 12, cursor: 'pointer' }}>Voltar</button>
-                  </div>
-                ) : (
-                  <>
-                    {authMode === 'register' && <input type="text" placeholder="Nome Completo" required value={authForm.name} onChange={e => setAuthForm({...authForm, name: e.target.value})} className="w-full border-2 border-gray-200 rounded-xl px-4 py-3 outline-none focus:border-stratsight-medium transition-colors" />}
-                    <input type="email" placeholder="E-mail corporativo" required value={authForm.email} onChange={e => setAuthForm({...authForm, email: e.target.value})} className="w-full border-2 border-gray-200 rounded-xl px-4 py-3 outline-none focus:border-stratsight-medium transition-colors" />
-                    <div className="relative">
-                      <input type={showPassword ? 'text' : 'password'} placeholder="Senha" required value={authForm.password} onChange={e => setAuthForm({...authForm, password: e.target.value})} className="w-full border-2 border-gray-200 rounded-xl px-4 py-3 outline-none focus:border-stratsight-medium transition-colors pr-10" />
-                      <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-3.5 text-gray-400 hover:text-stratsight-medium focus:outline-none">
-                        {showPassword ? '🙈' : '👁️'}
-                      </button>
-                    </div>
-                    <button type="submit" className="w-full bg-stratsight-dark text-white font-bold py-3.5 rounded-xl hover:bg-stratsight-medium transition-colors shadow-lg shadow-green-900/20">
-                      {authMode === 'login' ? 'Autenticar →' : 'Cadastrar'}
-                    </button>
-                  </>
-                )}
-              </form>
-
-              {!setup2FA && !requires2FA && !isFirstRun && (
-                <div style={{ marginTop: 20, textAlign: 'center' as const }}>
-                  <button
-                    onClick={() => setAuthMode(authMode === 'login' ? 'register' : 'login')}
-                    style={{ background: 'none', border: 'none', color: '#6B8C7A', fontSize: 12, cursor: 'pointer' }}
-                    onMouseEnter={e => (e.currentTarget.style.color = '#A3C9AE')}
-                    onMouseLeave={e => (e.currentTarget.style.color = '#6B8C7A')}
-                  >
-                    {authMode === 'login' ? 'Não tem conta? Cadastre-se' : 'Já tem conta? Faça login'}
-                  </button>
-                </div>
-              )}
-
-              {authMode === 'login' && !setup2FA && !requires2FA && (
-                <div style={{
-                  marginTop: 16, textAlign: 'center' as const,
-                  fontFamily: "'DM Mono', monospace", fontSize: 9.5,
-                  color: '#3D6B50', letterSpacing: '0.5px',
-                }}>
-                  Protegido por autenticação JWT · 2FA disponível
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-
-        {/* Footer */}
-        <div style={{
-          display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-          padding: '10px 24px', borderTop: '1px solid rgba(255,255,255,.06)',
-          fontFamily: "'DM Mono', 'Cascadia Code', monospace",
-          fontSize: 10, color: '#3D6B50', letterSpacing: '0.5px',
-        }}>
-          <span>v1.0</span>
-          <span>© {new Date().getFullYear()} OLYMPUS StratSight BR — Uso Restrito</span>
-        </div>
-
-      </div>
-    );
-  }
-
-  // ── APLICAÇÃO PRINCIPAL ───────────────────────────────────────────────────────
+  // ── Main application ──────────────────────────────────────────────────────
   return (
     <>
     <div className="flex h-screen font-sans bg-[#F0F4F0] overflow-hidden">
 
-      {/* ── MODAL: NOVA SESSÃO ─────────────────────────────────────────────────── */}
-      {showNovaSessaoModal && (
-        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[92vh] flex flex-col">
-            {/* Header */}
-            <div className="flex items-center gap-4 p-6 border-b border-gray-100">
-              <div className="w-11 h-11 rounded-full bg-stratsight-dark flex items-center justify-center text-white text-xl font-bold shrink-0">⚡</div>
-              <div className="flex-1">
-                <h2 className="font-bold text-stratsight-dark text-lg tracking-wide">Nova Análise Prospectiva</h2>
-                <p className="text-xs text-stratsight-medium mt-0.5">Preencha o escopo da análise ou carregue um documento de contexto.</p>
-              </div>
-              <button onClick={() => setShowNovaSessaoModal(false)} className="text-gray-400 hover:text-red-500 font-bold text-xl p-1">✕</button>
-            </div>
-
-            {/* Body */}
-            <div className="overflow-y-auto flex-1 p-6 space-y-4">
-              {/* Orientação */}
-              <div className="bg-stratsight-light border border-stratsight-medium/30 rounded-xl p-4 text-sm text-stratsight-dark leading-relaxed">
-                <strong>Como preencher:</strong> Informe ao menos o <em>tema/objeto</em> e o sistema sugere as demais opções. Você pode carregar documentos de contexto (relatórios, estudos, bases de dados) para enriquecer a análise — ou deixar todos os campos em branco e deixar o HERMES conduzir a sessão.
-              </div>
-
-              {/* Campos do formulário */}
-              <div className="grid grid-cols-1 gap-4">
-                <div>
-                  <label className="block text-xs font-bold text-stratsight-dark uppercase mb-1.5 tracking-wide">1. Tema / Objeto de Análise <span className="text-stratsight-medium">(principal)</span></label>
-                  <input
-                    value={scopeForm.tema}
-                    onChange={e => setScopeForm(f => ({...f, tema: e.target.value}))}
-                    className="w-full border-2 border-gray-200 rounded-xl px-4 py-2.5 focus:border-stratsight-medium outline-none transition-colors text-sm"
-                    placeholder="Ex: Cenários prospectivos para o setor de defesa até 2035"
-                  />
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-xs font-bold text-stratsight-dark uppercase mb-1.5 tracking-wide">2. Horizonte Temporal</label>
-                    <input
-                      value={scopeForm.horizonte}
-                      onChange={e => setScopeForm(f => ({...f, horizonte: e.target.value}))}
-                      className="w-full border-2 border-gray-200 rounded-xl px-4 py-2.5 focus:border-stratsight-medium outline-none transition-colors text-sm"
-                      placeholder="Ex: 10 anos (até 2035)"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-bold text-stratsight-dark uppercase mb-1.5 tracking-wide">3. Quem Elabora</label>
-                    <input
-                      value={scopeForm.elaborador}
-                      onChange={e => setScopeForm(f => ({...f, elaborador: e.target.value}))}
-                      className="w-full border-2 border-gray-200 rounded-xl px-4 py-2.5 focus:border-stratsight-medium outline-none transition-colors text-sm"
-                      placeholder="Ex: Célula de Inteligência Estratégica"
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-xs font-bold text-stratsight-dark uppercase mb-1.5 tracking-wide">4. Usuário / Cliente</label>
-                  <input
-                    value={scopeForm.cliente}
-                    onChange={e => setScopeForm(f => ({...f, cliente: e.target.value}))}
-                    className="w-full border-2 border-gray-200 rounded-xl px-4 py-2.5 focus:border-stratsight-medium outline-none transition-colors text-sm"
-                    placeholder="Ex: Comando do Exército / Diretoria de Planejamento"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-bold text-stratsight-dark uppercase mb-1.5 tracking-wide">5. Questão Estratégica Central</label>
-                  <textarea
-                    value={scopeForm.questaoEstrategica}
-                    onChange={e => setScopeForm(f => ({...f, questaoEstrategica: e.target.value}))}
-                    rows={2}
-                    className="w-full border-2 border-gray-200 rounded-xl px-4 py-2.5 focus:border-stratsight-medium outline-none transition-colors text-sm resize-none"
-                    placeholder="Ex: Como o Brasil deve se posicionar diante das transformações tecnológicas no campo de batalha até 2035?"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-bold text-stratsight-dark uppercase mb-1.5 tracking-wide">6. Mudança Específica Já Identificada</label>
-                  <textarea
-                    value={scopeForm.mudancaIdentificada}
-                    onChange={e => setScopeForm(f => ({...f, mudancaIdentificada: e.target.value}))}
-                    rows={2}
-                    className="w-full border-2 border-gray-200 rounded-xl px-4 py-2.5 focus:border-stratsight-medium outline-none transition-colors text-sm resize-none"
-                    placeholder="Ex: Aceleração do uso de IA em sistemas autônomos de combate por potências rivais"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-bold text-stratsight-dark uppercase mb-1.5 tracking-wide">
-                    7. Instruções Livres para a IA <span className="text-stratsight-medium normal-case font-normal">(opcional)</span>
-                  </label>
-                  <textarea
-                    value={scopeForm.instrucoes}
-                    onChange={e => setScopeForm(f => ({...f, instrucoes: e.target.value}))}
-                    rows={3}
-                    className="w-full border-2 border-gray-200 rounded-xl px-4 py-2.5 focus:border-stratsight-medium outline-none transition-colors text-sm resize-none"
-                    placeholder="Ex: Foco especial no impacto para o setor de defesa. Não abordar aspectos tributários. Usar linguagem técnica."
-                  />
-                  <p className="text-[10px] text-gray-400 mt-1">Instruções de direcionamento, restrições ou preferências de formato que a IA deve seguir ao longo de toda a análise.</p>
-                </div>
-              </div>
-
-              {/* Upload de contexto */}
-              <div className="border-2 border-dashed border-stratsight-medium/40 rounded-xl p-4 bg-stratsight-light/50">
-                <div className="flex items-start gap-3">
-                  <span className="text-2xl">📂</span>
-                  <div className="flex-1">
-                    <p className="text-xs font-bold text-stratsight-dark uppercase tracking-wide mb-1">Documentos de Contexto (opcional)</p>
-                    <p className="text-xs text-gray-500 mb-3">Carregue relatórios, estudos, bases de dados ou qualquer documento relevante. O sistema os incorporará como contexto da análise.</p>
-                    <input
-                      ref={scopeFileInputRef}
-                      type="file"
-                      accept={ACCEPTED_TYPES}
-                      multiple
-                      className="hidden"
-                      onChange={handleScopeFileChange}
-                    />
-                    <button
-                      onClick={() => scopeFileInputRef.current?.click()}
-                      disabled={scopeExtracting}
-                      className="px-4 py-2 bg-white border border-stratsight-medium/40 text-stratsight-dark text-xs font-bold rounded-lg hover:bg-stratsight-light transition-colors shadow-sm disabled:opacity-50"
-                    >
-                      {scopeExtracting ? '⏳ Processando...' : '📎 Selecionar Arquivos'}
-                    </button>
-                    {scopeFiles.length > 0 && (
-                      <div className="mt-2 flex flex-wrap gap-1.5">
-                        {scopeFiles.map((f, i) => (
-                          <div key={i} className="flex items-center gap-1.5 bg-white border border-stratsight-medium/30 rounded-full px-3 py-1 text-xs text-stratsight-dark">
-                            <span>📄 {f.name}</span>
-                            <button onClick={() => setScopeFiles(prev => prev.filter((_, j) => j !== i))} className="text-gray-400 hover:text-red-500 font-bold ml-1">×</button>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </div>
-
-              {/* Equipe responsável */}
-              {teams.length > 0 && (
-                <div>
-                  <label className="block text-xs font-bold text-stratsight-dark uppercase mb-1.5 tracking-wide">Equipe Responsável <span className="text-stratsight-medium normal-case font-normal">(opcional)</span></label>
-                  <select
-                    value={selectedTeamId}
-                    onChange={e => setSelectedTeamId(e.target.value)}
-                    className="w-full border-2 border-gray-200 rounded-xl px-4 py-2.5 focus:border-stratsight-medium outline-none transition-colors text-sm bg-white"
-                  >
-                    <option value="">— Sem equipe vinculada —</option>
-                    {teams.map((t: any) => (
-                      <option key={t.id} value={t.id}>{t.name}{t.description ? ` — ${t.description}` : ''}</option>
-                    ))}
-                  </select>
-                </div>
-              )}
-
-              {/* Metodologia */}
-              <div>
-                <label className="block text-xs font-bold text-stratsight-dark uppercase mb-1.5 tracking-wide">Metodologia de Análise</label>
-                <select
-                  value={projeto.metodologia}
-                  onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setProjeto((p: any) => ({ ...p, metodologia: e.target.value }))}
-                  className="w-full border-2 border-gray-200 rounded-xl px-4 py-2.5 focus:border-stratsight-medium outline-none transition-colors text-sm bg-white"
-                >
-                  {cenariosMethodologies.length > 0
-                    ? cenariosMethodologies.map((m: any) => (
-                        <option key={m.id} value={m.name}>{m.name} — {m.description}</option>
-                      ))
-                    : <option value="MSEF">MSEF — Método Multidimensional de Exploração de Futuros</option>
-                  }
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-stratsight-dark uppercase mb-2 tracking-wide">Nível de Análise</label>
-                <div className="grid grid-cols-2 gap-2">
-                  {[
-                    { id: 'thinking', label: '🧠 Raciocínio Estendido', desc: 'Exibe o raciocínio interno antes da resposta' },
-                    { id: 'passos', label: '👣 Passo a Passo', desc: 'Avança com uma pergunta/tarefa por vez' },
-                    { id: 'etapa', label: '📋 Etapa Completa', desc: 'Gera a etapa inteira de uma vez (Padrão)' },
-                    { id: 'passagem', label: '⚡ Processo Completo', desc: 'Conduz o método de forma autônoma' }
-                  ].map(vm => (
-                    <button key={vm.id} onClick={() => setVizMode(vm.id)} className={`p-3 text-left border-2 rounded-xl transition-colors ${vizMode === vm.id ? 'border-stratsight-medium bg-stratsight-light text-stratsight-dark' : 'border-gray-200 bg-white text-gray-500 hover:border-stratsight-medium/50'}`}>
-                      <div className="font-bold text-sm">{vm.label}</div>
-                      <div className="text-[10px] mt-1 leading-tight text-gray-500">{vm.desc}</div>
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </div>
-
-            {/* Footer */}
-            <div className="p-6 border-t border-gray-100 flex gap-3">
-              <button
-                onClick={() => setShowNovaSessaoModal(false)}
-                className="flex-1 py-3 text-stratsight-medium border-2 border-gray-200 font-bold rounded-xl hover:bg-gray-50 transition-colors"
-              >
-                Cancelar
-              </button>
-              <button
-                onClick={iniciarSessao}
-                className="flex-[2] py-3 bg-stratsight-dark text-white font-bold rounded-xl hover:bg-stratsight-medium transition-colors shadow-lg shadow-green-900/20"
-              >
-                Iniciar Análise
-              </button>
-            </div>
-          </div>
-        </div>
+      {/* ── Modals ──────────────────────────────────────────────────────────── */}
+      {activeModal === 'newSession' && (
+        <NewSessionModal
+          onClose={() => setActiveModal(null)}
+          onStart={handleStartSession}
+          cenariosMethodologies={cenariosMethodologies}
+          teams={teams}
+          token={token}
+          defaultMetodologia={projectState.projeto.metodologia}
+          defaultVizMode={vizMode}
+        />
+      )}
+      {activeModal === 'settings' && (
+        <ProjectSettingsModal
+          projeto={projectState.projeto}
+          cenariosMethodologies={cenariosMethodologies}
+          onClose={() => setActiveModal(null)}
+          onSave={() => projectState.salvarConfiguracoes(() => setActiveModal(null))}
+          onProjetoChange={projectState.setProjeto}
+          onEnviarRelatorio={() => projectState.enviarRelatorioKratos()}
+        />
+      )}
+      {activeModal === 'users'  && <UsersModal  onClose={() => setActiveModal(null)} reqHeaders={reqHeaders} />}
+      {activeModal === 'backup' && <BackupModal onClose={() => setActiveModal(null)} reqHeaders={reqHeaders} />}
+      {activeModal === 'review' && (
+        <ReviewModal
+          sessionId={projectState.sessionId}
+          token={token}
+          userName={user?.name || 'Analista'}
+          review={projectData.analyticReview}
+          onClose={() => setActiveModal(null)}
+          onSaved={projectData.setAnalyticReview}
+          onClearReview={() => projectData.setAnalyticReview(null)}
+        />
       )}
 
-      {/* ── MODAL: CONFIGURAÇÕES DO PROJETO ───────────────────────────────────── */}
-      {showSettingsModal && (
-        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md max-h-[92vh] flex flex-col">
-          <div className="p-8 overflow-y-auto flex-1">
-            <h2 className="font-bold text-stratsight-dark text-xl mb-4">Configurações do Projeto</h2>
-            <div className="space-y-4">
-              <div>
-                <label className="block text-xs font-bold text-stratsight-dark uppercase mb-2">Nome do Projeto</label>
-                <input value={projeto.nome} onChange={e => setProjeto({...projeto, nome: e.target.value})} className="w-full border-2 border-gray-200 rounded-xl px-4 py-3 focus:border-stratsight-medium outline-none" placeholder="Ex: Cenários 2030" />
-              </div>
-              <div>
-                <label className="block text-xs font-bold text-stratsight-dark uppercase mb-2">Metodologia</label>
-                <select value={projeto.metodologia} onChange={e => setProjeto({...projeto, metodologia: e.target.value})} className="w-full border-2 border-gray-200 rounded-xl px-4 py-3 focus:border-stratsight-medium outline-none bg-white">
-                  {cenariosMethodologies.length > 0
-                    ? cenariosMethodologies.map((m: any) => <option key={m.id} value={m.name}>{m.name} — {m.description}</option>)
-                    : <option value="MSEF">MSEF</option>
-                  }
-                </select>
-              </div>
-              <div>
-                <label className="block text-xs font-bold text-stratsight-dark uppercase mb-2">Status do Projeto</label>
-                <select value={projeto.status} onChange={e => setProjeto({...projeto, status: e.target.value})} className="w-full border-2 border-gray-200 rounded-xl px-4 py-3 focus:border-stratsight-medium outline-none">
-                  <option value="Em produção">Em produção (Sem monitoramento)</option>
-                  <option value="Ativo">Ativo (Monitoramento KRATOS ligado)</option>
-                  <option value="Inativo">Inativo (Arquivado / Pausado)</option>
-                </select>
-              </div>
-              <div>
-                <label className="block text-xs font-bold text-stratsight-dark uppercase mb-2">Frequência do Monitoramento</label>
-                <select value={projeto.kratosCron} onChange={e => setProjeto({...projeto, kratosCron: e.target.value})} className="w-full border-2 border-gray-200 rounded-xl px-4 py-3 focus:border-stratsight-medium outline-none bg-white transition-colors" disabled={projeto.status !== 'Ativo'}>
-                  <option value="0 6 * * *">Diário — Todo dia às 06:00</option>
-                  <option value="0 18 * * *">Diário — Todo dia às 18:00</option>
-                  <option value="0 8 * * 1">Semanal — Toda Segunda-feira às 08:00</option>
-                  <option value="0 8 * * 5">Semanal — Toda Sexta-feira às 08:00</option>
-                  <option value="0 8 1 * *">Mensal — Todo dia 1º às 08:00</option>
-                  <option value="* * * * *">A cada minuto (⚠️ Apenas Testes)</option>
-                </select>
-                <p className="text-[10px] text-gray-500 mt-1">O agente acordará automaticamente nestes horários para varrer a internet.</p>
-              </div>
-              <div>
-                <label className="block text-xs font-bold text-stratsight-dark uppercase mb-2">E-mails de Alerta KRATOS</label>
-                <input
-                  type="text"
-                  value={projeto.alertEmails}
-                  onChange={e => setProjeto({...projeto, alertEmails: e.target.value})}
-                  placeholder="email1@dominio.com, email2@dominio.com"
-                  className="w-full border-2 border-gray-200 rounded-xl px-4 py-3 focus:border-stratsight-medium outline-none text-sm"
-                />
-                <p className="text-[10px] text-gray-500 mt-1">Destinatários dos relatórios automáticos e sob demanda. Separe múltiplos e-mails por vírgula.</p>
-              </div>
-            </div>
-            <div className="mt-6 p-4 bg-blue-50 border border-blue-100 rounded-xl">
-              <h3 className="text-xs font-bold text-blue-900 uppercase mb-2">Relatório KRATOS por E-mail</h3>
-              <p className="text-[10px] text-blue-700 mb-3">Gera o relatório de monitoramento agora e envia imediatamente para os e-mails configurados acima.</p>
-              <button onClick={() => enviarRelatorioKratos()} className="w-full py-2 bg-blue-700 text-white font-bold rounded-lg hover:bg-blue-800 transition-colors text-xs shadow-sm">📊 Gerar e Enviar Relatório Agora</button>
-            </div>
-          </div>
-          {/* Rodapé fixo — sempre visível */}
-          <div className="px-8 py-5 border-t border-gray-100 flex gap-3 bg-white rounded-b-2xl flex-shrink-0">
-            <button onClick={() => setShowSettingsModal(false)} className="flex-1 py-3 text-stratsight-medium border-2 border-gray-200 font-bold rounded-xl hover:bg-gray-50 transition-colors">Cancelar</button>
-            <button onClick={salvarConfiguracoes} className="flex-[2] py-3 bg-stratsight-dark text-white font-bold rounded-xl hover:bg-stratsight-medium transition-colors">Salvar Configurações</button>
-          </div>
-          </div>
-        </div>
-      )}
-
-      {showUsersModal && <UsersModal onClose={() => setShowUsersModal(false)} reqHeaders={reqHeaders} />}
-      {showBackupModal && <BackupModal onClose={() => setShowBackupModal(false)} reqHeaders={reqHeaders} />}
-
-      {/* ── SIDEBAR ──────────────────────────────────────────────────────────────── */}
+      {/* ── Sidebar ─────────────────────────────────────────────────────────── */}
       <Sidebar
         open={sidebarOpen}
         user={user}
-        projeto={projeto}
-        sessoes={sessoes}
-        showSessoes={showSessoes}
-        sessionSearch={sessionSearch}
-        filterStatus={filterStatus}
-        analyticReview={analyticReview}
-        sessionId={sessionId}
-        exportingPdf={exportingPdf}
+        projeto={projectState.projeto}
+        sessoes={sessions.sessoes}
+        showSessoes={sessions.showSessoes}
+        sessionSearch={sessions.sessionSearch}
+        filterStatus={sessions.filterStatus}
+        analyticReview={projectData.analyticReview as any}
+        sessionId={projectState.sessionId}
+        exportingPdf={exports.exportingPdf}
         currentMsefStep={currentStep}
         currentStep={currentStep}
         methodologySteps={currentMethodologySteps}
         mode={mode}
         vizMode={vizMode}
-        onModeChange={m => setMode(m)}
-        onVizModeChange={v => setVizMode(v)}
-        onNovaSessao={() => {
-          setScopeForm({ tema: '', horizonte: '', elaborador: '', cliente: '', questaoEstrategica: '', mudancaIdentificada: '', instrucoes: '' });
-          setScopeFiles([]);
-          setProjeto((p: any) => ({ ...p, metodologia: 'MSEF' }));
-          setShowNovaSessaoModal(true);
-        }}
+        onModeChange={setMode}
+        onVizModeChange={setVizMode}
+        onNovaSessao={openNewSession}
         onOpenPainel={openPainel}
-        onGerarRelatorioKratos={gerarRelatorioKratos}
-        onShowUsers={() => setShowUsersModal(true)}
-        onShowBackup={() => setShowBackupModal(true)}
-        onCopyClientLink={() => {
-          const url = `${window.location.origin}/api/v1/painel/project/${sessionId}?token=${token}`;
-          navigator.clipboard.writeText(url).then(() => {
-            alert('✅ Link do cliente copiado!\n\nCompartilhe este link com o cliente para acesso ao Painel de Monitoramento.');
-          }).catch(() => { prompt('Copie o link abaixo:', url); });
-        }}
-        onShowReviewModal={() => setShowReviewModal(true)}
-        onGerarRelatorioPadrao={() => gerarRelatorio('padrao')}
-        onGerarRelatorioEstendido={() => gerarRelatorio('estendido')}
-        onShowSettings={() => setShowSettingsModal(true)}
-        onToggleSessoes={() => { setShowSessoes(s => !s); if (!showSessoes) carregarSessoes(); }}
-        onSessionSearchChange={v => setSessionSearch(v)}
-        onFilterChange={(key, value) => setFilterStatus(f => ({ ...f, [key]: value }))}
-        onCarregarSessao={carregarSessao}
-        onDeletarSessao={deletarSessao}
-        onLogout={() => {
-          localStorage.removeItem('olympus_token');
-          localStorage.removeItem('olympus_user');
-          setToken(null);
-          setUser(null);
-          setMessages([]);
-          setSessoes([]);
-        }}
+        onGerarRelatorioKratos={chat.gerarRelatorioKratos}
+        onShowUsers={() => setActiveModal('users')}
+        onShowBackup={() => setActiveModal('backup')}
+        onCopyClientLink={copyClientLink}
+        onShowReviewModal={() => setActiveModal('review')}
+        onGerarRelatorioPadrao={() => exports.gerarRelatorio('padrao')}
+        onGerarRelatorioEstendido={() => exports.gerarRelatorio('estendido')}
+        onShowSettings={() => setActiveModal('settings')}
+        onToggleSessoes={sessions.toggleSessoes}
+        onSessionSearchChange={sessions.setSessionSearch}
+        onFilterChange={sessions.updateFilter}
+        onCarregarSessao={projectState.carregarSessao}
+        onDeletarSessao={sessions.deletarSessao}
+        onLogout={() => { logout(); chat.setMessages([]); sessions.setSessoes([]); }}
       />
 
-      {/* ── CONTEÚDO PRINCIPAL ────────────────────────────────────────────────────── */}
+      {/* ── Main content ─────────────────────────────────────────────────────── */}
       <div className="flex-1 flex flex-col min-w-0 relative">
         <CommandBar
           mode={mode}
-          projetoNome={projeto.nome}
-          progressAgent={progressAgent}
-          streamingText={streamingText}
+          projetoNome={projectState.projeto.nome}
+          progressAgent={chat.progressAgent}
+          streamingText={chat.streamingText}
           currentStep={currentStep}
           user={user}
           mainView={mainView}
           onToggleKratos={() => setMainView(v => v === 'kratos' ? 'chat' : 'kratos')}
           onToggleSidebar={() => setSidebarOpen(s => !s)}
-          onNovaSessao={() => {
-            setScopeForm({ tema: '', horizonte: '', elaborador: '', cliente: '', questaoEstrategica: '', mudancaIdentificada: '', instrucoes: '' });
-            setScopeFiles([]);
-            setProjeto((p: any) => ({ ...p, metodologia: 'MSEF' }));
-            setShowNovaSessaoModal(true);
-          }}
-          onGerarRelatorio={() => gerarRelatorio('padrao')}
-          onGerarPlaybook={user?.role === 'admin' ? gerarPlaybook : undefined}
-          onCopyClientLink={() => {
-            const url = `${window.location.origin}/api/v1/painel/project/${sessionId}?token=${token}`;
-            navigator.clipboard.writeText(url).then(() => {
-              alert('✅ Link do cliente copiado!\n\nCompartilhe este link com o cliente para acesso ao Painel de Monitoramento.');
-            }).catch(() => { prompt('Copie o link abaixo:', url); });
-          }}
-          cliente={projeto.cliente}
-          horizonte={projeto.horizonte}
-          questaoEstrategica={projeto.questaoEstrategica}
+          onNovaSessao={openNewSession}
+          onGerarRelatorio={() => exports.gerarRelatorio('padrao')}
+          onGerarPlaybook={user?.role === 'admin' ? exports.gerarPlaybook : undefined}
+          onCopyClientLink={copyClientLink}
+          cliente={projectState.projeto.cliente}
+          horizonte={projectState.projeto.horizonte}
+          questaoEstrategica={projectState.projeto.questaoEstrategica}
           teamName={currentTeamName}
-          methodologyName={projeto.metodologia || 'MSEF'}
+          methodologyName={projectState.projeto.metodologia || 'MSEF'}
           methodologySteps={currentMethodologySteps}
-          llmConfig={llmConfig}
-          anthropicModels={anthropicModels}
-          ollamaModels={ollamaModels}
-          ollamaAvailable={ollamaAvailable}
-          onLlmChange={user?.role === 'admin' ? handleLlmChange : undefined}
+          llmConfig={llm.llmConfig}
+          anthropicModels={llm.anthropicModels}
+          ollamaModels={llm.ollamaModels}
+          ollamaAvailable={llm.ollamaAvailable}
+          onLlmChange={user?.role === 'admin' ? llm.handleLlmChange : undefined}
         />
 
         <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
 
-        {/* ── VIEW: KRATOS PANEL ─────────────────────────────────────────── */}
-        {mainView === 'kratos' && sessionId && (
-          <KratosPanel
-            sessionId={sessionId}
-            reqHeaders={reqHeaders}
-            onRunKratos={() => { setMainView('chat'); gerarRelatorioKratos(); }}
-            onSettings={() => setShowSettingsModal(true)}
-          />
-        )}
-
-        {/* ── VIEW: CHAT ──────────────────────────────────────────────────── */}
-        {mainView === 'chat' && <main className="flex-1 overflow-y-auto p-6 flex flex-col gap-6">
-
-          {/* ── PAINEL DE BOAS-VINDAS (estado vazio) ────────────────────────────── */}
-          {messages.length === 0 && !loading && (
-            <div className="flex-1 flex flex-col items-center justify-center py-16 text-center">
-              <div className="w-20 h-20 rounded-full bg-stratsight-dark/10 border-2 border-stratsight-medium/20 flex items-center justify-center text-4xl mb-6 shadow-inner">⚡</div>
-              <h2 className="text-xl font-bold text-stratsight-dark mb-3 tracking-wide">OLYMPUS v1.0</h2>
-              <p className="text-stratsight-medium text-sm max-w-md leading-relaxed mb-8">
-                {user?.role === 'cliente'
-                  ? <>Bem-vindo ao painel de acompanhamento.<br/>Selecione um projeto no <strong>Histórico</strong> para visualizar os cenários e indicadores.</>
-                  : <>Nossa equipe lhe dá as boas-vindas.<br/>Abra um dos projetos no <strong>Histórico</strong> ou inicie uma nova análise clicando em <strong>Nova Sessão</strong>.</>
-                }
-              </p>
-              <div className="flex gap-3">
-                <button
-                  onClick={() => { setShowSessoes(true); setSidebarOpen(true); carregarSessoes(); }}
-                  className="px-5 py-2.5 border-2 border-stratsight-medium text-stratsight-dark font-bold rounded-xl hover:bg-stratsight-light transition-colors text-sm"
-                >
-                  📂 Histórico de Análises
-                </button>
-                {user?.role !== 'cliente' && (
-                  <button
-                    onClick={() => {
-                      setScopeForm({ tema: '', horizonte: '', elaborador: '', cliente: '', questaoEstrategica: '', mudancaIdentificada: '', instrucoes: '' });
-                      setScopeFiles([]);
-                      setProjeto((p: any) => ({ ...p, metodologia: 'MSEF' }));
-                      setShowNovaSessaoModal(true);
-                    }}
-                    className="px-5 py-2.5 bg-stratsight-dark text-white font-bold rounded-xl hover:bg-stratsight-medium transition-colors shadow-lg shadow-green-900/20 text-sm"
-                  >
-                    🔄 Nova Sessão
-                  </button>
-                )}
-              </div>
-            </div>
-          )}
-
-          {/* ── MENSAGENS ────────────────────────────────────────────────────────── */}
-          {messages.map((msg, idx) => {
-            if (msg.role === 'user' && msg.content.startsWith('Iniciar')) return null;
-            const agent = msg.role === 'assistant' ? getAgentInfo(msg.content) : null;
-            return (
-              <MessageBubble
-                key={idx}
-                role={msg.role as 'user' | 'assistant'}
-                content={msg.content}
-                idx={idx}
-                agentName={agent?.name || 'ATHENA'}
-                agentLabel={agent?.label || 'Sistema'}
-                agentHex={agent?.hex || '#1B3A2D'}
-                thinkingContent={thinkingBlocks[idx]}
-                thinkingOpen={!!thinkingOpen[idx]}
-                onToggleThinking={() => setThinkingOpen(prev => ({ ...prev, [idx]: !prev[idx] }))}
-                userRole={user?.role}
-                onDelete={() => deletarMensagem(msg.id, idx)}
-                onCopy={() => navigator.clipboard.writeText(msg.content).catch(() => {})}
-                onExportMd={() => downloadMarkdown(msg.content)}
-                onExportDocx={() => exportSingleDocx(msg.content)}
-                onExportPdf={() => exportSinglePdf(msg.content)}
-              />
-            );
-          })}
-
-
-          {/* Streaming bubble — tokens chegando em tempo real */}
-          {streamingText && (
-            <MessageBubble
-              role="assistant"
-              content={streamingText}
-              idx={-1}
-              agentName="HERMES"
-              agentLabel="Orquestrador"
-              agentHex="#1B3A2D"
-              isStreaming
+          {mainView === 'kratos' && projectState.sessionId && (
+            <KratosPanel
+              sessionId={projectState.sessionId}
+              reqHeaders={reqHeaders}
+              onRunKratos={() => { setMainView('chat'); chat.gerarRelatorioKratos(); }}
+              onSettings={() => setActiveModal('settings')}
             />
           )}
 
-          {/* Loading — progresso dinâmico com etapas do raciocínio */}
-          {loading && !streamingText && (
-            <AgentWorking progressAgent={progressAgent} stepLog={stepLog} />
-          )}
-          <div ref={bottomRef} />
-        </main>}
-
-        {mainView === 'chat' && (
-          <RightPanel
-            projeto={projeto}
-            indicadores={indicadores}
-            weakSignals={weakSignals}
-            signalStats={signalStats}
-            onRefreshIndicators={() => carregarIndicadores(sessionId)}
-            onRefreshSignals={() => carregarSinais(sessionId)}
-          />
-        )}
-        </div>
-
-        {mainView === 'chat' && (
-        <InputZone
-          userRole={user?.role}
-          mode={mode}
-          hasMessages={messages.length > 0}
-          input={input}
-          loading={loading}
-          extracting={extracting}
-          fileError={fileError}
-          attachedFiles={attachedFiles}
-          acceptedTypes={ACCEPTED_TYPES}
-          metodologia={projeto.metodologia}
-          onInputChange={v => setInput(v)}
-          onSend={sendMessage}
-          onQuickSend={cmd => sendMessage(cmd)}
-          onRemoveFile={removeFile}
-          onFileChange={handleFileChange}
-          onGerarRelatorio={() => gerarRelatorio('padrao')}
-          onExportEstimativa={exportEstimativa}
-        />
-        )}
-      </div>
-    </div>
-
-    {/* ── Modal de Revisão Analítica ICD 203 ─────────────────────────────── */}
-    {showReviewModal && (
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
-        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
-          <div className="bg-stratsight-dark text-white px-6 py-4 rounded-t-2xl flex items-center justify-between">
-            <div>
-              <div className="font-bold text-lg">Revisão de Qualidade Analítica</div>
-              <div className="text-xs text-gray-300 mt-0.5">Padrão ICD 203 · ODNI 2022 · McMahon 2024</div>
-            </div>
-            <button onClick={() => setShowReviewModal(false)} className="text-gray-300 hover:text-white text-xl">✕</button>
-          </div>
-
-          {analyticReview ? (
-            <div className="p-6 space-y-4">
-              <div className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-sm font-bold ${
-                analyticReview.status === 'aprovado' ? 'bg-green-100 text-green-800' :
-                analyticReview.status === 'aprovado_com_ressalvas' ? 'bg-yellow-100 text-yellow-800' :
-                analyticReview.status === 'requer_revisao' ? 'bg-red-100 text-red-800' :
-                'bg-gray-100 text-gray-600'
-              }`}>
-                {analyticReview.status === 'aprovado' && '✅ Aprovado'}
-                {analyticReview.status === 'aprovado_com_ressalvas' && '⚠️ Aprovado com Ressalvas'}
-                {analyticReview.status === 'requer_revisao' && '🔴 Requer Revisão'}
-                {analyticReview.status === 'nao_revisado' && '⏳ Não Revisado'}
-              </div>
-
-              {analyticReview.atsCompliance && (
-                <div>
-                  <div className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Pontuação por Padrão ATS</div>
-                  <div className="grid grid-cols-4 gap-2">
-                    {Object.entries(analyticReview.atsCompliance).map(([k, v]: any) => (
-                      <div key={k} className="text-center bg-gray-50 rounded-lg p-2">
-                        <div className="text-lg font-bold text-stratsight-dark">{v}</div>
-                        <div className="text-[10px] text-gray-500">{k}</div>
-                      </div>
-                    ))}
+          {mainView === 'chat' && (
+            <main className="flex-1 overflow-y-auto p-6 flex flex-col gap-6">
+              {chat.messages.length === 0 && !chat.loading && (
+                <div className="flex-1 flex flex-col items-center justify-center py-16 text-center">
+                  <div className="w-20 h-20 rounded-full bg-stratsight-dark/10 border-2 border-stratsight-medium/20 flex items-center justify-center text-4xl mb-6 shadow-inner">⚡</div>
+                  <h2 className="text-xl font-bold text-stratsight-dark mb-3 tracking-wide">OLYMPUS v1.0</h2>
+                  <p className="text-stratsight-medium text-sm max-w-md leading-relaxed mb-8">
+                    {user?.role === 'cliente'
+                      ? <>Bem-vindo ao painel de acompanhamento.<br/>Selecione um projeto no <strong>Histórico</strong> para visualizar os cenários e indicadores.</>
+                      : <>Nossa equipe lhe dá as boas-vindas.<br/>Abra um dos projetos no <strong>Histórico</strong> ou inicie uma nova análise clicando em <strong>Nova Sessão</strong>.</>
+                    }
+                  </p>
+                  <div className="flex gap-3">
+                    <button onClick={() => { sessions.setShowSessoes(true); setSidebarOpen(true); sessions.carregarSessoes(); }} className="px-5 py-2.5 border-2 border-stratsight-medium text-stratsight-dark font-bold rounded-xl hover:bg-stratsight-light transition-colors text-sm">📂 Histórico de Análises</button>
+                    {user?.role !== 'cliente' && (
+                      <button onClick={openNewSession} className="px-5 py-2.5 bg-stratsight-dark text-white font-bold rounded-xl hover:bg-stratsight-medium transition-colors shadow-lg shadow-green-900/20 text-sm">🔄 Nova Sessão</button>
+                    )}
                   </div>
                 </div>
               )}
 
-              {analyticReview.notasRevisor && (
-                <div>
-                  <div className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Notas do Revisor</div>
-                  <div className="text-sm text-gray-700 bg-gray-50 rounded-lg p-3 whitespace-pre-wrap">{analyticReview.notasRevisor}</div>
-                </div>
+              {chat.messages.map((msg, idx) => {
+                if (msg.role === 'user' && typeof msg.content === 'string' && msg.content.startsWith('Iniciar')) return null;
+                const agent = msg.role === 'assistant' ? getAgentInfo(typeof msg.content === 'string' ? msg.content : '') : null;
+                return (
+                  <MessageBubble
+                    key={idx}
+                    role={msg.role as 'user' | 'assistant'}
+                    content={typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content)}
+                    idx={idx}
+                    agentName={agent?.name || 'ATHENA'}
+                    agentLabel={agent?.label || 'Sistema'}
+                    agentHex={agent?.hex || '#1B3A2D'}
+                    thinkingContent={chat.thinkingBlocks[idx]}
+                    thinkingOpen={!!chat.thinkingOpen[idx]}
+                    onToggleThinking={() => chat.toggleThinking(idx)}
+                    userRole={user?.role}
+                    onDelete={() => chat.deletarMensagem(msg.id, idx)}
+                    onCopy={() => navigator.clipboard.writeText(typeof msg.content === 'string' ? msg.content : '').catch(() => {})}
+                    onExportMd={() => exports.downloadMarkdown(typeof msg.content === 'string' ? msg.content : '')}
+                    onExportDocx={() => exports.exportSingleDocx(typeof msg.content === 'string' ? msg.content : '')}
+                    onExportPdf={() => exports.exportSinglePdf(typeof msg.content === 'string' ? msg.content : '')}
+                  />
+                );
+              })}
+
+              {chat.streamingText && (
+                <MessageBubble role="assistant" content={chat.streamingText} idx={-1} agentName="HERMES" agentLabel="Orquestrador" agentHex="#1B3A2D" isStreaming />
               )}
-
-              {analyticReview.declaracaoPropriedade && (
-                <div>
-                  <div className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Declaração de Propriedade</div>
-                  <div className="text-xs text-gray-600 italic bg-blue-50 rounded-lg p-3">{analyticReview.declaracaoPropriedade}</div>
-                </div>
+              {chat.loading && !chat.streamingText && (
+                <AgentWorking progressAgent={chat.progressAgent} stepLog={chat.stepLog} />
               )}
+              <div ref={bottomRef} />
+            </main>
+          )}
 
-              <div className="text-[10px] text-gray-400">
-                Revisado por: {analyticReview.reviewerName || '—'} · {analyticReview.reviewedAt ? new Date(analyticReview.reviewedAt).toLocaleString('pt-BR') : '—'}
-              </div>
-
-              <div className="flex gap-2">
-                <button onClick={() => setAnalyticReview(null)} className="flex-1 border border-gray-300 text-gray-700 py-2 rounded-xl text-sm hover:bg-gray-50 transition-colors">Nova Revisão</button>
-                <button onClick={() => setShowReviewModal(false)} className="flex-1 bg-stratsight-dark text-white py-2 rounded-xl font-bold hover:bg-stratsight-medium transition-colors">Fechar</button>
-              </div>
-            </div>
-          ) : (
-            <ReviewForm
-              sessionId={sessionId}
-              token={token!}
-              userName={user?.name || 'Analista'}
-              onSaved={(rev) => { setAnalyticReview(rev); }}
-              onClose={() => setShowReviewModal(false)}
+          {mainView === 'chat' && (
+            <RightPanel
+              projeto={projectState.projeto}
+              indicadores={projectData.indicadores}
+              weakSignals={projectData.weakSignals}
+              signalStats={projectData.signalStats}
+              onRefreshIndicators={() => projectData.carregarIndicadores(projectState.sessionId)}
+              onRefreshSignals={() => projectData.carregarSinais(projectState.sessionId)}
             />
           )}
         </div>
-      </div>
-    )}
-    </>
-  );
-}
 
-// ── Componente ReviewForm ─────────────────────────────────────────────────────
-function ReviewForm({ sessionId, token, userName, onSaved, onClose }: {
-  sessionId: string;
-  token: string;
-  userName: string;
-  onSaved: (rev: any) => void;
-  onClose: () => void;
-}) {
-  const [status, setStatus] = useState<string>('nao_revisado');
-  const [notas, setNotas] = useState('');
-  const [declaracao, setDeclaracao] = useState(`Esta análise foi produzida por ${userName} com assistência de IA como ferramenta auxiliar. A responsabilidade analítica é do analista.`);
-  const [ats1, setAts1] = useState('');
-  const [ats2, setAts2] = useState('');
-  const [ats3, setAts3] = useState('');
-  const [ats4, setAts4] = useState('');
-  const [saving, setSaving] = useState(false);
-
-  const salvar = async () => {
-    setSaving(true);
-    try {
-      const atsCompliance: any = {};
-      if (ats1) atsCompliance['ATS1-Fontes'] = Number(ats1);
-      if (ats2) atsCompliance['ATS2-Probabilidade'] = Number(ats2);
-      if (ats3) atsCompliance['ATS3-Julgamento'] = Number(ats3);
-      if (ats4) atsCompliance['ATS4-Alternativas'] = Number(ats4);
-
-      const r = await fetch('/api/v1/reviews', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-        body: JSON.stringify({
-          projectId: sessionId,
-          status,
-          notasRevisor: notas || null,
-          declaracaoPropriedade: declaracao || null,
-          atsCompliance: Object.keys(atsCompliance).length > 0 ? atsCompliance : null,
-        })
-      });
-      const d = await r.json();
-      if (d.ok) onSaved(d.review);
-    } finally { setSaving(false); }
-  };
-
-  return (
-    <div className="p-6 space-y-4">
-      <div>
-        <label className="text-xs font-bold text-gray-500 uppercase tracking-wider">Status da Revisão</label>
-        <select value={status} onChange={e => setStatus(e.target.value)} className="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-stratsight-medium">
-          <option value="nao_revisado">⏳ Não Revisado</option>
-          <option value="aprovado">✅ Aprovado</option>
-          <option value="aprovado_com_ressalvas">⚠️ Aprovado com Ressalvas</option>
-          <option value="requer_revisao">🔴 Requer Revisão</option>
-        </select>
-      </div>
-
-      <div>
-        <label className="text-xs font-bold text-gray-500 uppercase tracking-wider">Pontuação ATS (0–25 cada)</label>
-        <div className="grid grid-cols-4 gap-2 mt-1">
-          {[['ATS1', 'Fontes', ats1, setAts1], ['ATS2', 'Probabilidade', ats2, setAts2], ['ATS3', 'Julgamento', ats3, setAts3], ['ATS4', 'Alternativas', ats4, setAts4]].map(([id, label, val, setter]: any) => (
-            <div key={id} className="text-center">
-              <input type="number" min="0" max="25" value={val} onChange={e => setter(e.target.value)} placeholder="—" className="w-full border border-gray-200 rounded-lg px-2 py-1.5 text-center text-sm focus:outline-none focus:border-stratsight-medium" />
-              <div className="text-[10px] text-gray-400 mt-0.5">{label}</div>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      <div>
-        <label className="text-xs font-bold text-gray-500 uppercase tracking-wider">Notas do Revisor</label>
-        <textarea value={notas} onChange={e => setNotas(e.target.value)} rows={4} placeholder="Não conformidades identificadas, recomendações ao analista..." className="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-stratsight-medium resize-none" />
-      </div>
-
-      <div>
-        <label className="text-xs font-bold text-gray-500 uppercase tracking-wider">Declaração de Propriedade</label>
-        <textarea value={declaracao} onChange={e => setDeclaracao(e.target.value)} rows={2} className="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-stratsight-medium resize-none" />
-      </div>
-
-      <div className="flex gap-2 pt-2">
-        <button onClick={onClose} className="flex-1 border border-gray-300 text-gray-700 py-2 rounded-xl text-sm hover:bg-gray-50 transition-colors">Cancelar</button>
-        <button onClick={salvar} disabled={saving} className="flex-1 bg-stratsight-dark text-white py-2 rounded-xl font-bold hover:bg-stratsight-medium transition-colors disabled:opacity-50">
-          {saving ? 'Salvando...' : 'Salvar Revisão'}
-        </button>
+        {mainView === 'chat' && (
+          <InputZone
+            userRole={user?.role}
+            mode={mode}
+            hasMessages={chat.messages.length > 0}
+            input={input}
+            loading={chat.loading}
+            extracting={attachments.extracting}
+            fileError={attachments.fileError}
+            attachedFiles={attachments.attachedFiles}
+            acceptedTypes={ACCEPTED_TYPES}
+            metodologia={projectState.projeto.metodologia}
+            onInputChange={setInput}
+            onSend={() => { chat.sendMessage(input, attachments.attachedFiles, attachments.clearFiles); setInput(''); }}
+            onQuickSend={cmd => chat.sendMessage(cmd, [], undefined)}
+            onRemoveFile={attachments.removeFile}
+            onFileChange={attachments.handleFileChange}
+            onGerarRelatorio={() => exports.gerarRelatorio('padrao')}
+            onExportEstimativa={exports.exportEstimativa}
+          />
+        )}
       </div>
     </div>
+    </>
   );
 }
 
