@@ -13,65 +13,7 @@ export interface MethodologyStep {
   label: string;
 }
 
-// ─── Definições estáticas ──────────────────────────────────────────────────────
-
-export const METHODOLOGY_DEFS: Record<string, MethodologyStep[]> = {
-
-  // ── MSEF — Método Multidimensional de Exploração de Futuros ──────────────────
-  MSEF: [
-    { num: 1, agent: 'SCOPUS',    label: 'Escopo'      },
-    { num: 2, agent: 'KLIO',      label: 'Drivers'     },
-    { num: 3, agent: 'PYTHIA',    label: 'Cenários'    },
-    { num: 4, agent: 'MNEMOSYNE', label: 'Narrativas'  },
-    { num: 5, agent: 'THEMIS',    label: 'Implicações' },
-  ],
-
-  // ── MACROPLAN ─────────────────────────────────────────────────────────────────
-  MACROPLAN: [
-    { num: 1, agent: 'SCOPUS',    label: 'Tema e Escopo'  },
-    { num: 2, agent: 'KLIO',      label: 'Diagnóstico'    },
-    { num: 3, agent: 'PYTHIA',    label: 'Cen. Referência' },
-    { num: 4, agent: 'MNEMOSYNE', label: 'Cen. Alternativos' },
-    { num: 5, agent: 'THEMIS',    label: 'Estratégias'    },
-  ],
-
-  // ── Grumbach — Método Prospectivo Militar Brasileiro ─────────────────────────
-  Grumbach: [
-    { num: 1, agent: 'SCOPUS',    label: 'Sistema'     },
-    { num: 2, agent: 'KLIO',      label: 'Eventos'     },
-    { num: 3, agent: 'PYTHIA',    label: 'Delphi'      },
-    { num: 4, agent: 'MNEMOSYNE', label: 'Morfológica' },
-    { num: 5, agent: 'THEMIS',    label: 'Cenários'    },
-  ],
-
-  // ── Godet — La Prospective ────────────────────────────────────────────────────
-  Godet: [
-    { num: 1, agent: 'SCOPUS',    label: 'Delimitação'  },
-    { num: 2, agent: 'KLIO',      label: 'MICMAC'       },
-    { num: 3, agent: 'PYTHIA',    label: 'MACTOR/SMIC'  },
-    { num: 4, agent: 'MNEMOSYNE', label: 'Cenários'     },
-    { num: 5, agent: 'THEMIS',    label: 'Síntese'      },
-  ],
-
-  // ── SIEX/EB — Sistema de Inteligência do Exército Brasileiro ─────────────────
-  'SIEX/EB': [
-    { num: 1, agent: 'SCOPUS',    label: 'Missão e Área' },
-    { num: 2, agent: 'KLIO',      label: 'Ambiente'      },
-    { num: 3, agent: 'PYTHIA',    label: 'Cursos CA'     },
-    { num: 4, agent: 'MNEMOSYNE', label: 'Análise'       },
-    { num: 5, agent: 'THEMIS',    label: 'Estimativa'    },
-  ],
-
-  // ── NATO AltA — Alternative Analysis ─────────────────────────────────────────
-  ALTA: [
-    { num: 1, agent: 'SCOPUS', label: 'Enquadramento' },
-    { num: 2, agent: 'KLIO',   label: 'Diagnóstico'   },
-    { num: 3, agent: 'PYTHIA', label: 'Futuros Alt.'  },
-    { num: 4, agent: 'THEMIS', label: 'Validação'     },
-  ],
-};
-
-// ─── Fallback genérico ────────────────────────────────────────────────────────
+// ─── Fallback genérico (usado quando API não retorna steps) ──────────────────
 
 export const DEFAULT_STEPS: MethodologyStep[] = [
   { num: 1, agent: 'SCOPUS',    label: 'Escopo'     },
@@ -94,22 +36,18 @@ export const STEP_DETECTION_PATTERNS: Record<string, RegExp[]> = {
 
 // ─── Função de resolução ──────────────────────────────────────────────────────
 
-/**
- * Retorna as etapas da metodologia, priorizando dados vindos da API
- * (agentsConfig.steps) e caindo para definições estáticas como fallback.
- */
 export function getMethodologySteps(
   methodologyName: string,
   dbMethodologies?: any[],
 ): MethodologyStep[] {
-  // 1. DB tem steps no agentsConfig rico?
   if (dbMethodologies?.length) {
-    const found = dbMethodologies.find(m => m.name === methodologyName);
-    const dbSteps = found?.agentsConfig?.steps;
+    const found = dbMethodologies.find(
+      (m: any) => m.name === methodologyName || m.slug === methodologyName.toLowerCase(),
+    );
+    const dbSteps = found?.steps;
     if (Array.isArray(dbSteps) && dbSteps.length > 0) {
       return dbSteps as MethodologyStep[];
     }
   }
-  // 2. Fallback estático
-  return METHODOLOGY_DEFS[methodologyName] ?? DEFAULT_STEPS;
+  return DEFAULT_STEPS;
 }

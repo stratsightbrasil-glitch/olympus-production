@@ -14,6 +14,14 @@ export interface AgentContext {
   dispatch?: (agentName: string, input: string) => Promise<string>;
   /** Configuração de LLM ativa — sobrescreve as variáveis de ambiente */
   llmConfig?: { provider: string; model: string };
+  /** Fases da metodologia ativa — carregadas via loadMethodology() */
+  phases?: Array<{ phaseNum: number; label: string; agentRole: string; description?: string | null }>;
+  /** Instruções extras por agente para a metodologia ativa — agentName → extraInstructions */
+  agentMethodPrompts?: Record<string, string>;
+  /** Modo de soberania de dados do projeto */
+  connectivityMode?: "ONLINE" | "SOBERANO" | "AIR_GAPPED";
+  /** Âncora de contexto estruturado — injetada no system prompt quando há eventos aprovados */
+  anchorContext?: string;
 }
 
 export interface Tool<T = any> {

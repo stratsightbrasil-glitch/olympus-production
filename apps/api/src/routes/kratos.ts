@@ -126,21 +126,47 @@ function buildSnapshotHtml(
 </body></html>`;
 }
 
-// ─── Parser de probabilidades de cenário (Q1-Q4) ─────────────────────────────
+// ─── Parser de probabilidades de cenário (MSEF, GRUMBACH) ────────────────────
+// MSEF   → { q1, q2, q3, q4 }  — padrões "Q1... 40%" ou "Cenário 1... 40%"
+// GRUMBACH → { mais_provavel, ideal, alvo, tendencia } — nomes CEEEx
+// GODET  → cenários morfológicos com nomes arbitrários; não parseável sem contexto
 
-function parseScenarioProbabilities(text: string | null): Record<string,number> | null {
+function parseScenarioProbabilities(text: string | null): Record<string, number> | null {
   if (!text) return null;
-  const found: Record<number, number> = {};
-  // Padrões: "Q1... 40%", "Q1 — 40%", "Cenário 1... 40%"
-  const re = /\bQ(\d)\b[^\n%]{0,60}?(\d{1,3})\s*%|\b[Cc]en[aá]rio\s*(\d)\b[^\n%]{0,60}?(\d{1,3})\s*%/g;
+
+  // ── MSEF: Q1-Q4 ou "Cenário 1-4" ─────────────────────────────────────────
+  const msef: Record<number, number> = {};
+  const reMsef = /\bQ(\d)\b[^\n%]{0,60}?(\d{1,3})\s*%|\b[Cc]en[aá]rio\s*(\d)\b[^\n%]{0,60}?(\d{1,3})\s*%/g;
   let m: RegExpExecArray | null;
-  while ((m = re.exec(text)) !== null) {
+  while ((m = reMsef.exec(text)) !== null) {
     const q = parseInt(m[1] || m[3]);
     const pct = parseInt(m[2] || m[4]);
-    if (q >= 1 && q <= 4 && pct >= 0 && pct <= 100 && !found[q]) found[q] = pct;
+    if (q >= 1 && q <= 4 && pct >= 0 && pct <= 100 && !msef[q]) msef[q] = pct;
   }
-  if (Object.keys(found).length === 0) return null;
-  return { q1: found[1] ?? 0, q2: found[2] ?? 0, q3: found[3] ?? 0, q4: found[4] ?? 0 };
+  if (Object.keys(msef).length >= 2) {
+    return { q1: msef[1] ?? 0, q2: msef[2] ?? 0, q3: msef[3] ?? 0, q4: msef[4] ?? 0 };
+  }
+
+  // ── GRUMBACH/CEEEx: nomes canônicos dos 4 cenários ───────────────────────
+  // Padrões: "Mais Provável: 45%", "Cenário Mais Provável... 45%",
+  //          "Ideal... 25%", "Alvo... 20%", "Tendência... 10%"
+  const grumbach: Record<string, number> = {};
+  const reGrumbach: [RegExp, string][] = [
+    [/[Mm]ais\s+[Pp]rov[aá]vel[^\n%]{0,80}?(\d{1,3})\s*%/,  'mais_provavel'],
+    [/[Cc]en[aá]rio\s+[Ii]deal[^\n%]{0,80}?(\d{1,3})\s*%/,  'ideal'        ],
+    [/[Cc]en[aá]rio\s+[Aa]lvo[^\n%]{0,80}?(\d{1,3})\s*%/,   'alvo'         ],
+    [/[Tt]end[eê]n[ck]ia[^\n%]{0,80}?(\d{1,3})\s*%/,         'tendencia'    ],
+  ];
+  for (const [re, key] of reGrumbach) {
+    const match = re.exec(text);
+    if (match) {
+      const pct = parseInt(match[1]);
+      if (pct >= 0 && pct <= 100) grumbach[key] = pct;
+    }
+  }
+  if (Object.keys(grumbach).length >= 2) return grumbach;
+
+  return null;
 }
 
 // ─── GET /api/v1/kratos/:projectId/dashboard ──────────────────────────────────

@@ -1,19 +1,86 @@
 import { Hono } from 'hono';
 import { streamSSE } from 'hono/streaming';
 import { Orchestrator, Agent, AgentContext, Tool } from '@olympus/core';
-import { db, projects, messages, methodologies, agents as agentsTable, techniques as techniquesTable } from '@olympus/db';
+import { db, projects, messages, methodologies, agents as agentsTable, techniques as techniquesTable, methodologyPhases, agentMethodPrompts, projectEvents } from '@olympus/db';
 import { tavilySearchTool, dadosPublicosTool } from '@olympus/tools';
 import { ragTool } from '../tools/rag';
 import { createSignalTools } from '../tools/signals';
 import { createAnalyticStandardsTools } from '../tools/analytic-standards';
 import { getTechniqueInstructions, getAltATechniquesForSeed } from '../tools/technique-engine';
 import { getLLMConfig } from './settings';
-import { eq, inArray } from 'drizzle-orm';
+import { eq, inArray, and } from 'drizzle-orm';
 
 const chatRoutes = new Hono();
 
+// ── T6: Janela de memória por budget de tokens ────────────────────────────────
+const MEMORY_TOKEN_BUDGET = 80_000;
+function estimateTokens(text: string): number { return Math.ceil((text ?? '').length / 4); }
+function buildMemoryWindow(msgs: any[]): any[] {
+  const candidates = msgs.slice(0, -1); // exclui a mensagem corrente
+  if (candidates.length === 0) return [];
+  const first = candidates[0];
+  const rest = candidates.slice(1).reverse();
+  const window: any[] = [];
+  let tokens = Math.min(estimateTokens(first?.content ?? ''), 4_000);
+  for (const msg of rest) {
+    const t = estimateTokens(msg.content ?? '');
+    if (tokens + t > MEMORY_TOKEN_BUDGET) break;
+    window.unshift(msg);
+    tokens += t;
+  }
+  if (first && !window.includes(first)) window.unshift(first);
+  return window;
+}
+
 // ============================================================================
-// MOTOR DINÂMICO DE METODOLOGIAS (AUTO-SEED)
+// MOTOR NORMALIZADO — loadMethodology() — leitura pura do banco
+// getOrSeedMethodology() mantido como fallback até Sprint 3 confirmar estabilidade.
+// ============================================================================
+
+async function loadMethodology(slug: string) {
+  // Normaliza: permite buscar por nome ou slug
+  const method = await db.query.methodologies.findFirst({
+    where: (t, { or, eq: eqFn }) => or(
+      eqFn(t.slug, slug.toLowerCase()),
+      eqFn(t.name, slug)
+    )
+  });
+  if (!method) return null;
+
+  const phases = await db
+    .select()
+    .from(methodologyPhases)
+    .where(eq(methodologyPhases.methodologyId, method.id))
+    .orderBy(methodologyPhases.phaseNum);
+
+  const promptRows = await db
+    .select({
+      agentId:           agentMethodPrompts.agentId,
+      extraInstructions: agentMethodPrompts.extraInstructions,
+    })
+    .from(agentMethodPrompts)
+    .where(eq(agentMethodPrompts.methodologyId, method.id));
+
+  // Resolver agentId → agentName
+  const promptMap: Record<string, string> = {};
+  if (promptRows.length > 0) {
+    const agentIds = promptRows.map(p => p.agentId);
+    const agentNames = await db
+      .select({ id: agentsTable.id, name: agentsTable.name })
+      .from(agentsTable)
+      .where(inArray(agentsTable.id, agentIds));
+    const nameMap = Object.fromEntries(agentNames.map(a => [a.id, a.name]));
+    for (const p of promptRows) {
+      const name = nameMap[p.agentId];
+      if (name) promptMap[name] = p.extraInstructions;
+    }
+  }
+
+  return { method, phases, agentMethodPrompts: promptMap };
+}
+
+// ============================================================================
+// MOTOR DINÂMICO DE METODOLOGIAS (AUTO-SEED) — mantido como fallback
 // ============================================================================
 
 async function getOrSeedMethodology(methodName: string) {
@@ -68,14 +135,14 @@ Etapa 7 · MONITORAMENTO (KRATOS): Ciclo de monitoramento contínuo com dados of
 - Narrativas, loglines, histórias dos cenários → MNEMOSYNE
 - Implicações estratégicas, alertas precoces → THEMIS
 - Monitoramento contínuo, indicadores → KRATOS
-- Revisão de qualidade analítica por fase → HERMES_REVISOR
+- Revisão de qualidade analítica por fase → ATHENA
 
 [PROTOCOLO DE QUALIDADE — REVISÃO POR FASE]
 Após receber a entrega de cada especialista (SCOPUS, KLIO, PYTHIA, MNEMOSYNE, THEMIS), antes de apresentar o resultado ao usuário:
-1. Acione: consultar_agente(agent_name="HERMES_REVISOR", query="Revisar Etapa [N] — [Nome]: [síntese do conteúdo entregue em até 200 chars]")
-2. Se HERMES_REVISOR retornar APROVADO ou APROVADO COM RESSALVAS: apresente o resultado da fase + o selo de qualidade de forma compacta.
-3. Se HERMES_REVISOR retornar REQUER REVISÃO: informe o usuário, acione o especialista para corrigir, e repita a revisão.
-Exceção: NÃO chame HERMES_REVISOR após KRATOS (monitoramento) nem após o Relatório Final.
+1. Acione: consultar_agente(agent_name="ATHENA", query="Revisar Etapa [N] — [Nome]: [síntese do conteúdo entregue em até 200 chars]")
+2. Se ATHENA retornar APROVADO ou APROVADO COM RESSALVAS: apresente o resultado da fase + o selo de qualidade de forma compacta.
+3. Se ATHENA retornar REQUER REVISÃO: informe o usuário, acione o especialista para corrigir, e repita a revisão.
+Exceção: NÃO chame ATHENA após KRATOS (monitoramento) nem após o Relatório Final.
 
 [PROTOCOLO DE INTERVENÇÃO DO USUÁRIO]
 Quando o usuário fizer qualquer correção, ajuste ou instrução substantiva DURANTE uma fase (não apenas "Confirmar"):
@@ -388,10 +455,10 @@ IMPORTANTE: Inicie sempre com "**KRATOS** · ".`,
         toolsConfig: ['web_search', 'buscar_dados_publicos', 'buscar_sinais', 'atualizar_sentinela', 'avaliar_fonte', 'declarar_julgamento']
       },
       {
-        name: 'HERMES_REVISOR',
+        name: 'ATHENA',
         role: 'Revisor de Qualidade Analítica ICD 203',
         type: 'expert',
-        systemPrompt: `Você é HERMES_REVISOR, especialista em Revisão de Qualidade Analítica do OLYMPUS (StratSight Brasil).
+        systemPrompt: `Você é ATHENA, especialista em Revisão de Qualidade Analítica do OLYMPUS (StratSight Brasil).
 Você opera sob o padrão ICD 203 (ODNI, 2022) e McMahon (2024).
 
 [DOIS MODOS DE OPERAÇÃO]
@@ -428,7 +495,7 @@ Emita o CQA completo:
 - **Recomendações**
 - **Declaração**: "Análise produzida com assistência de IA. Responsabilidade analítica é do analista responsável."
 
-IMPORTANTE: Inicie sempre com "**HERMES_REVISOR** · ".`,
+IMPORTANTE: Inicie sempre com "**ATHENA** · ".`,
         toolsConfig: ['avaliar_fonte', 'declarar_julgamento', 'registrar_hipotese_alternativa']
       }
     ];
@@ -473,288 +540,6 @@ IMPORTANTE: Inicie sempre com "**HERMES_REVISOR** · ".`,
     });
   }
 
-  // ── NATO Alternative Analysis (AltA) ────────────────────────────────────────
-  if (methodName === 'ALTA') {
-    console.log('[Motor Dinâmico] Verificando/Atualizando metodologia NATO AltA...');
-
-    // Seed das técnicas SAT (idempotente — usa upsert via ON CONFLICT)
-    const altaTechs = getAltATechniquesForSeed();
-    for (const tech of altaTechs) {
-      const exists = await db.query.techniques.findFirst({
-        where: eq(techniquesTable.name, tech.name)
-      });
-      if (!exists) {
-        await db.insert(techniquesTable).values(tech);
-      } else {
-        await db.update(techniquesTable).set({
-          description: tech.description,
-          instructions: tech.instructions,
-        }).where(eq(techniquesTable.name, tech.name));
-      }
-    }
-
-    const altaAgents = [
-      {
-        name: 'HERMES_ALTA',
-        role: 'Orquestrador NATO Alternative Analysis',
-        type: 'orchestrator',
-        systemPrompt: `Você é HERMES_ALTA, Orquestrador do motor de Análise Alternativa (AltA) do OLYMPUS (StratSight Brasil), baseado no NATO Alternative Analysis Handbook (2ª ed., 2017).
-
-A AltA é a aplicação deliberada de pensamento independente e crítico para melhorar a tomada de decisão. Você coordena a equipe de especialistas usando as técnicas SAT (Structured Analytic Techniques) da OTAN.
-
-[REGRA ABSOLUTA — SEM EXCEÇÃO]
-Você SEMPRE invoca 'consultar_agente' ANTES de qualquer resposta ao usuário.
-Não existe situação — saudação, confirmação, status — em que você responde sem antes acionar um especialista.
-
-[PROCESSO AltA — 4 FASES]
-Fase 1 · INICIAÇÃO (SCOPUS): Definir o problema, compreender a tarefa, identificar partes interessadas e recursos disponíveis.
-Fase 2 · PREPARAÇÃO (SCOPUS + KLIO): Refinar o problema, selecionar as técnicas AltA mais adequadas ao objetivo, definir o resultado esperado.
-Fase 3 · APLICAÇÃO (PYTHIA + THEMIS): Aplicar as técnicas selecionadas com rigor metodológico. Cada especialista aplica as técnicas pertinentes à sua área.
-Fase 4 · CONCLUSÃO (HERMES_ALTA): Consolidar os resultados, escrever o produto final, apresentar ao tomador de decisão.
-
-[SELEÇÃO DE TÉCNICAS]
-Escolha técnicas com base no objetivo:
-• Estruturar/definir problema → Identificação de Premissas-Chave, Pensamento de Fora para Dentro, PMI
-• Criar/explorar alternativas → Futuros Alternativos, Adversário Substituto, Análise E-Se
-• Revisar/desafiar → Advocacia do Diabo, Cinco Porquês, Verificação de Qualidade da Informação
-• Avaliar/decidir → Análise SWOT, PMI, Time A/Time B, Análise Pré-Mortem
-
-[MAPEAMENTO DE ESPECIALISTAS]
-- Estruturação do problema, premissas, escopo → SCOPUS
-- Análise ambiental, fatores externos, PESTEL → KLIO
-- Incertezas, hipóteses alternativas, futuros → PYTHIA
-- Implicações estratégicas, validação, riscos → THEMIS
-
-[PRODUTO FINAL]
-Ao encerrar a análise, HERMES_ALTA produz o "PRODUTO AltA FINAL":
-1. Enunciado do problema
-2. Técnicas AltA aplicadas (e por quê foram escolhidas)
-3. Resultados por técnica
-4. Premissas-chave e vulnerabilidades
-5. Hipóteses alternativas consideradas
-6. Conclusão e recomendação (com grau de confiança)
-7. Indicadores de alerta para monitoramento
-
-[PROIBIDO]
-❌ Responder sem invocar consultar_agente. ❌ Aplicar técnicas sem explicar por que foram escolhidas. ❌ Afirmar certeza absoluta.`,
-        toolsConfig: ['consultar_agente']
-      },
-      {
-        name: 'SCOPUS',
-        role: 'Enquadramento Estratégico',
-        type: 'expert',
-        systemPrompt: `Você é SCOPUS, especialista em Enquadramento Estratégico do OLYMPUS (StratSight Brasil).
-[ACESSO À INTERNET] Você TEM acesso à internet via ferramenta "web_search". NUNCA afirme data de corte.
-
-[MISSÃO AltA]
-Na metodologia AltA, você executa as Fases 1 e 2:
-- Enquadrar o problema com precisão
-- Identificar as premissas explícitas e implícitas
-- Aplicar: Identificação de Premissas-Chave, Pensamento de Fora para Dentro, Verificação de Qualidade da Informação
-
-[ENTREGAS]
-1. Ficha de Enquadramento do Problema
-2. Aplicação da Identificação de Premissas-Chave (completa, com premissa-linchpin)
-3. Mapeamento de forças externas (Pensamento de Fora para Dentro)
-4. Avaliação da qualidade das fontes disponíveis
-
-IMPORTANTE: Inicie sempre com "**SCOPUS** · ".`,
-        toolsConfig: ['web_search', 'buscar_documentos_internos', 'avaliar_fonte', 'declarar_julgamento']
-      },
-      {
-        name: 'KLIO',
-        role: 'Análise Ambiental e Diagnóstico',
-        type: 'expert',
-        systemPrompt: `Você é KLIO, especialista em Análise Ambiental do OLYMPUS (StratSight Brasil).
-[ACESSO À INTERNET] Você TEM acesso à internet via "web_search". Sempre busque dados reais antes de analisar.
-
-[MISSÃO AltA]
-Você realiza o diagnóstico do ambiente externo usando técnicas AltA:
-- SWOT Analysis (com matriz de confrontação)
-- Cinco Porquês (causas-raiz dos problemas identificados)
-- PMI sobre as principais opções estratégicas
-- Pesquisa de dados reais para fundamentar cada análise
-
-[ENTREGAS]
-1. Análise SWOT completa com matriz de confrontação e plano de ação
-2. Cinco Porquês sobre as questões-chave identificadas
-3. PMI sobre as principais opções ou hipóteses
-4. Base de evidências com avaliação de fontes
-
-IMPORTANTE: Inicie sempre com "**KLIO** · ".`,
-        toolsConfig: ['web_search', 'buscar_dados_publicos', 'buscar_documentos_internos', 'avaliar_fonte', 'declarar_julgamento']
-      },
-      {
-        name: 'PYTHIA',
-        role: 'Análise de Incertezas e Futuros Alternativos',
-        type: 'expert',
-        systemPrompt: `Você é PYTHIA, especialista em Análise de Incertezas e Futuros Alternativos do OLYMPUS (StratSight Brasil).
-[ACESSO À INTERNET] Você TEM acesso à internet via "web_search". Busque dados antes de fazer projeções.
-
-[MISSÃO AltA]
-Você explora os futuros possíveis usando técnicas AltA de alta complexidade:
-- Futuros Alternativos (matriz 2×2 com 4 narrativas)
-- Análise E-Se (What-If): como eventos adversos/positivos poderiam se materializar
-- Advocacia do Diabo: desafie a hipótese principal com o melhor argumento contrário
-- Adversário Substituto: como atores externos percebem e reagirão à situação
-
-[ENTREGAS]
-1. Matriz 2×2 de Futuros Alternativos (4 narrativas + sinalizadores)
-2. Análise E-Se para 2 cenários críticos
-3. Advocacia do Diabo contra a hipótese principal
-4. Modelagem de pelo menos 1 ator externo relevante
-
-IMPORTANTE: Inicie sempre com "**PYTHIA** · ".`,
-        toolsConfig: ['web_search', 'buscar_dados_publicos', 'avaliar_fonte', 'declarar_julgamento', 'registrar_hipotese_alternativa']
-      },
-      {
-        name: 'THEMIS',
-        role: 'Validação, Riscos e Implicações Estratégicas',
-        type: 'expert',
-        systemPrompt: `Você é THEMIS, especialista em Validação e Implicações Estratégicas do OLYMPUS (StratSight Brasil).
-[ACESSO À INTERNET] Você TEM acesso à internet via "web_search".
-
-[MISSÃO AltA]
-Você valida e desafia a análise produzida pelas outras fases usando técnicas de challenge:
-- Análise Pré-Mortem: como o plano/estratégia pode fracassar?
-- Time A/Time B: debate as posições mais fortes e mais fracas
-- Verificação de Qualidade da Informação: audita as fontes críticas
-
-[ENTREGAS]
-1. Análise Pré-Mortem com causas de fracasso priorizadas e refinamentos propostos
-2. Time A/Time B sobre a decisão ou recomendação mais importante
-3. Auditoria de qualidade das fontes críticas usadas na análise
-4. Implicações estratégicas e alertas antecipados
-
-IMPORTANTE: Inicie sempre com "**THEMIS** · ".`,
-        toolsConfig: ['web_search', 'buscar_documentos_internos', 'avaliar_fonte', 'declarar_julgamento', 'registrar_hipotese_alternativa']
-      }
-    ];
-
-    for (const ag of altaAgents) {
-      const exists = await db.query.agents.findFirst({ where: eq(agentsTable.name, ag.name) });
-      if (!exists) {
-        await db.insert(agentsTable).values(ag);
-      } else {
-        await db.update(agentsTable).set({
-          systemPrompt: ag.systemPrompt,
-          toolsConfig: ag.toolsConfig,
-          role: ag.role,
-        }).where(eq(agentsTable.name, ag.name));
-      }
-    }
-
-    if (!method) {
-      await db.insert(methodologies).values({
-        name: 'ALTA',
-        description: 'NATO Alternative Analysis — Análise Alternativa baseada no NATO AltA Handbook (2ª ed., 2017)',
-        category: 'Análise Alternativa',
-        isDefault: false,
-        agentsConfig: altaAgents.map(a => a.name)
-      });
-    } else {
-      await db.update(methodologies).set({
-        agentsConfig: altaAgents.map(a => a.name)
-      }).where(eq(methodologies.name, 'ALTA'));
-    }
-
-    method = await db.query.methodologies.findFirst({
-      where: eq(methodologies.name, 'ALTA')
-    });
-  }
-
-  // ── La Prospective Godet ────────────────────────────────────────────────────
-  if (methodName === 'GODET') {
-    console.log('[Motor Dinâmico] Verificando/Atualizando metodologia GODET...');
-
-    const godetOrchestrator = {
-      name: 'HERMES_GODET',
-      role: 'Orquestrador La Prospective (Godet)',
-      type: 'orchestrator',
-      systemPrompt: `Você é HERMES_GODET, Orquestrador do Método La Prospective Stratégique de Michel Godet (StratSight Brasil).
-La Prospective é o método francês de prospectiva estratégica, base do LIPSOR/CNAM, amplamente usado em governo, defesa e empresas europeias.
-VOCÊ NÃO TEM ACESSO DIRETO À INTERNET. Delegue SEMPRE via 'consultar_agente'.
-
-[REGRA ABSOLUTA]
-Você SEMPRE invoca 'consultar_agente' ANTES de qualquer resposta ao usuário.
-Não existe situação — saudação, confirmação, status — em que você responde sem antes acionar um especialista.
-Exceção única: durante a geração do RAPPORT FINAL GODET, escreva diretamente a partir do histórico completo da conversa — NÃO chame consultar_agente nessa etapa.
-
-[FLUXO GODET — 5 FASES]
-Fase 1 · ANÁLISE ESTRUTURAL — MICMAC (SCOPUS): Identificação das variáveis do sistema. Matriz de influência/dependência. Classificação: variáveis-chave (alta influência, alta dependência), reguladoras, autônomas e de resultado.
-Fase 2 · JOGO DE ATORES — MACTOR (KLIO): Mapeamento dos atores estratégicos. Análise de objetivos, meios de ação, alianças e conflitos. Plano de alianças e antagonismos.
-Fase 3 · MORFOLOGIA DOS FUTUROS (PYTHIA): Decomposição do futuro em componentes. Hipóteses por variável-chave. Combinação de hipóteses em cenários morfológicos.
-Fase 4 · CENÁRIOS E PROBABILIDADES (PYTHIA): Seleção dos cenários mais prováveis. Atribuição de probabilidades (método SMIC). Cenário de referência + cenários contrastados.
-Fase 5 · OPÇÕES ESTRATÉGICAS (THEMIS): Para cada cenário, definir opções estratégicas, objetivos e plano de ação.
-
-[MAPEAMENTO DE ESPECIALISTAS]
-- Análise estrutural MICMAC, variáveis → SCOPUS
-- Jogo de atores MACTOR → KLIO
-- Morfologia, hipóteses, cenários → PYTHIA
-- Opções estratégicas → THEMIS
-
-[PROTOCOLO POR FASE]
-Ao receber a entrega de cada especialista:
-1. Apresente o resultado completo da fase ao usuário.
-2. Inclua ao final: "Para avançar, clique em **Confirmar** na barra de ações."
-3. NÃO avance para a próxima fase sem o Confirmar explícito do usuário.
-
-[RAPPORT FINAL GODET]
-Ao concluir a Fase 5 (THEMIS confirmada), produza o "RAPPORT PROSPECTIF GODET CONSOLIDADO" DIRETAMENTE — sem acionar especialistas — relendo o histórico da conversa e extraindo exclusivamente o que foi produzido em cada fase:
-1. Enquadramento Estratégico (objeto, horizonte, questão central)
-2. Variáveis-Chave do Sistema (MICMAC — influência × dependência)
-3. Jogo de Atores (MACTOR — alianças, conflitos, objetivos)
-4. Morfologia dos Futuros (componentes, hipóteses por variável)
-5. Cenários Prospectivos (referência + contrastados, com probabilidades SMIC)
-6. Opções Estratégicas por Cenário
-7. Conclusão e Prioridades de Ação
-O rapport é consolidação e formatação — não nova análise. Após entregá-lo:
-- Informe: "Para iniciar um novo ciclo, clique em **Nova Sessão** na barra lateral."
-- Encerre. Não pergunte o que mais o usuário deseja.
-
-[PROIBIDO]
-❌ Responder sem invocar consultar_agente (exceto no Rapport Final).
-❌ Dizer "Vou delegar" sem realmente chamar a ferramenta.
-❌ Chamar consultar_agente durante a geração do Rapport Final.
-
-IMPORTANTE: Inicie SEMPRE a resposta final com "**HERMES** · ".`,
-      toolsConfig: ['consultar_agente'],
-    };
-
-    const exists = await db.query.agents.findFirst({ where: eq(agentsTable.name, 'HERMES_GODET') });
-    if (!exists) {
-      await db.insert(agentsTable).values(godetOrchestrator);
-    } else {
-      await db.update(agentsTable).set({ systemPrompt: godetOrchestrator.systemPrompt, toolsConfig: godetOrchestrator.toolsConfig })
-        .where(eq(agentsTable.name, 'HERMES_GODET'));
-    }
-
-    const godetAgentsConfig = {
-      agents: ['HERMES_GODET', 'SCOPUS', 'KLIO', 'PYTHIA', 'THEMIS'],
-      steps: [
-        { num: 1, agent: 'SCOPUS', label: 'MICMAC'   },
-        { num: 2, agent: 'KLIO',   label: 'MACTOR'   },
-        { num: 3, agent: 'PYTHIA', label: 'Morfologia' },
-        { num: 4, agent: 'PYTHIA', label: 'Cenários'  },
-        { num: 5, agent: 'THEMIS', label: 'Estratégia' },
-      ],
-    };
-
-    if (!method) {
-      await db.insert(methodologies).values({
-        name: 'GODET',
-        description: 'La Prospective Stratégique (Michel Godet / LIPSOR)',
-        category: 'Cenários Prospectivos',
-        isDefault: false,
-        agentsConfig: godetAgentsConfig,
-      });
-    } else {
-      await db.update(methodologies).set({ agentsConfig: godetAgentsConfig })
-        .where(eq(methodologies.name, 'GODET'));
-    }
-
-    method = await db.query.methodologies.findFirst({ where: eq(methodologies.name, 'GODET') });
-  }
 
   return method;
 }
@@ -824,6 +609,7 @@ async function runAnalysis(body: any, jwtPayload: any, cb: AnalysisCallbacks, op
   const vizMode       = body.vizMode || 'etapa';
   const metodologiaName = (body.metodologia as string) || 'MSEF';
   const projectName   = body.projectName || 'Novo Projeto';
+  const teamId        = body.teamId || null;
   const llmConfig     = await getLLMConfig();   // lê configuração ativa do banco
 
   const inputMsgStr = typeof rawInputMsg === 'string'
@@ -838,12 +624,13 @@ async function runAnalysis(body: any, jwtPayload: any, cb: AnalysisCallbacks, op
   if (!existingProject) {
     await db.insert(projects).values({
       id: projectId, name: projectName, methodology: metodologiaName,
+      teamId: teamId || undefined,
       createdBy: jwtPayload.name, updatedBy: jwtPayload.name
     });
   } else if (existingProject.name !== projectName || existingProject.methodology !== metodologiaName) {
-    await db.update(projects).set({
-      name: projectName, methodology: metodologiaName, updatedBy: jwtPayload.name
-    }).where(eq(projects.id, projectId));
+    const upd: any = { name: projectName, methodology: metodologiaName, updatedBy: jwtPayload.name };
+    if (teamId) upd.teamId = teamId;
+    await db.update(projects).set(upd).where(eq(projects.id, projectId));
   }
 
   // 2. Salva a mensagem do usuário (ignorado em retentativas para evitar duplicatas)
@@ -851,9 +638,56 @@ async function runAnalysis(body: any, jwtPayload: any, cb: AnalysisCallbacks, op
     await db.insert(messages).values({ projectId, role: 'user', content: inputMsgStr });
   }
 
-  // 3. Motor dinâmico
+  // ── Modo de conectividade e âncora de contexto (anti-bloat HITL) ─────────────
+  const projectRow = await db.query.projects.findFirst({
+    columns: { connectivityMode: true },
+    where: eq(projects.id, projectId),
+  });
+  const connectivityMode = (
+    projectRow?.connectivityMode ?? process.env.CONNECTIVITY_MODE ?? "ONLINE"
+  ) as "ONLINE" | "SOBERANO" | "AIR_GAPPED";
+
+  const approvedEvents = await db
+    .select({
+      id: projectEvents.id,
+      name: projectEvents.name,
+      description: projectEvents.description,
+      type: projectEvents.type,
+      sourceEvaluation: projectEvents.sourceEvaluation,
+    })
+    .from(projectEvents)
+    .where(and(eq(projectEvents.projectId, projectId), eq(projectEvents.status, "approved")));
+
+  let anchorContext = "";
+  if (approvedEvents.length > 0) {
+    const byType = (t: string) => approvedEvents.filter(e => e.type === t);
+    const fmt = (e: typeof approvedEvents[0]) => {
+      const ev = e.sourceEvaluation as any;
+      const mpc = ev ? ` [MPC:${ev.reliability}${ev.credibility}]` : "";
+      return `· ${e.name}: ${e.description}${mpc}`;
+    };
+    const trends = byType("trend");
+    const uncerts = byType("uncertainty");
+    const inflections = byType("inflection_factor");
+    const fpfs = byType("fpf");
+    anchorContext = [
+      "=== ÂNCORA DE CONTEXTO — DADOS APROVADOS PELO ANALISTA (IMUTÁVEIS) ===",
+      trends.length ? `\nTENDÊNCIAS ESTRUTURANTES (${trends.length}):\n${trends.map(fmt).join("\n")}` : "",
+      uncerts.length ? `\nINCERTEZAS CRÍTICAS / EVENTOS BOOLEANOS (${uncerts.length}):\n${uncerts.map(fmt).join("\n")}` : "",
+      inflections.length ? `\nFATORES DE INFLEXÃO GEOPOLÍTICA (${inflections.length}):\n${inflections.map(fmt).join("\n")}` : "",
+      fpfs.length ? `\nFATOS PORTADORES DE FUTURO — GRUMBACH (${fpfs.length}):\n${fpfs.map(fmt).join("\n")}` : "",
+      `\nMODO DE CONECTIVIDADE: ${connectivityMode}`,
+      connectivityMode === "AIR_GAPPED" ? "⚠️ AIR_GAPPED: ferramentas de busca externa PROIBIDAS." : "",
+      connectivityMode === "SOBERANO" ? "⚠️ SOBERANO: usar RAG interno. Não expor intenção analítica." : "",
+      "\n=======================================================================",
+    ].filter(Boolean).join("");
+  }
+  // ─────────────────────────────────────────────────────────────────────────────
+
+  // 3. Carregar metodologia (normalizado) com fallback para getOrSeedMethodology
   cb.onStatus('Carregando metodologia...');
-  const method = await getOrSeedMethodology(metodologiaName);
+  const loaded = await loadMethodology(metodologiaName);
+  const method = loaded?.method ?? await getOrSeedMethodology(metodologiaName);
   if (!method || !method.agentsConfig) {
     throw new Error(`Metodologia '${metodologiaName}' não encontrada ou sem agentes configurados.`);
   }
@@ -941,8 +775,12 @@ async function runAnalysis(body: any, jwtPayload: any, cb: AnalysisCallbacks, op
   const context: AgentContext = {
     projectId,
     methodology: metodologiaName as any,
-    memory: body.messages ? body.messages.slice(0, -1).slice(-12) : [],
+    memory: body.messages ? buildMemoryWindow(body.messages) : [],
     llmConfig,
+    phases: loaded?.phases,
+    agentMethodPrompts: loaded?.agentMethodPrompts,
+    connectivityMode,
+    anchorContext: anchorContext || undefined,
     onThinking: (text) => { thinkingContent = text; },
     onToken: cb.onToken,
     onStep: cb.onStep,
@@ -982,15 +820,32 @@ async function runAnalysis(body: any, jwtPayload: any, cb: AnalysisCallbacks, op
     responseText = `**${orchestratorName}** · \n\n${responseText}`;
   }
 
-  // 4. Salva resposta
+  // 4. Classifica e salva resposta
+  const REPORT_PATTERNS = [
+    'RELATÓRIO FINAL PADRÃO', 'RELATÓRIO FINAL', 'RELATÓRIO DE CENÁRIOS',
+    'RELATÓRIO ESTRATÉGICO', 'RELATÓRIO PROSPECTIVO',
+    'RAPPORT PROSPECTIF GODET', 'RAPPORT PROSPECTIF',
+    'RELATÓRIO GRUMBACH', 'RELATÓRIO SIEX',
+    'PRODUTO ALTA FINAL', 'PRODUTO ALTA',
+  ];
+  const isOrchestratorFinal =
+    REPORT_PATTERNS.some(p => responseText.includes(p)) ||
+    (responseText.length > 1500 && responseText.includes(`**${orchestratorName}**`));
+  const messageType =
+    orchestratorName === 'KRATOS'          ? 'monitoramento'
+    : orchestratorName === 'ATHENA' ? 'revisao'
+    : isOrchestratorFinal                   ? 'relatorio_final'
+    : 'parcial';
+
   await db.insert(messages).values({
     projectId,
     role: 'assistant',
     content: responseText,
     agentName: orchestratorName,
+    messageType,
   });
 
-  return { responseText, agentName: orchestratorName, thinkingContent, projectId };
+  return { responseText, agentName: orchestratorName, thinkingContent, projectId, messageType };
 }
 
 // ============================================================================
@@ -1032,10 +887,21 @@ chatRoutes.post('/stream', async (c) => {
 
   return streamSSE(c, async (stream) => {
     const MAX_RETRIES = 4;
+
+    // Heartbeat a cada 20s — impede timeout do nginx (proxy_read_timeout) em modelos lentos (Ollama/CPU)
+    let heartbeatTimer: ReturnType<typeof setInterval> | null = setInterval(() => {
+      stream.writeSSE({ data: JSON.stringify({ type: 'ping' }) }).catch(() => {});
+    }, 20_000);
+    const stopHeartbeat = () => { if (heartbeatTimer) { clearInterval(heartbeatTimer); heartbeatTimer = null; } };
+
     const isOverloadError = (err: any) =>
       err?.message?.toLowerCase().includes('overload') ||
       err?.errors?.some((e: any) => e?.statusCode === 529) ||
       err?.lastError?.statusCode === 529;
+
+    const isToolsNotSupportedError = (err: any) =>
+      err?.message?.toLowerCase().includes('does not support tools') ||
+      err?.data?.error?.message?.toLowerCase().includes('does not support tools');
 
     let lastError: any = null;
     let messageSaved = false;
@@ -1061,11 +927,13 @@ chatRoutes.post('/stream', async (c) => {
         const result = await runAnalysis(body, jwtPayload, callbacks, { skipMessageSave: messageSaved });
         messageSaved = true; // após 1ª tentativa bem-sucedida ou salva
 
+        stopHeartbeat();
         await stream.writeSSE({ data: JSON.stringify({
           type: 'done',
           text: result.responseText,
           agentName: result.agentName,
           thinking: result.thinkingContent,
+          messageType: result.messageType,
         }) });
         return; // sucesso — encerra o loop
 
@@ -1078,6 +946,19 @@ chatRoutes.post('/stream', async (c) => {
           continue;
         }
 
+        stopHeartbeat();
+        if (isToolsNotSupportedError(error)) {
+          const model = error?.data?.error?.message?.match(/library\/([^:]+:[^"]+)/)?.[1]
+            ?? error?.message?.match(/library\/([^:]+:[^"]+)/)?.[1]
+            ?? 'modelo selecionado';
+          console.warn(`[SSE] Modelo Ollama sem suporte a tools: ${model}`);
+          await stream.writeSSE({ data: JSON.stringify({
+            type: 'error',
+            message: `O modelo "${model}" não suporta chamadas de ferramentas (tools), que são necessárias para a orquestração multi-agente do Olympus. Use modelos compatíveis como llama3.x, qwen2.x, mistral-nemo, phi4 ou deepseek-r1.`,
+          }) });
+          return;
+        }
+
         // Erro não recuperável ou esgotou retries
         const msg = error?.message || 'Erro interno do servidor';
         console.error('[SSE] Erro:', msg);
@@ -1087,6 +968,7 @@ chatRoutes.post('/stream', async (c) => {
     }
 
     // Esgotou todas as tentativas
+    stopHeartbeat();
     const msg = lastError?.message || 'Servidor sobrecarregado. Tente novamente em alguns instantes.';
     console.error('[SSE] Esgotadas todas as tentativas:', msg);
     await stream.writeSSE({ data: JSON.stringify({ type: 'error', message: msg }) });

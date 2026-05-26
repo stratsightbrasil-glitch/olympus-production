@@ -5,6 +5,19 @@ import { sign } from 'hono/jwt';
 import bcrypt from 'bcryptjs';
 import qrcode from 'qrcode';
 import speakeasy from 'speakeasy';
+import { logAudit } from '../utils/audit';
+
+// JWT_EXPIRY: '1h'|'4h'|'8h'|'24h'|'7d' — default '8h' (recomendado para produção)
+function jwtExpirySeconds(): number {
+  const raw = process.env.JWT_EXPIRY || '8h';
+  const match = raw.match(/^(\d+)(h|d|m)$/);
+  if (!match) return 8 * 3600;
+  const n = Number(match[1]);
+  if (match[2] === 'h') return n * 3600;
+  if (match[2] === 'd') return n * 86400;
+  if (match[2] === 'm') return n * 60;
+  return 8 * 3600;
+}
 
 const authRoutes = new Hono();
 
@@ -33,8 +46,13 @@ authRoutes.post('/login', async (c) => {
     if (!isTotpValid) return c.json({ error: 'Código 2FA inválido' }, 401);
   }
 
-  const payload = { id: user.id, name: user.name, role: user.role, exp: Math.floor(Date.now() / 1000) + 60 * 60 * 8 };
+  const exp = Math.floor(Date.now() / 1000) + jwtExpirySeconds();
+  const payload = { id: user.id, name: user.name, role: user.role, exp };
   const token = await sign(payload, process.env.JWT_SECRET || 'olympus_super_secret_key_2026');
+  await logAudit({
+    userId: user.id, userName: user.name, action: 'login', resourceType: 'user', resourceId: user.id,
+    ipAddress: c.req.header('x-forwarded-for') || c.req.header('x-real-ip'),
+  });
   return c.json({ token, user: { id: user.id, name: user.name, role: user.role } });
 });
 

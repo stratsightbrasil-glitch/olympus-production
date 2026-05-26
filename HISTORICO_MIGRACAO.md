@@ -1,6 +1,6 @@
 # OLYMPUS v4.0 — Histórico Consolidado de Arquitetura e Desenvolvimento
 **StratSight Brasil · Strategic Foresight · IA Agêntica**
-**Última atualização:** 19 de Maio de 2026 (Sprint 8 — TechniqueEngine · NATO AltA · ICD 203 · Step Streaming) · **Confidencial**
+**Última atualização:** 23 de Maio de 2026 (Sprint 10 — FRED + Legislativo · Playbook · Audit · Rate Limiting · Ollama Hardening · PoC Seed) · **Confidencial**
 
 > Este documento é a memória técnica do projeto. Registra a arquitetura, as justificativas de cada decisão, tudo o que foi feito e funcionou, tudo o que foi feito errado e precisou ser revertido, e o estado atual do backlog. Deve ser lido antes de qualquer intervenção no código.
 
@@ -787,6 +787,61 @@ Se o Docker travar com `input/output error` ou `EOF` durante o build: `wsl --shu
 - `apps/api/src/routes/chat.ts` — seed AltA (5 agentes + 12 técnicas), TechniqueEngine na montagem de agentes, `onStep` no contexto, SSE `{type:'step'}`
 - `apps/web/src/App.tsx` — `stepLog` state, handler `type:'step'`, bloco de progresso dinâmico, Fragment fix
 
+### ✅ Sprint 9 — Provider Factory Ollama · LLM Selector · Stepper Dinâmico (Maio 2026)
+
+| Item | Descrição |
+|---|---|
+| **Provider Factory Ollama** | `getModel()` em `Agent.ts` lê `LLM_PROVIDER` do env: `'anthropic'` (padrão) ou `'ollama'`. Ollama usa `@ai-sdk/openai` com `createOpenAI({ baseURL: OLLAMA_BASE_URL, apiKey: 'ollama' })` — compatível com `/v1/chat/completions`. **Ponto único de expansão para provedores futuros.** |
+| **Seletor LLM em runtime** | `CommandBar.tsx`: `LlmSelector` dropdown com seção Anthropic (modelos do banco) e seção Ollama (modelos carregados via `GET /api/v1/settings` → proxy `ollama/api/tags`). Troca de provider sem restart — PATCH /api/v1/settings/llm grava em `platform_settings`. |
+| **Stepper dinâmico** | `App.tsx`: passos exibidos no stepper lidos de `agentsConfig.steps` retornado pelo Motor Dinâmico; fallback para `methodologySteps.ts` estático quando `steps` não está presente. Elimina divergência de exibição para MSEF e GODET. |
+| **Modelos Anthropic no banco** | `index.ts` startup: `platform_settings` `anthropic_models` inicializada com `claude-opus-4-7`, `claude-sonnet-4-6`, `claude-haiku-4-5-20251001` via `onConflictDoNothing`. |
+| **GODET rapport separado** | Parser de `isHermes()` e patterns de relatório atualizados para reconhecer `RAPPORT PROSPECTIF GODET` como relatório final separado do MSEF. Evita mistura de formatos na exportação. |
+| **alertEmails TS fix** | Tipo de `alertEmails` corrigido em `schema.ts` e nos handlers KRATOS/KRONOS — era `string[]` no código mas `text` no banco; unificado para `string` (CSV de emails). |
+
+**Arquivos modificados no Sprint 9:**
+- `packages/core/src/Agent.ts` — `getModel()` Provider Factory
+- `apps/api/src/routes/settings.ts` — `ollamaModels` via proxy, PATCH /settings/llm
+- `apps/api/src/index.ts` — `platform_settings` inicializada com `anthropic_models`
+- `apps/web/src/components/layout/CommandBar.tsx` — `LlmSelector` com Anthropic + Ollama
+- `apps/web/src/App.tsx` — stepper dinâmico por metodologia
+- `apps/api/src/routes/sessions.ts` / `cron.ts` / `kratos.ts` — fix alertEmails TS
+
+### ✅ Sprint 10 — Dados Globais · Playbook · Audit · Rate Limit · Hardening Ollama · PoC (23 Mai 2026)
+
+| Item | Descrição |
+|---|---|
+| **FRED + Legislativo BR** | `dados-publicos.ts` ampliada: **FRED** (Federal Reserve EUA) — 8 séries (`federal_funds_rate`, `us_gdp`, `us_cpi`, `us_unemployment`, `us_10y_treasury`, `dxy_index`, `us_trade_balance`, `china_gdp_growth`); **Câmara dos Deputados** — proposições e votações recentes (API aberta, sem chave); **Senado Federal** — votações plenárias recentes (API aberta, sem chave). `FRED_API_KEY` opcional no `.env`. Total passa de 51 para ~62 indicadores disponíveis. |
+| **Histórico de indicadores + Sparkline** | `schema.ts`: coluna `valueHistory jsonb DEFAULT '[]'` adicionada a `indicators`. `indicators.ts`: `appendHistory()` — append incremental com prune automático de entradas >90 dias. `KratosPanel.tsx`: componente `Sparkline` SVG (polyline min-max normalizado); `IndicadorRow` com expand/collapse (tabela de histórico + sparkline ampliado ao clicar). |
+| **Auto-registro de sinais** | `indicators.ts`: `autoRegisterSignal()` — quando status do indicador muda para `amarelo` ou `vermelho`, um sinal fraco é criado automaticamente em `weakSignals` com tipo adequado e ação recomendada. Deduplicação por `titulo + projectId` evita duplicatas em execuções consecutivas do KRATOS. |
+| **Filtro classificação em sinais** | `KratosPanel.tsx`: chips de filtro `confirmavel` / `ambiguo` / `ruido` além do filtro existente de `statusRadar`. Filtros são independentes e combináveis. |
+| **Playbook DOCX** | `routes/playbook.ts` (arquivo novo): `POST /api/v1/playbook/gerar` — gera DOCX completo com capa (metadados do projeto), fases metodológicas, síntese da última análise HERMES (primeiros 3k chars), tabela de indicadores com status colorido, tabela de sinais fracos, recomendações estratégicas. `CommandBar.tsx`: botão **📘 Playbook** visível apenas para `role: admin`. |
+| **Logs de auditoria** | `schema.ts`: tabela `audit_logs` (append-only, imutável). `utils/audit.ts`: `logAudit()` — helper com try/catch silencioso (falha não bloqueia fluxo principal). `routes/audit.ts`: `GET /api/v1/audit` (filtros: userId, action, resourceType, from, to, limit, offset) + `GET /api/v1/audit/stats` (contagem por ação). `auth.ts`: evento `login` registrado no audit. |
+| **JWT_EXPIRY configurável** | `auth.ts`: `jwtExpirySeconds()` lê env `JWT_EXPIRY` (formatos: `1h`, `4h`, `8h`, `24h`, `7d`; padrão `8h`). Clientes de defesa podem usar `24h` para sessões diárias sem re-login. |
+| **Marca d'água nos exports** | `export.ts`: CSS `.watermark { position:fixed; rotate(-45deg); opacity:0.06; font-size:110px }` injetado no HTML/PDF. Texto é a `classificacao` do projeto (ex: `CONFIDENCIAL`); `@media print` mantém o watermark na impressão. |
+| **Rate limiting em memória** | `middleware/rateLimit.ts` (arquivo novo): bucket in-memory por `userId` (fallback IP); 5 análises/hora (`/api/v1/chat/*`) + 10 exportações/hora (`/api/v1/export/*`); limpeza periódica a cada 5 min. Adequado para instância única — nota de refatoração futura para Redis em multi-instância. |
+| **Health endpoint** | `index.ts`: `GET /health` (público, sem JWT) — retorna `{ status, database, anthropic, tavily, llm, version, uptime, latencyMs, timestamp }`. Usado por Railway health checks e monitoramento externo. |
+| **Seed de demonstração** | `scripts/seed-demo.ts` (arquivo novo): cria usuário `demo@stratsight.com.br / OlympusDemo2026!`, projeto `sess_demo_msef_2026` (CEEx · MSEF · 2030), análise MSEF pré-carregada (4 cenários com probabilidades), 5 indicadores com thresholds (2 amarelo, 1 vermelho), 3 sinais fracos. Idempotente. |
+| **Fix pgvector NOTICE** | `packages/db/src/db.ts`: `onnotice: () => {}` no cliente postgres.js. Suprime mensagens NOTICE do PostgreSQL (pgvector "extension already exists, skipping") que eram impressas como JSON nos logs do container — visual confuso na inicialização. |
+| **Fix Ollama Headers Timeout** | `apps/api/src/index.ts`: `setGlobalDispatcher(new Agent({headersTimeout:15min, bodyTimeout:30min}))` via `undici` no topo do arquivo, antes de qualquer import. Corrige `UND_ERR_HEADERS_TIMEOUT` que ocorria quando o modelo Llama precisava de >30s para carregar na memória antes de enviar o primeiro byte de resposta. **Causa raiz:** Em Node.js 20, `globalThis.fetch` usa o mesmo módulo undici interno — `setGlobalDispatcher` de `npm undici` afeta ambos. Complementado por Ollama pre-warm no startup: `POST /api/generate` com `keep_alive:-1` carrega o modelo na GPU/RAM antes da primeira requisição de usuário. |
+
+**Arquivos modificados no Sprint 10:**
+- `packages/tools/src/dados-publicos.ts` — `fetchFRED()`, `fetchCamara()`, `fetchSenado()`, 11 novos indicadores em `ALL_INDICATORS` e `execute()`
+- `packages/db/src/schema.ts` — `valueHistory` em `indicators`; tabela `audit_logs`; export de `AuditLog`/`NewAuditLog`
+- `packages/db/src/db.ts` — `onnotice: () => {}`
+- `apps/api/src/routes/indicators.ts` — `HistoryEntry`, `appendHistory()`, `autoRegisterSignal()`
+- `apps/api/src/routes/playbook.ts` — **arquivo novo** — `buildPlaybookDocx()` + rota POST /gerar
+- `apps/api/src/routes/audit.ts` — **arquivo novo** — GET /audit, GET /audit/stats
+- `apps/api/src/utils/audit.ts` — **arquivo novo** — `logAudit()` helper
+- `apps/api/src/middleware/rateLimit.ts` — **arquivo novo** — `rateLimitAnalysis`, `rateLimitExport`
+- `apps/api/src/scripts/seed-demo.ts` — **arquivo novo** — seed idempotente para PoC
+- `apps/api/src/routes/auth.ts` — `jwtExpirySeconds()`, `logAudit` no login
+- `apps/api/src/routes/export.ts` — `.watermark` CSS + div no `buildHtml()`
+- `apps/api/src/index.ts` — `setGlobalDispatcher`, pre-warm Ollama, `GET /health`, rate limit middleware, rotas audit/playbook, `PROTECTED_PREFIXES` atualizado
+- `apps/api/package.json` — `"undici": "^6.21.2"` adicionado às dependências
+- `apps/web/src/components/layout/KratosPanel.tsx` — `Sparkline`, `IndicadorRow`, `classifFilter`
+- `apps/web/src/components/layout/CommandBar.tsx` — `onGerarPlaybook` prop + botão Playbook
+- `apps/web/src/App.tsx` — `gerarPlaybook()` function, `onGerarPlaybook` passado ao CommandBar
+
 ---
 
 ### ⛔ BLOQUEADORES — Caminho Crítico para o Primeiro Contrato
@@ -818,17 +873,28 @@ Se o Docker travar com `input/output error` ou `EOF` durante o build: `wsl --shu
 - **Sem 3–5:** Primeira PoC formal — CEEx ou CIE — relatório entregue + NPS ≥ 8
 - **Sem 5–8:** Pipeline para primeiro contrato (R$ 60K–120K)
 
+### ✅ Sprints 9–10 — Concluídos (adicionados ao backlog)
+
+| Item | Concluído em |
+|---|---|
+| **FRED API + Legislativo BR** | Sprint 10 |
+| **Ollama Local (A5 antecipado)** | Sprint 9 |
+| **Playbook Automatizado (C3)** | Sprint 10 |
+| **Dashboard Gráficos KRATOS** | Sprint 10 (Sparkline SVG inline) |
+| **Audit logs + Rate limiting** | Sprint 10 |
+| **Marca d'água nos exports** | Sprint 10 |
+| **JWT_EXPIRY configurável** | Sprint 10 |
+| **Health endpoint** | Sprint 10 |
+| **Seed de demonstração** | Sprint 10 |
+
 ### 🔲 Pendente — Prioridade Média (pós-deploy)
 
 | Item | Descrição | Prazo estimado |
 |---|---|---|
-| **FRED API + Legislativo** | `buscar_dados_publicos` com FRED (Federal Funds Rate, GDP, CPI) + dados Câmara/Senado | Mês 5–6 |
-| **Ollama Local (A5 antecipado)** | `LLM_PROVIDER=ollama` + Llama 3.3 70B testado. Provider Factory já pronta — só configurar. Reduz custo Anthropic ~70% em tarefas simples. | Mês 5–6 |
-| **Playbook Automatizado (C3)** | Rota `POST /playbook/gerar` + exportação DOCX com metodologia + prompts + cases. Base técnica pronta (Motor Dinâmico). | Mês 6–7 |
-| **Dashboard Gráficos KRATOS** | Chart.js inline no painel de indicadores — gráfico de linha 30 dias por indicador. Tabela `indicators` já existe. | Mês 6 |
 | **VPN + dados proprietários (B2)** | Acesso a dados internos do cliente via VPN. Depende do deploy Railway ativo. | Mês 6 |
 | **Sliding window por tokens** | Substituir `.slice(-12)` (arbitrário) por janela baseada em token count (tiktoken). Previne degradação em análises longas. | Mês 6 |
-| **API pública + Swagger (C5)** | Rate limiting por plano na API docs. Swagger UI já existe (`GET /api/docs`). Falta rate limiting e documentação de parceiros. | Mês 7–8 |
+| **API pública + Swagger (C5)** | Rate limiting por plano (Redis) na API docs. Swagger UI já existe (`GET /api/docs`). Falta documentação de parceiros. | Mês 7–8 |
+| **Audit frontend** | Modal de visualização de audit_logs para admins — exportação CSV. Backend já implementado. | Mês 7 |
 
 ### 🔮 Futuro (Fase D)
 

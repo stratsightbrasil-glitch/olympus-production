@@ -15,9 +15,12 @@ function getModel(config?: { provider: string; model: string }) {
   if (provider === 'ollama') {
     const baseURL   = process.env.OLLAMA_BASE_URL || 'http://ollama:11434/v1';
     const modelName = config?.model || process.env.OLLAMA_MODEL || 'llama3.1:8b';
+    // .chat() força OpenAIChatLanguageModel → /v1/chat/completions
+    // A chamada padrão provider(model) usa OpenAIResponsesLanguageModel → /v1/responses
+    // que o Ollama não implementa, causando Headers Timeout Error
     const ollama = createOpenAI({ baseURL, apiKey: 'ollama' });
     console.log(`[Provider] Ollama — ${baseURL} / ${modelName}`);
-    return ollama(modelName);
+    return ollama.chat(modelName);
   }
 
   // Default: Anthropic
@@ -224,6 +227,87 @@ const TOOL_JSON_SCHEMAS: Record<string, object> = {
     },
     required: ["url","tipo","fidelidadeAoDocumento","informacaoUsada","avaliacaoCredibilidade"],
   },
+  // ── Ferramentas Analíticas Avançadas (Fase 1 — JSON Schema puro, sem Zod) ──
+  tool_unified_search_engine: {
+    type: "object",
+    required: ["query", "connectivityMode"],
+    properties: {
+      query: { type: "string" },
+      connectivityMode: { type: "string", enum: ["ONLINE", "SOBERANO", "AIR_GAPPED"] },
+      domainRestriction: { type: "string" },
+      maxTokenBudget: { type: "integer", default: 6000 },
+    },
+  },
+  tool_register_event: {
+    type: "object",
+    required: ["projectId", "name", "description", "type"],
+    properties: {
+      projectId: { type: "string" },
+      name: { type: "string" },
+      description: { type: "string" },
+      type: { type: "string", enum: ["trend", "uncertainty", "inflection_factor", "fpf"] },
+      reliability: { type: "string", enum: ["A", "B", "C", "D", "E", "F"] },
+      credibility: { type: "string", enum: ["1", "2", "3", "4", "5", "6"] },
+    },
+  },
+  tool_mpc_source_evaluator: {
+    type: "object",
+    required: ["eventId", "reliability", "credibility"],
+    properties: {
+      eventId: { type: "string" },
+      reliability: { type: "string", enum: ["A", "B", "C", "D", "E", "F"] },
+      credibility: { type: "string", enum: ["1", "2", "3", "4", "5", "6"] },
+      justification: { type: "string" },
+    },
+  },
+  tool_register_impact_relation: {
+    type: "object",
+    required: ["projectId", "fromEventId", "toEventId", "impactScore"],
+    properties: {
+      projectId: { type: "string" },
+      fromEventId: { type: "string" },
+      toEventId: { type: "string" },
+      impactScore: { type: "integer", minimum: 0, maximum: 3 },
+    },
+  },
+  tool_grumbach_expert_simulation: {
+    type: "object",
+    required: ["projectId", "eventIds"],
+    properties: {
+      projectId: { type: "string" },
+      eventIds: { type: "array", items: { type: "string" } },
+      numberOfExpertPersonas: { type: "integer", default: 7 },
+      domain: { type: "string" },
+    },
+  },
+  tool_mactor_analysis: {
+    type: "object",
+    required: ["actorsRelations"],
+    properties: {
+      actorsRelations: {
+        type: "array",
+        items: {
+          type: "object",
+          properties: {
+            actorId: { type: "string" },
+            targetActorId: { type: "string" },
+            influenceScore: { type: "integer", minimum: -3, maximum: 3 },
+          },
+          required: ["actorId", "targetActorId", "influenceScore"],
+        },
+      },
+    },
+  },
+  tool_mpo_backcasting: {
+    type: "object",
+    required: ["projectId", "targetScenarioId"],
+    properties: {
+      projectId: { type: "string" },
+      targetScenarioId: { type: "string" },
+      horizonYears: { type: "integer", default: 30 },
+      intermediateHorizons: { type: "array", items: { type: "integer" } },
+    },
+  },
 };
 
 const FALLBACK_JSON_SCHEMA = {
@@ -246,6 +330,17 @@ export class Agent {
     vizMode: string = "etapa",
   ): Promise<string> {
     console.log(`[${this.name}] Iniciando raciocínio...`);
+
+    // Injetar extra_instructions por metodologia (Sprint 1 → populado via seed na Sprint 2)
+    let finalSystemPrompt = this.systemPrompt;
+    const extra = context.agentMethodPrompts?.[this.name];
+    if (extra) {
+      finalSystemPrompt += `\n\n[METODOLOGIA ATIVA: ${context.methodology}]\n${extra}`;
+    }
+    // Âncora de contexto: eventos aprovados pelo analista — prefixada para evitar Context Bloat
+    if (context.anchorContext) {
+      finalSystemPrompt = context.anchorContext + "\n\n" + finalSystemPrompt;
+    }
 
     const rawMessages: any[] = [...context.memory];
     if (input) {
@@ -310,6 +405,16 @@ export class Agent {
       aiTools[t.name] = myTool;
     }
 
+    // ── vizMode — controla profundidade de orquestração e limite de tokens ────
+    // "etapa"    (padrão): análise por etapa de metodologia, maxTokens=32_000
+    // "passos"  : passo-a-passo detalhado — instrução extra injetada em chat.ts,
+    //             maxTokens=32_000
+    // "passagem": processo autônomo completo — instrução de síntese em chat.ts,
+    //             maxTokens=16_000 (reduz custo em sessões de contexto longo)
+    // "thinking": raciocínio estendido — instrução de profundidade em chat.ts,
+    //             maxTokens=32_000. ⚠️ NÃO usa a API ExtendedThinking da Anthropic;
+    //             apenas adiciona instrução de prompt. Compatibilidade com Ollama
+    //             não garantida (depende do suporte do modelo local).
     const maxTokens =
       vizMode === "thinking" ? 32000
       : vizMode === "passagem" ? 16000
@@ -336,9 +441,26 @@ export class Agent {
       return `${icon} ${toolName}(${JSON.stringify(args).slice(0, 40)})`;
     };
 
+    const AGENT_MODEL_OVERRIDES: Record<string, string> = {
+      SCOPUS:    'claude-sonnet-4-6',
+      KRATOS:    'claude-sonnet-4-6',
+      KLIO:      'claude-opus-4-7',
+      PYTHIA:    'claude-opus-4-7',
+      MNEMOSYNE: 'claude-opus-4-7',
+      THEMIS:    'claude-opus-4-7',
+      ATHENA:    'claude-opus-4-7',
+    };
+    const agentOverride = (context.llmConfig?.provider ?? 'anthropic') === 'anthropic'
+      ? AGENT_MODEL_OVERRIDES[this.name]
+      : undefined;
+    const effectiveConfig = agentOverride
+      ? { provider: 'anthropic' as const, model: agentOverride }
+      : context.llmConfig;
+    if (agentOverride) console.log(`[${this.name}] Modelo override → ${agentOverride}`);
+
     const sharedParams = {
-      model: getModel(context.llmConfig),
-      system: this.systemPrompt,
+      model: getModel(effectiveConfig),
+      system: finalSystemPrompt,
       messages,
       tools: hasTools ? aiTools : undefined,
       stopWhen: stepCountIs(15),
@@ -360,17 +482,54 @@ export class Agent {
       },
     } as any;
 
+    // ── Detectar tool call emitido como texto bruto (Ollama/modelos pequenos) ──
+    // Modelos que não suportam structured tool calling obedecem o systemPrompt
+    // ("inicie com **HERMES** · ") e depois emitem o JSON da ferramenta como texto.
+    // A detecção simples startsWith('{') falha por causa desse prefixo.
+    const isRawToolCallText = (text: string, toolCallCount: number): boolean => {
+      if (toolCallCount > 0) return false; // ferramenta foi executada de verdade — OK
+      if (text.length > 900) return false;  // texto longo demais para ser só uma tool call
+      // Remove prefixos tipo "**HERMES** · " ou "**OLYMPUS** · " que o modelo adiciona
+      const stripped = text.replace(/^\*\*[A-Z][A-Z_0-9]*\*\*\s*[·•·\-–—]\s*/u, '').trim();
+      if (!stripped.startsWith('{')) return false;
+      // Procura padrões de tool call: {"name":..., "parameters":...} ou {"tool_call":...}
+      return (
+        (stripped.includes('"name"') || stripped.includes('"tool_name"') || stripped.includes('"tool_call"')) &&
+        (stripped.includes('"parameters"') || stripped.includes('"arguments"') || stripped.includes('"input"'))
+      );
+    };
+
+    const RAW_TOOL_CALL_WARN = (agentName: string) =>
+      `\n\n⚠️ **${agentName}** não conseguiu acionar o agente especialista porque o modelo **${context.llmConfig?.model ?? 'Ollama'}** não suporta tool calling estruturado. Ele emitiu a chamada como texto bruto.\n\n**Solução:** troque para Anthropic Claude (recomendado) ou um modelo Ollama maior com suporte a function calling, como **llama3.1:70b**, **llama3.3:70b** ou **qwen2.5:72b**.`;
+
     if (context.onToken) {
       // Token-by-token streaming — used only by the orchestrator (SSE route)
       const result = streamText(sharedParams);
       for await (const delta of result.textStream) {
         context.onToken(delta);
       }
-      return (await result.text) || "Análise concluída.";
+      const finalText = (await result.text) || "Análise concluída.";
+      if (hasTools) {
+        const stepsArr = await result.steps;
+        const actualCalls = stepsArr.reduce((n: number, s: any) => n + (s.toolCalls?.length ?? 0), 0);
+        if (isRawToolCallText(finalText, actualCalls)) {
+          const warn = RAW_TOOL_CALL_WARN(this.name);
+          context.onToken(warn);
+          return finalText + warn;
+        }
+      }
+      return finalText;
     }
 
     // O chat.ts já faz o stamp do orquestrador; aqui só garantimos agentes especialistas
     const response = await generateText(sharedParams);
-    return response.text || "Análise concluída.";
+    const finalText = response.text || "Análise concluída.";
+    if (hasTools) {
+      const actualCalls = response.steps.reduce((n: number, s: any) => n + (s.toolCalls?.length ?? 0), 0);
+      if (isRawToolCallText(finalText, actualCalls)) {
+        return RAW_TOOL_CALL_WARN(this.name);
+      }
+    }
+    return finalText;
   }
 }

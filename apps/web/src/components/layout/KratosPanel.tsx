@@ -4,10 +4,12 @@
 import { useState, useEffect, useCallback } from 'react';
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
+interface HistoryEntry { date: string; value: number; }
 interface Indicator {
   id: string; name: string; status: string;
   lastValue?: number | null; source?: string | null; lastCheckedAt?: string | null;
   thresholdYellow?: number | null; thresholdRed?: number | null; parametersJson?: any;
+  valueHistory?: HistoryEntry[] | null;
 }
 interface Signal {
   id: string; titulo: string; tipo?: string; classificacao: string; statusRadar: string;
@@ -148,6 +150,105 @@ function parseScenarios(text: string | null): { label: string; value: number; co
 }
 
 // ─── Tabela densa de indicadores ──────────────────────────────────────────────
+// ─── Sparkline SVG ────────────────────────────────────────────────────────────
+function Sparkline({ history, color, w = 80, h = 28 }: {
+  history: HistoryEntry[]; color: string; w?: number; h?: number;
+}) {
+  if (!history || history.length < 2) return <span style={{ color: TEXT3, fontSize: 9 }}>sem histórico</span>;
+  const vals = history.map(e => e.value);
+  const min = Math.min(...vals);
+  const max = Math.max(...vals);
+  const range = max - min || 1;
+  const pts = vals.map((v, i) => {
+    const x = (i / (vals.length - 1)) * w;
+    const y = h - ((v - min) / range) * (h - 4) - 2;
+    return `${x.toFixed(1)},${y.toFixed(1)}`;
+  }).join(' ');
+  const last = history[history.length - 1];
+  const lastX = w;
+  const lastY = h - ((last.value - min) / range) * (h - 4) - 2;
+  return (
+    <svg width={w} height={h} style={{ overflow: 'visible', display: 'block' }}>
+      <polyline points={pts} fill="none" stroke={color} strokeWidth="1.5" strokeOpacity="0.8" />
+      <circle cx={lastX} cy={lastY} r="2.5" fill={color} />
+    </svg>
+  );
+}
+
+function IndicadorRow({ ind, i }: { ind: Indicator; i: number }) {
+  const [open, setOpen] = useState(false);
+  const st  = ind.status || 'verde';
+  const stc = CLR[st] ?? CLR.verde;
+  const yellow = ind.parametersJson?.yellowThreshold ?? ind.thresholdYellow;
+  const red    = ind.parametersJson?.redThreshold    ?? ind.thresholdRed;
+  const val    = ind.lastValue !== null && ind.lastValue !== undefined ? ind.lastValue : null;
+  const hist: HistoryEntry[] = Array.isArray(ind.valueHistory) ? ind.valueHistory : [];
+  const hasHistory = hist.length >= 2;
+
+  return (
+    <>
+      <tr
+        key={ind.id}
+        onClick={() => hasHistory && setOpen(o => !o)}
+        style={{
+          borderBottom: open ? 'none' : `1px solid ${BORDER}`,
+          background: i % 2 === 0 ? 'transparent' : 'rgba(255,255,255,.018)',
+          cursor: hasHistory ? 'pointer' : 'default',
+        }}
+      >
+        <td style={{ padding: '8px 10px', color: TEXT1, fontWeight: 600 }}>
+          {hasHistory && <span style={{ color: TEXT3, marginRight: 5, fontSize: 9 }}>{open ? '▼' : '▶'}</span>}
+          {ind.name}
+        </td>
+        <td style={{ padding: '8px 10px', fontFamily: "'DM Mono', monospace", fontWeight: 700, color: stc }}>
+          {val !== null ? String(val) : <span style={{ color: TEXT3 }}>—</span>}
+        </td>
+        <td style={{ padding: '8px 10px' }}>
+          <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+            <span style={{
+              width: 7, height: 7, borderRadius: '50%', background: stc,
+              boxShadow: `0 0 5px ${stc}`, flexShrink: 0,
+            }} />
+            <span style={{
+              fontSize: 9, fontWeight: 700, color: stc,
+              fontFamily: "'DM Mono', monospace", letterSpacing: 1,
+            }}>{st.toUpperCase()}</span>
+          </span>
+        </td>
+        <td style={{ padding: '8px 10px', fontFamily: "'DM Mono', monospace", fontSize: 10, color: CLR.amarelo }}>
+          {yellow !== null && yellow !== undefined ? yellow : <span style={{ color: TEXT3 }}>—</span>}
+        </td>
+        <td style={{ padding: '8px 10px', fontFamily: "'DM Mono', monospace", fontSize: 10, color: CLR.vermelho }}>
+          {red !== null && red !== undefined ? red : <span style={{ color: TEXT3 }}>—</span>}
+        </td>
+        <td style={{ padding: '8px 10px' }}>
+          {hasHistory
+            ? <Sparkline history={hist} color={stc} />
+            : <span style={{ color: TEXT3, fontSize: 9 }}>—</span>
+          }
+        </td>
+      </tr>
+      {open && hasHistory && (
+        <tr style={{ borderBottom: `1px solid ${BORDER}` }}>
+          <td colSpan={6} style={{ padding: '10px 16px', background: PANEL2 }}>
+            <div style={{ marginBottom: 4, fontSize: 9, color: TEXT3, letterSpacing: 1, textTransform: 'uppercase' }}>
+              Histórico 90 dias — {ind.name}
+            </div>
+            <Sparkline history={hist} color={stc} w={320} h={52} />
+            <div style={{ marginTop: 6, display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+              {hist.slice(-10).reverse().map((e, j) => (
+                <span key={j} style={{ fontSize: 9, fontFamily: "'DM Mono', monospace", color: TEXT2 }}>
+                  {e.date}: <span style={{ color: stc }}>{e.value}</span>
+                </span>
+              ))}
+            </div>
+          </td>
+        </tr>
+      )}
+    </>
+  );
+}
+
 function TabelaIndicadores({ indicadores }: { indicadores: Indicator[] }) {
   if (indicadores.length === 0)
     return (
@@ -160,7 +261,7 @@ function TabelaIndicadores({ indicadores }: { indicadores: Indicator[] }) {
       <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
         <thead>
           <tr style={{ borderBottom: `1px solid ${BORDER}` }}>
-            {['INDICADOR', 'VALOR', 'STATUS', '⚠ LIMIAR', '🔴 CRÍTICO'].map(h => (
+            {['INDICADOR', 'VALOR', 'STATUS', '⚠ LIMIAR', '🔴 CRÍTICO', 'TENDÊNCIA'].map(h => (
               <th key={h} style={{
                 padding: '7px 10px', textAlign: 'left',
                 fontSize: 8, letterSpacing: 1.5, color: TEXT3,
@@ -170,42 +271,7 @@ function TabelaIndicadores({ indicadores }: { indicadores: Indicator[] }) {
           </tr>
         </thead>
         <tbody>
-          {indicadores.map((ind, i) => {
-            const st  = ind.status || 'verde';
-            const stc = CLR[st] ?? CLR.verde;
-            const yellow = ind.parametersJson?.yellowThreshold ?? ind.thresholdYellow;
-            const red    = ind.parametersJson?.redThreshold    ?? ind.thresholdRed;
-            const val    = ind.lastValue !== null && ind.lastValue !== undefined ? ind.lastValue : null;
-            return (
-              <tr key={ind.id} style={{
-                borderBottom: `1px solid ${BORDER}`,
-                background: i % 2 === 0 ? 'transparent' : 'rgba(255,255,255,.018)',
-              }}>
-                <td style={{ padding: '8px 10px', color: TEXT1, fontWeight: 600 }}>{ind.name}</td>
-                <td style={{ padding: '8px 10px', fontFamily: "'DM Mono', monospace", fontWeight: 700, color: stc }}>
-                  {val !== null ? String(val) : <span style={{ color: TEXT3 }}>—</span>}
-                </td>
-                <td style={{ padding: '8px 10px' }}>
-                  <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-                    <span style={{
-                      width: 7, height: 7, borderRadius: '50%', background: stc,
-                      boxShadow: `0 0 5px ${stc}`, flexShrink: 0,
-                    }} />
-                    <span style={{
-                      fontSize: 9, fontWeight: 700, color: stc,
-                      fontFamily: "'DM Mono', monospace", letterSpacing: 1,
-                    }}>{st.toUpperCase()}</span>
-                  </span>
-                </td>
-                <td style={{ padding: '8px 10px', fontFamily: "'DM Mono', monospace", fontSize: 10, color: CLR.amarelo }}>
-                  {yellow !== null && yellow !== undefined ? yellow : <span style={{ color: TEXT3 }}>—</span>}
-                </td>
-                <td style={{ padding: '8px 10px', fontFamily: "'DM Mono', monospace", fontSize: 10, color: CLR.vermelho }}>
-                  {red !== null && red !== undefined ? red : <span style={{ color: TEXT3 }}>—</span>}
-                </td>
-              </tr>
-            );
-          })}
+          {indicadores.map((ind, i) => <IndicadorRow key={ind.id} ind={ind} i={i} />)}
         </tbody>
       </table>
     </div>
@@ -321,7 +387,8 @@ export function KratosPanel({ sessionId, reqHeaders, onRunKratos, onSettings }: 
   const [loading,     setLoading]     = useState(true);
   const [sending,     setSending]     = useState(false);
   const [sendMsg,     setSendMsg]     = useState('');
-  const [radarFilter, setRadarFilter] = useState<string | null>(null);
+  const [radarFilter,    setRadarFilter]    = useState<string | null>(null);
+  const [classifFilter,  setClassifFilter]  = useState<string | null>(null);
 
   const load = useCallback(async () => {
     if (!sessionId) return;
@@ -389,9 +456,13 @@ export function KratosPanel({ sessionId, reqHeaders, onRunKratos, onSettings }: 
   })();
 
   const RADAR_ORDER = ['materializado', 'amplificando', 'monitorando', 'arquivado'];
-  const sinaisFiltrados = radarFilter
-    ? sinais.filter(s => s.statusRadar === radarFilter)
-    : [...sinais].sort((a, b) => RADAR_ORDER.indexOf(a.statusRadar) - RADAR_ORDER.indexOf(b.statusRadar));
+  const CLASSIF_LABELS: Record<string, string> = { confirmavel: 'Confirmável', ambiguo: 'Ambíguo', ruido: 'Ruído' };
+  const sinaisFiltrados = (() => {
+    let list = [...sinais];
+    if (radarFilter)   list = list.filter(s => s.statusRadar    === radarFilter);
+    if (classifFilter) list = list.filter(s => s.classificacao  === classifFilter);
+    return list.sort((a, b) => RADAR_ORDER.indexOf(a.statusRadar) - RADAR_ORDER.indexOf(b.statusRadar));
+  })();
 
   // ── Render ───────────────────────────────────────────────────────────────────
   return (
@@ -540,6 +611,22 @@ export function KratosPanel({ sessionId, reqHeaders, onRunKratos, onSettings }: 
                     background: active ? `${c}30` : 'transparent',
                     color: active ? c : TEXT3,
                   }}>{RADAR_LABEL[k]?.toUpperCase()} ({cnt})</button>
+                );
+              })}
+              <span style={{ width: 1, height: 14, background: BORDER, display: 'inline-block', margin: '0 2px' }} />
+              {(['confirmavel', 'ambiguo', 'ruido'] as const).map(k => {
+                const cnt = sinais.filter(s => s.classificacao === k).length;
+                if (!cnt) return null;
+                const CLASSIF_CLR: Record<string, string> = { confirmavel: '#43A047', ambiguo: '#FF9800', ruido: '#616161' };
+                const c = CLASSIF_CLR[k];
+                const active = classifFilter === k;
+                return (
+                  <button key={k} onClick={() => setClassifFilter(active ? null : k)} style={{
+                    fontSize: 9, padding: '2px 10px', borderRadius: 10, cursor: 'pointer',
+                    border: `1px solid ${active ? c : BORDER}`,
+                    background: active ? `${c}30` : 'transparent',
+                    color: active ? c : TEXT3,
+                  }}>{CLASSIF_LABELS[k].toUpperCase()} ({cnt})</button>
                 );
               })}
             </div>

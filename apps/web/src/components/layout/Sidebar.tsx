@@ -2,7 +2,7 @@ import React, { useRef, useEffect, useState } from 'react';
 import { AgentMark } from '../ui/AgentMark';
 import type { Agent } from '../ui/AgentMark/types';
 import type { MethodologyStep } from '../../data/methodologySteps';
-import { METHODOLOGY_DEFS, DEFAULT_STEPS } from '../../data/methodologySteps';
+import { DEFAULT_STEPS } from '../../data/methodologySteps';
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
 
@@ -154,9 +154,7 @@ export function Sidebar({
 
   // step ativo: prefere currentStep (novo), fallback para currentMsefStep (legado)
   const activeStep = currentStep ?? currentMsefStep;
-  const steps: MethodologyStep[] = methodologySteps
-    ?? METHODOLOGY_DEFS[projeto.metodologia]
-    ?? DEFAULT_STEPS;
+  const steps: MethodologyStep[] = methodologySteps ?? DEFAULT_STEPS;
 
   const isAdmin = user?.role === 'admin';
   const isCliente = user?.role === 'cliente';
@@ -464,7 +462,15 @@ export function Sidebar({
                     onMouseEnter={e => (e.currentTarget.style.color = '#fff')}
                     onMouseLeave={e => (e.currentTarget.style.color = '#A3C9AE')}
                   >
-                    Usuários · Backup · Engine
+                    Usuários
+                  </button>
+                  <button
+                    onClick={onShowBackup}
+                    style={{ background: 'none', border: 'none', textAlign: 'left' as const, padding: '5px 0', fontSize: 11.5, color: '#A3C9AE', cursor: 'pointer', fontFamily: "'DM Sans',system-ui,sans-serif", transition: 'color .12s' }}
+                    onMouseEnter={e => (e.currentTarget.style.color = '#fff')}
+                    onMouseLeave={e => (e.currentTarget.style.color = '#A3C9AE')}
+                  >
+                    Backup
                   </button>
                   <button
                     onClick={onShowReviewModal}

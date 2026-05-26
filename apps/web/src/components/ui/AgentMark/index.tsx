@@ -23,6 +23,7 @@ const GLYPHS: Record<Agent, Record<Scale, GlyphFn>> = {
   MNEMOSYNE: { full: MnemosymeFull, compact: MnemosymeCompact, micro: MnemosymeMicro },
   THEMIS:    { full: ThemisFull,    compact: ThemisCompact,    micro: ThemisMicro    },
   KRATOS:    { full: KratosFull,    compact: KratosCompact,    micro: KratosMicro    },
+  ATHENA:    { full: HermesFull,    compact: HermesCompact,    micro: HermesMicro    },
 };
 
 const VB: Record<Scale, string> = {

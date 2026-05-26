@@ -1,4 +1,5 @@
-import { pgTable, text, timestamp, uuid, jsonb, doublePrecision, boolean, customType } from "drizzle-orm/pg-core";
+import { pgTable, text, timestamp, uuid, jsonb, doublePrecision, boolean, customType, integer, primaryKey, uniqueIndex } from "drizzle-orm/pg-core";
+import { relations } from "drizzle-orm";
 
 // pgvector custom column type (512 dims — Voyage voyage-3-lite)
 const vector = customType<{ data: number[] }>({
@@ -24,10 +25,12 @@ export const users = pgTable("users", {
 export const methodologies = pgTable("methodologies", {
   id: uuid("id").primaryKey().defaultRandom(),
   name: text("name").notNull().unique(),
+  slug: text("slug").unique(), // identificador URL-safe (ex: 'msef', 'grumbach')
   description: text("description"),
-  category: text("category").default("Cenários Prospectivos").notNull(), // ex: Cenários, Planejamento Estratégico
+  sourceDoc: text("source_doc"), // documento de referência (ex: 'EB70-MT-10.401')
+  category: text("category").default("Cenários Prospectivos").notNull(),
   isDefault: boolean("is_default").default(false).notNull(),
-  agentsConfig: jsonb("agents_config"), // Array de nomes de agentes (ex: ["HERMES", "KLIO", "SCOPUS"])
+  agentsConfig: jsonb("agents_config"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
@@ -71,7 +74,10 @@ export const projects = pgTable("projects", {
   panelToken: text("panel_token").unique(),
   status: text("status").default("Em produção").notNull(),
   kratosCron: text("kratos_cron").default("0 6 * * *").notNull(),
+  connectivityMode: text("connectivity_mode").default("ONLINE").notNull(), // 'ONLINE' | 'SOBERANO' | 'AIR_GAPPED'
   alertEmails: text("alert_emails").default("").notNull(),
+  teamId: uuid("team_id"),    // FK para teams — nullable (projetos existentes não são afetados)
+  analystId: uuid("analyst_id"), // FK para users — nullable (substitui gradualmente o campo texto analyst)
   createdBy: text("created_by").default("Sistema").notNull(),
   updatedBy: text("updated_by").default("Sistema").notNull(),
   deletedBy: text("deleted_by"),
@@ -87,6 +93,7 @@ export const messages = pgTable("messages", {
   content: text("content").notNull(),
   filesJson: jsonb("files_json"),
   agentName: text("agent_name"),
+  messageType: text("message_type").default("parcial"), // 'relatorio_final'|'parcial'|'monitoramento'|'revisao'
   metadata: jsonb("metadata"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
@@ -183,5 +190,161 @@ export const indicators = pgTable("indicators", {
   lastValue: doublePrecision("last_value"),
   lastCheckedAt: timestamp("last_checked_at"),
   status: text("status").default("verde").notNull(),
+  valueHistory: jsonb("value_history").default('[]'),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
+
+// ── Audit Logs (imutável — sem update/delete) ────────────────────────────────
+export const auditLogs = pgTable("audit_logs", {
+  id:           uuid("id").primaryKey().defaultRandom(),
+  userId:       text("user_id"),       // pode ser 'system' ou usuário deletado
+  userName:     text("user_name"),
+  action:       text("action").notNull(), // 'login'|'logout'|'create_project'|'delete_project'|'run_analysis'|'export_docx'|'export_pdf'|'generate_backup'|'view_painel'|'update_settings'|'create_user'|'update_user'
+  resourceType: text("resource_type"),   // 'project'|'user'|'backup'|'analysis'|'export'|'settings'
+  resourceId:   text("resource_id"),
+  metadata:     jsonb("metadata"),
+  ipAddress:    text("ip_address"),
+  createdAt:    timestamp("created_at").defaultNow().notNull(),
+});
+
+export type AuditLog    = typeof auditLogs.$inferSelect;
+export type NewAuditLog = typeof auditLogs.$inferInsert;
+
+// ── platform_settings (migrada do raw SQL no startup) ─────────────────────────
+export const platformSettings = pgTable("platform_settings", {
+  key:       text("key").primaryKey(),
+  value:     jsonb("value").notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow(),
+});
+
+// ── Motor de Metodologias Normalizado (Sprint 1) ──────────────────────────────
+
+// Tipos/categorias — N:N com methodologies
+// Ex: GRUMBACH → "Planejamento Estratégico" E "Cenários Prospectivos"
+export const methodologyTypes = pgTable("methodology_types", {
+  id:            uuid("id").primaryKey().defaultRandom(),
+  methodologyId: uuid("methodology_id").notNull().references(() => methodologies.id, { onDelete: "cascade" }),
+  category:      text("category").notNull(),
+  // Valores: "Cenários Prospectivos"|"Planejamento Estratégico"|"Produção do Conhecimento"|"Análise Estratégica"
+});
+
+// Fases de cada metodologia
+export const methodologyPhases = pgTable("methodology_phases", {
+  id:            uuid("id").primaryKey().defaultRandom(),
+  methodologyId: uuid("methodology_id").notNull().references(() => methodologies.id, { onDelete: "cascade" }),
+  phaseNum:      integer("phase_num").notNull(),
+  label:         text("label").notNull(),
+  agentRole:     text("agent_role").notNull(), // nome do agente responsável pela fase
+  description:   text("description"),
+  slug:          text("slug").unique(),        // identificador URL-safe para upsert, ex: 'msef_triagem'
+  nodeSlug:      text("node_slug"),            // nó LangGraph futuro: 'node_framing', 'node_modeling', etc.
+});
+
+// Técnicas recomendadas por fase — pool livre (não obrigatório)
+export const phaseTechniques = pgTable("phase_techniques", {
+  phaseId:     uuid("phase_id").notNull().references(() => methodologyPhases.id, { onDelete: "cascade" }),
+  techniqueId: uuid("technique_id").notNull().references(() => techniques.id, { onDelete: "cascade" }),
+  priority:    integer("priority").default(0),
+}, (t) => ({
+  pk: primaryKey({ columns: [t.phaseId, t.techniqueId] }),
+}));
+
+// Instruções específicas por agente × metodologia — injetadas em runtime
+export const agentMethodPrompts = pgTable("agent_method_prompts", {
+  id:                uuid("id").primaryKey().defaultRandom(),
+  agentId:           uuid("agent_id").notNull().references(() => agents.id, { onDelete: "cascade" }),
+  methodologyId:     uuid("methodology_id").notNull().references(() => methodologies.id, { onDelete: "cascade" }),
+  extraInstructions: text("extra_instructions").notNull(),
+}, (t) => ({
+  agentMethodUniq: uniqueIndex('agent_method_prompts_agent_method_unique').on(t.agentId, t.methodologyId),
+}));
+
+// ── Equipes de analistas (Sprint 1-B) ─────────────────────────────────────────
+
+export const teams = pgTable("teams", {
+  id:          uuid("id").primaryKey().defaultRandom(),
+  name:        text("name").notNull(),
+  description: text("description"),
+  createdAt:   timestamp("created_at").defaultNow().notNull(),
+});
+
+// N:N users × teams
+export const teamMembers = pgTable("team_members", {
+  teamId: uuid("team_id").notNull().references(() => teams.id, { onDelete: "cascade" }),
+  userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  role:   text("role").notNull().default("analista"), // 'lider'|'analista'|'revisor'
+}, (t) => ({
+  pk: primaryKey({ columns: [t.teamId, t.userId] }),
+}));
+
+// ── Eventos Booleanos de Projeto (Fase 1 — HITL) ──────────────────────────────
+// FPFs, tendências, incertezas e fatores de inflexão propostos pelos agentes.
+// Fluxo HITL: proposed → approved/rejected pelo analista humano.
+// Na Fase 2, o StateGraph lê apenas eventos com status='approved'.
+export const projectEvents = pgTable("project_events", {
+  id:               uuid("id").defaultRandom().primaryKey(),
+  projectId:        text("project_id").notNull().references(() => projects.id, { onDelete: "cascade" }),
+  name:             text("name").notNull(),
+  description:      text("description").notNull(),
+  type:             text("type").notNull().default("uncertainty"), // 'trend'|'uncertainty'|'inflection_factor'|'fpf'
+  status:           text("status").notNull().default("proposed"),  // 'proposed'|'approved'|'rejected'
+  // Avaliação alfanumérica MPC/EB70-MT-10.401: reliability A-F, credibility 1-6
+  sourceEvaluation: jsonb("source_evaluation").default({ reliability: "C", credibility: "3" }),
+  createdAt:        timestamp("created_at").defaultNow().notNull(),
+  updatedAt:        timestamp("updated_at").defaultNow().notNull(),
+});
+
+// ── Cenários de Projeto ────────────────────────────────────────────────────────
+// matrixValue: { "uuid_do_evento": "OCORRE" | "NÃO OCORRE" } — estados booleanos.
+// Probabilidade calculada via Grumbach/SMIC (soma ≈ 1.0).
+export const projectScenarios = pgTable("project_scenarios", {
+  id:          uuid("id").defaultRandom().primaryKey(),
+  projectId:   text("project_id").notNull().references(() => projects.id, { onDelete: "cascade" }),
+  name:        text("name").notNull(),
+  description: text("description").notNull(),
+  probability: doublePrecision("probability").default(0.0),
+  type:        text("type").notNull().default("alternative"), // 'inercial'|'alternative'|'target'
+  matrixValue: jsonb("matrix_value").notNull().default({}),
+  createdAt:   timestamp("created_at").defaultNow().notNull(),
+});
+
+// ── Matriz de Impactos Diretos (entrada do MICMAC) ────────────────────────────
+// Escala MICMAC: 0=sem influência, 1=fraca, 2=moderada, 3=forte.
+// pythia_node calculará M^k (k=4 ou 5) para motricidade e dependência indireta.
+export const matrixDirectImpacts = pgTable("matrix_direct_impacts", {
+  id:          uuid("id").defaultRandom().primaryKey(),
+  projectId:   text("project_id").notNull().references(() => projects.id, { onDelete: "cascade" }),
+  fromEventId: uuid("from_event_id").notNull(),
+  toEventId:   uuid("to_event_id").notNull(),
+  impactScore: integer("impact_score").notNull().default(0),
+  createdAt:   timestamp("created_at").defaultNow().notNull(),
+});
+
+// ── Saídas de Técnicas Determinísticas (MICMAC, MACTOR, SMIC) ─────────────────
+// Resultados persistidos como JSONB — agentes leem esses dados sem precisar calcular.
+// Elimina alucinações quantitativas e torna os resultados auditáveis.
+export const techniqueExecutionOutputs = pgTable("technique_execution_outputs", {
+  id:            uuid("id").defaultRandom().primaryKey(),
+  projectId:     text("project_id").notNull().references(() => projects.id, { onDelete: "cascade" }),
+  techniqueType: text("technique_type").notNull(), // 'micmac'|'mactor'|'smic'|'morphol'|'grumbach_panel'
+  outputData:    jsonb("output_data").notNull().default({}),
+  metadata:      jsonb("metadata").default({}),
+  createdAt:     timestamp("created_at").defaultNow().notNull(),
+});
+
+// ── Relações das novas tabelas ─────────────────────────────────────────────────
+export const projectEventsRelations = relations(projectEvents, ({ one }) => ({
+  project: one(projects, { fields: [projectEvents.projectId], references: [projects.id] }),
+}));
+
+export const projectScenariosRelations = relations(projectScenarios, ({ one }) => ({
+  project: one(projects, { fields: [projectScenarios.projectId], references: [projects.id] }),
+}));
+
+export const matrixDirectImpactsRelations = relations(matrixDirectImpacts, ({ one }) => ({
+  project: one(projects, { fields: [matrixDirectImpacts.projectId], references: [projects.id] }),
+}));
+
+export const techniqueOutputsRelations = relations(techniqueExecutionOutputs, ({ one }) => ({
+  project: one(projects, { fields: [techniqueExecutionOutputs.projectId], references: [projects.id] }),
+}));

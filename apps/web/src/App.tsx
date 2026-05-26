@@ -171,7 +171,7 @@ function BackupModal({ onClose, reqHeaders }: { onClose: () => void, reqHeaders:
 
 function App() {
   // ── Mensagens e estado da conversa ──────────────────────────────────────────
-  const [messages, setMessages] = useState<{role: string, content: string, id?: string}[]>([]);
+  const [messages, setMessages] = useState<{role: string, content: string, id?: string, messageType?: string}[]>([]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [progressAgent, setProgressAgent] = useState('');
@@ -180,10 +180,11 @@ function App() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
 
   // ── Projeto / Sessão ─────────────────────────────────────────────────────────
-  const [projeto, setProjeto] = useState({
+  const [projeto, setProjeto] = useState<any>({
     nome: '', metodologia: 'MSEF', status: 'Em produção', kratosCron: '0 6 * * *',
     alertEmails: '',
-    horizonte: '', elaborador: '', cliente: '', questaoEstrategica: '', mudancaIdentificada: ''
+    horizonte: '', elaborador: '', cliente: '', questaoEstrategica: '', mudancaIdentificada: '',
+    teamId: null
   });
   const [vizMode, setVizMode] = useState('passos');
   const [mode, setMode] = useState('production');
@@ -231,6 +232,8 @@ function App() {
   const [analyticReview, setAnalyticReview] = useState<any>(null);
   const [showReviewModal, setShowReviewModal] = useState(false);
   const [methodologies, setMethodologies] = useState<any[]>([]);
+  const [teams, setTeams] = useState<any[]>([]);
+  const [selectedTeamId, setSelectedTeamId] = useState<string>('');
   const [llmConfig, setLlmConfig] = useState<{ provider: string; model: string }>({ provider: 'anthropic', model: 'claude-opus-4-7' });
   const [anthropicModels, setAnthropicModels] = useState<{ id: string; label: string }[]>([]);
   const [ollamaModels, setOllamaModels] = useState<{ id: string; size?: number }[]>([]);
@@ -303,6 +306,10 @@ function App() {
         .then(res => res.ok ? res.json() : [])
         .then(data => setMethodologies(Array.isArray(data) ? data : []))
         .catch(err => console.error('Erro ao buscar metodologias:', err));
+      fetch('/api/v1/teams', { headers: reqHeaders })
+        .then(res => res.ok ? res.json() : [])
+        .then(data => setTeams(Array.isArray(data) ? data : []))
+        .catch(() => {});
     }
   }, [token]);
 
@@ -376,12 +383,13 @@ function App() {
         elaborador: s.analyst || '',
         cliente: s.client || '',
         questaoEstrategica: '',
-        mudancaIdentificada: ''
+        mudancaIdentificada: '',
+        teamId: s.teamId || null
       });
       setSessionId(s.id);
       setMainView('chat');
       const msgs = s.mensagens || [];
-      setMessages(msgs.map((m: any) => ({ role: m.role, content: m.content, id: m.id })));
+      setMessages(msgs.map((m: any) => ({ role: m.role, content: m.content, id: m.id, messageType: m.messageType ?? m.message_type })));
       setShowSessoes(false);
       carregarIndicadores(s.id);
       carregarSinais(s.id);
@@ -427,7 +435,7 @@ function App() {
 
   const enviarRelatorioKratos = async (overrideEmails?: string[]) => {
     if (!sessionId) { alert('Nenhum projeto ativo.'); return; }
-    const destinos = overrideEmails || (projeto.alertEmails ? projeto.alertEmails.split(',').map(e => e.trim()).filter(Boolean) : []);
+    const destinos = overrideEmails || (projeto.alertEmails ? projeto.alertEmails.split(',').map((e: string) => e.trim()).filter(Boolean) : []);
     if (destinos.length === 0) {
       const manual = window.prompt('Nenhum e-mail configurado neste projeto.\nDigite o(s) e-mail(s) de destino (separados por vírgula):');
       if (!manual?.trim()) return;
@@ -459,6 +467,22 @@ function App() {
     const foundKey = Object.keys(AGENTS).find(key => text.includes(`${key} ·`) || text.includes(`**${key}**`));
     return foundKey ? { name: foundKey, ...AGENTS[foundKey] } : { name: 'ATHENA', ...AGENTS.ATHENA };
   };
+
+  // ── Metodologias filtradas por módulo ────────────────────────────────────────
+  // Athena exibe metodologias de produção de cenários, independente do módulo de origem.
+  // SIEx/EB e ALTA são visíveis pois seus componentes de cenários são usados em Athena
+  // mesmo antes de seus módulos-pai (Produção do Conhecimento / Análise Estratégica) serem ativados.
+  // Filtro por slug (não por category) para não alterar a semântica dos módulos no banco.
+  const ATHENA_SLUGS = new Set(['msef', 'godet', 'grumbach', 'macroplan', 'futures', 'siex', 'alta']);
+  const cenariosMethodologies = useMemo(
+    () => methodologies.filter((m: any) => ATHENA_SLUGS.has((m.slug ?? '').toLowerCase())),
+    [methodologies],
+  );
+
+  const currentTeamName = useMemo(() => {
+    if (!projeto.teamId || teams.length === 0) return undefined;
+    return teams.find((t: any) => t.id === projeto.teamId)?.name;
+  }, [projeto.teamId, teams]);
 
   // ── Etapas da metodologia atual ───────────────────────────────────────────────
   const currentMethodologySteps = useMemo(
@@ -507,7 +531,7 @@ function App() {
   // ── SSE Chat — progresso e token streaming em tempo real ────────────────────
   const callChatStream = async (
     payload: object,
-    onDone: (data: { text: string; agentName: string; thinking: string }) => void
+    onDone: (data: { text: string; agentName: string; thinking: string; messageType: string }) => void
   ): Promise<void> => {
     setStreamingText('');
     setStepLog([]);
@@ -553,7 +577,7 @@ function App() {
             setProgressAgent('');
             setStreamingText('');
             setStepLog([]);
-            onDone({ text: event.text, agentName: event.agentName, thinking: event.thinking || '' });
+            onDone({ text: event.text, agentName: event.agentName, thinking: event.thinking || '', messageType: event.messageType || 'parcial' });
           } else if (event.type === 'error') {
             throw new Error(event.message || 'Erro no servidor');
           }
@@ -594,7 +618,7 @@ function App() {
     const nome = scopeForm.tema || 'Nova Análise';
     const newSessionId = `sess_${Date.now()}`;
 
-    setProjeto(prev => ({ ...prev, nome, ...scopeForm }));
+    setProjeto((prev: any) => ({ ...prev, nome, ...scopeForm }));
     setSessionId(newSessionId);
     setMessages([]);
     setThinkingBlocks({});
@@ -609,10 +633,10 @@ function App() {
 
     try {
       await callChatStream(
-        { projectId: newSessionId, projectName: nome, metodologia: projeto.metodologia || 'MSEF', vizMode, messages: newMessages },
-        ({ text, thinking: thinkingText }) => {
+        { projectId: newSessionId, projectName: nome, metodologia: projeto.metodologia || 'MSEF', vizMode, messages: newMessages, teamId: selectedTeamId || undefined },
+        ({ text, thinking: thinkingText, messageType }) => {
           setMessages(prev => {
-            const next = [...prev, { role: 'assistant', content: text }];
+            const next = [...prev, { role: 'assistant', content: text, messageType }];
             if (thinkingText) setThinkingBlocks(tb => ({ ...tb, [next.length - 1]: thinkingText }));
             return next;
           });
@@ -760,9 +784,9 @@ function App() {
     try {
       await callChatStream(
         { projectId: sessionId, projectName: projeto.nome, metodologia: projeto.metodologia, vizMode, messages: newMessages },
-        ({ text, thinking: thinkingText }) => {
+        ({ text, thinking: thinkingText, messageType }) => {
           setMessages(prev => {
-            const next = [...prev, { role: 'assistant', content: text }];
+            const next = [...prev, { role: 'assistant', content: text, messageType }];
             if (thinkingText) setThinkingBlocks(tb => ({ ...tb, [next.length - 1]: thinkingText }));
             return next;
           });
@@ -785,43 +809,14 @@ function App() {
     if (loading || extracting || messages.length === 0) return;
 
     if (tipo === 'padrao') {
-      // O relatório padrão é sempre gerado pelo HERMES (orquestrador).
-      // Mensagens de outros agentes (THEMIS, KLIO, etc.) podem conter o texto
-      // "RELATÓRIO FINAL PADRÃO" como referência — não devem ser selecionadas.
-      const patterns = [
-        'RELATÓRIO FINAL PADRÃO', 'RELATÓRIO FINAL', 'RELATÓRIO DE CENÁRIOS',
-        'RELATÓRIO ESTRATÉGICO', 'RELATÓRIO PROSPECTIVO',
-        // Metodologias específicas
-        'RAPPORT PROSPECTIF GODET', 'RAPPORT PROSPECTIF',
-        'RELATÓRIO GRUMBACH', 'RELATÓRIO SIEX',
-        'PRODUTO ALTA FINAL', 'PRODUTO ALTA',
-      ];
-      let targetMsg: {role: string, content: string, id?: string} | undefined;
+      // 1ª tentativa: messageType explícito (mensagens da sessão atual ou carregadas do banco)
+      let targetMsg = messages.find(m => m.messageType === 'relatorio_final');
 
-      // 1ª tentativa: encontra mensagens que contêm o padrão E foram escritas pelo HERMES
-      // (primeiros 100 chars contêm "**HERMES**" mas NÃO "HERMES_REVISOR")
-      const isHermes = (content: string) => {
-        const head = content.slice(0, 120).toUpperCase();
-        return head.includes('**HERMES**') && !head.includes('HERMES_REVISOR');
-      };
-      for (const pat of patterns) {
-        const hermesPool = messages.filter(m =>
-          m.role === 'assistant' && isHermes(m.content) && m.content.toUpperCase().includes(pat)
-        );
-        if (hermesPool.length > 0) {
-          // Pega a mais longa — o relatório final é sempre >> mensagens de status
-          targetMsg = hermesPool.reduce((a, b) => b.content.length > a.content.length ? b : a);
-          break;
-        }
-      }
-
-      // 2ª tentativa: maior mensagem HERMES com > 1500 chars (relatório final é muito longo)
+      // 2ª tentativa: maior mensagem assistant com > 1500 chars (fallback para sessões antigas)
       if (!targetMsg) {
-        const hermesMsgs = messages.filter(m =>
-          m.role === 'assistant' && isHermes(m.content) && m.content.length > 1500
-        );
-        if (hermesMsgs.length > 0)
-          targetMsg = hermesMsgs.reduce((a, b) => b.content.length > a.content.length ? b : a);
+        const candidates = messages.filter(m => m.role === 'assistant' && m.content.length > 1500);
+        if (candidates.length > 0)
+          targetMsg = candidates.reduce((a, b) => b.content.length > a.content.length ? b : a);
       }
 
       if (!targetMsg) return alert('Relatório Final Padrão não encontrado.\n\nCertifique-se de que o HERMES concluiu todas as etapas e gerou o relatório consolidado.');
@@ -965,6 +960,30 @@ function App() {
       window.open(url, '_blank');
       setTimeout(() => URL.revokeObjectURL(url), 30000);
     } catch (e: any) { alert('Erro ao gerar PDF: ' + e.message); }
+  };
+
+  // ── Playbook DOCX ────────────────────────────────────────────────────────────
+  const gerarPlaybook = async () => {
+    try {
+      const lastMsg = messages.filter(m => m.role === 'assistant').slice(-1)[0];
+      const res = await fetch('/api/v1/playbook/gerar', {
+        method: 'POST',
+        headers: reqHeaders,
+        body: JSON.stringify({
+          projectId: projeto.id,
+          projeto,
+          excerpt: lastMsg?.content?.slice(0, 3000) || '',
+        }),
+      });
+      if (!res.ok) throw new Error('Erro ao gerar Playbook');
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `Playbook_${(projeto.nome || 'Projeto').replace(/\s+/g, '_')}_${new Date().toISOString().slice(0, 10)}.docx`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (e: any) { alert('Erro ao gerar Playbook: ' + e.message); }
   };
 
   // ── Estimativa EB — SIEx/EB (EB70-MT-10.401) ────────────────────────────────
@@ -1353,17 +1372,33 @@ function App() {
                 </div>
               </div>
 
-              {/* Nível de análise */}
+              {/* Equipe responsável */}
+              {teams.length > 0 && (
+                <div>
+                  <label className="block text-xs font-bold text-stratsight-dark uppercase mb-1.5 tracking-wide">Equipe Responsável <span className="text-stratsight-medium normal-case font-normal">(opcional)</span></label>
+                  <select
+                    value={selectedTeamId}
+                    onChange={e => setSelectedTeamId(e.target.value)}
+                    className="w-full border-2 border-gray-200 rounded-xl px-4 py-2.5 focus:border-stratsight-medium outline-none transition-colors text-sm bg-white"
+                  >
+                    <option value="">— Sem equipe vinculada —</option>
+                    {teams.map((t: any) => (
+                      <option key={t.id} value={t.id}>{t.name}{t.description ? ` — ${t.description}` : ''}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
               {/* Metodologia */}
               <div>
                 <label className="block text-xs font-bold text-stratsight-dark uppercase mb-1.5 tracking-wide">Metodologia de Análise</label>
                 <select
                   value={projeto.metodologia}
-                  onChange={e => setProjeto(p => ({ ...p, metodologia: e.target.value }))}
+                  onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setProjeto((p: any) => ({ ...p, metodologia: e.target.value }))}
                   className="w-full border-2 border-gray-200 rounded-xl px-4 py-2.5 focus:border-stratsight-medium outline-none transition-colors text-sm bg-white"
                 >
-                  {methodologies.length > 0
-                    ? methodologies.map((m: any) => (
+                  {cenariosMethodologies.length > 0
+                    ? cenariosMethodologies.map((m: any) => (
                         <option key={m.id} value={m.name}>{m.name} — {m.description}</option>
                       ))
                     : <option value="MSEF">MSEF — Método Multidimensional de Exploração de Futuros</option>
@@ -1422,8 +1457,8 @@ function App() {
               <div>
                 <label className="block text-xs font-bold text-stratsight-dark uppercase mb-2">Metodologia</label>
                 <select value={projeto.metodologia} onChange={e => setProjeto({...projeto, metodologia: e.target.value})} className="w-full border-2 border-gray-200 rounded-xl px-4 py-3 focus:border-stratsight-medium outline-none bg-white">
-                  {methodologies.length > 0
-                    ? methodologies.map((m: any) => <option key={m.id} value={m.name}>{m.name} — {m.description}</option>)
+                  {cenariosMethodologies.length > 0
+                    ? cenariosMethodologies.map((m: any) => <option key={m.id} value={m.name}>{m.name} — {m.description}</option>)
                     : <option value="MSEF">MSEF</option>
                   }
                 </select>
@@ -1500,7 +1535,7 @@ function App() {
         onNovaSessao={() => {
           setScopeForm({ tema: '', horizonte: '', elaborador: '', cliente: '', questaoEstrategica: '', mudancaIdentificada: '', instrucoes: '' });
           setScopeFiles([]);
-          setProjeto(p => ({ ...p, metodologia: 'MSEF' }));
+          setProjeto((p: any) => ({ ...p, metodologia: 'MSEF' }));
           setShowNovaSessaoModal(true);
         }}
         onOpenPainel={openPainel}
@@ -1547,10 +1582,11 @@ function App() {
           onNovaSessao={() => {
             setScopeForm({ tema: '', horizonte: '', elaborador: '', cliente: '', questaoEstrategica: '', mudancaIdentificada: '', instrucoes: '' });
             setScopeFiles([]);
-            setProjeto(p => ({ ...p, metodologia: 'MSEF' }));
+            setProjeto((p: any) => ({ ...p, metodologia: 'MSEF' }));
             setShowNovaSessaoModal(true);
           }}
           onGerarRelatorio={() => gerarRelatorio('padrao')}
+          onGerarPlaybook={user?.role === 'admin' ? gerarPlaybook : undefined}
           onCopyClientLink={() => {
             const url = `${window.location.origin}/api/v1/painel/project/${sessionId}?token=${token}`;
             navigator.clipboard.writeText(url).then(() => {
@@ -1560,6 +1596,7 @@ function App() {
           cliente={projeto.cliente}
           horizonte={projeto.horizonte}
           questaoEstrategica={projeto.questaoEstrategica}
+          teamName={currentTeamName}
           methodologyName={projeto.metodologia || 'MSEF'}
           methodologySteps={currentMethodologySteps}
           llmConfig={llmConfig}
@@ -1607,7 +1644,7 @@ function App() {
                     onClick={() => {
                       setScopeForm({ tema: '', horizonte: '', elaborador: '', cliente: '', questaoEstrategica: '', mudancaIdentificada: '', instrucoes: '' });
                       setScopeFiles([]);
-                      setProjeto(p => ({ ...p, metodologia: 'MSEF' }));
+                      setProjeto((p: any) => ({ ...p, metodologia: 'MSEF' }));
                       setShowNovaSessaoModal(true);
                     }}
                     className="px-5 py-2.5 bg-stratsight-dark text-white font-bold rounded-xl hover:bg-stratsight-medium transition-colors shadow-lg shadow-green-900/20 text-sm"

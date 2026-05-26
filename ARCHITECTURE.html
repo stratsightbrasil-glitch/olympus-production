@@ -178,7 +178,7 @@ footer { background: var(--dark); color: #4A7A5A; text-align: center; padding: 1
   <div class="h-badge">StratSight Brasil · Strategic Foresight</div>
   <h1>OLYMPUS v4.0 — Architecture Map</h1>
   <div class="sub">Monorepo TypeScript · Hono + React · PostgreSQL + pgvector · Docker Compose · Vercel AI SDK v6</div>
-  <div class="meta">Atualizado em: Maio 2026 (Sprint 9) &nbsp;·&nbsp; Referência rápida para desenvolvimento e onboarding</div>
+  <div class="meta">Atualizado em: Maio 2026 (Sprint 10) &nbsp;·&nbsp; Referência rápida para desenvolvimento e onboarding</div>
 </header>
 
 <div class="layout">
@@ -199,8 +199,11 @@ footer { background: var(--dark); color: #4A7A5A; text-align: center; padding: 1
   <a href="#s3c" class="sub">GODET</a>
   <div class="divider"></div>
   <a href="#s4">4. API Routes</a>
+  <a href="#s4" class="sub">/health · /audit · /playbook</a>
   <a href="#s5">5. Banco de Dados</a>
+  <a href="#s5" class="sub">audit_logs · valueHistory</a>
   <a href="#s6">6. Ferramentas dos Agentes</a>
+  <a href="#s6" class="sub">FRED · Câmara · Senado</a>
   <a href="#s7">7. Docker</a>
   <div class="divider"></div>
   <a href="#s8">8. Fluxo de Execução</a>
@@ -280,22 +283,29 @@ footer { background: var(--dark); color: #4A7A5A; text-align: center; padding: 1
 │   │       ├── cron.ts          → KRONOS scheduler (KRATOS automático)
 │   │       ├── mailer.ts        → Nodemailer (alertas KRATOS)
 │   │       ├── routes/
-│   │       │   ├── auth.ts      → Login, 2FA TOTP, setup-status
+│   │       │   ├── auth.ts      → Login, 2FA TOTP, JWT_EXPIRY, logAudit
 │   │       │   ├── chat.ts      → Orquestração MSEF + SSE streaming
 │   │       │   ├── sessions.ts  → CRUD de projetos + mensagens
 │   │       │   ├── extract.ts   → Upload + parse + embed (RAG)
 │   │       │   ├── embeddings.ts→ Busca vetorial + RAG endpoints
-│   │       │   ├── export.ts    → Geração de relatórios (PDF, DOCX)
+│   │       │   ├── export.ts    → PDF/DOCX + marca d'água CONFIDENCIAL
 │   │       │   ├── engine.ts    → Registro de agentes + metodologias
-│   │       │   ├── indicators.ts→ KPIs + thresholds + status KRATOS
+│   │       │   ├── indicators.ts→ KPIs + history + autoRegisterSignal
+│   │       │   ├── playbook.ts  → POST /gerar — Playbook DOCX (admin)
+│   │       │   ├── audit.ts     → GET /audit + /audit/stats
 │   │       │   ├── painel.ts    → Dashboard HTML autenticado por token
 │   │       │   ├── backup.ts    → pg_dump → .sql.gz (admin only)
 │   │       │   ├── users.ts     → CRUD de usuários + roles
 │   │       │   └── docs.ts      → Swagger UI + OpenAPI spec
+│   │       ├── middleware/
+│   │       │   └── rateLimit.ts → In-memory bucket (5 análises/h · 10 exports/h)
+│   │       ├── utils/
+│   │       │   └── audit.ts     → logAudit() helper silencioso
 │   │       ├── tools/
 │   │       │   └── rag.ts       → Tool buscar_documentos_internos (com @olympus/db)
 │   │       └── scripts/
-│   │           └── seed.ts      → Seed: agentes + metodologias + tools
+│   │           ├── seed.ts      → Seed: agentes + metodologias + tools
+│   │           └── seed-demo.ts → Seed PoC: usuário + projeto + análise + indicadores
 │   └── web/              @olympus/web — Frontend React/Vite (porta 80)
 │       └── src/
 │           ├── App.tsx          → Componente raiz (~1700 linhas)
@@ -359,7 +369,7 @@ import { eq, asc, desc, and, isNull } from 'drizzle-orm';</pre>
   <h3 id="s2c">packages/tools — Ferramentas Externas</h3>
   <div class="grid3">
     <div class="card gold"><div class="ct">tavily.ts</div><div class="cd"><code>web_search</code> — Tavily API. Retorna array de resultados com URL, título, snippet. Plano free: 1.000 req/mês.</div></div>
-    <div class="card gold"><div class="ct">dados-publicos.ts</div><div class="cd"><code>buscar_dados_publicos</code> — 51 indicadores, 9 fontes. BCB/SGS, IBGE, IPEA, Comex, DOU, Banco Mundial, FMI, OMS, ONU, ITU.</div></div>
+    <div class="card gold"><div class="ct">dados-publicos.ts</div><div class="cd"><code>buscar_dados_publicos</code> — ~62 indicadores, 12 fontes. BCB/SGS, IBGE, IPEA, Comex, DOU, Banco Mundial, FMI, OMS, ONU, ITU, <strong>FRED/EUA</strong>, <strong>Câmara/Senado BR</strong>.</div></div>
     <div class="card gold"><div class="ct">embed.ts</div><div class="cd">Voyage AI <code>voyage-3-lite</code>, 512 dims. Usado pelo extract.ts para indexação e pelo rag.ts para busca semântica.</div></div>
   </div>
 
@@ -463,8 +473,10 @@ app.listen(3333)</pre>
   <div class="sh"><div class="sn">4</div><h2>API Routes (Hono — porta 3333)</h2></div>
 
   <h3>Rotas Públicas (sem JWT)</h3>
+  <div class="route"><span class="method GET">GET</span><span class="route-path">/ping</span><span class="route-desc">Health check simples — suprimido do logger</span></div>
+  <div class="route"><span class="method GET">GET</span><span class="route-path">/health</span><span class="route-desc">Status detalhado: DB, Anthropic, Tavily, LLM provider, uptime, latência</span></div>
   <div class="route"><span class="method GET">GET</span><span class="route-path">/api/v1/auth/setup-status</span><span class="route-desc">Verifica se primeiro usuário existe</span></div>
-  <div class="route"><span class="method POST">POST</span><span class="route-path">/api/v1/auth/login</span><span class="route-desc">Login → JWT token + verificação 2FA TOTP</span></div>
+  <div class="route"><span class="method POST">POST</span><span class="route-path">/api/v1/auth/login</span><span class="route-desc">Login → JWT token + verificação 2FA TOTP + logAudit</span></div>
   <div class="route"><span class="method POST">POST</span><span class="route-path">/api/v1/auth/register</span><span class="route-desc">Criar usuário (só funciona se nenhum existe)</span></div>
   <div class="route"><span class="method GET">GET</span><span class="route-path">/api/docs</span><span class="route-desc">Swagger UI (Hono Swagger)</span></div>
   <div class="route"><span class="method GET">GET</span><span class="route-path">/api/docs/openapi.json</span><span class="route-desc">OpenAPI 3.0.3 spec</span></div>
@@ -486,16 +498,21 @@ app.listen(3333)</pre>
   <div class="route"><span class="method DEL">DEL</span><span class="route-path">/api/v1/embeddings/:projectId</span><span class="route-desc">Limpar embeddings de um projeto</span></div>
 
   <h3>Indicadores KRATOS</h3>
-  <div class="route"><span class="method GET">GET</span><span class="route-path">/api/v1/indicators/project/:id</span><span class="route-desc">Listar KPIs do projeto com status</span></div>
+  <div class="route"><span class="method GET">GET</span><span class="route-path">/api/v1/indicators/project/:id</span><span class="route-desc">Listar KPIs do projeto com status e valueHistory</span></div>
   <div class="route"><span class="method POST">POST</span><span class="route-path">/api/v1/indicators</span><span class="route-desc">Criar indicador (nome, fonte, thresholds)</span></div>
-  <div class="route"><span class="method PATCH">PATCH</span><span class="route-path">/api/v1/indicators/:id</span><span class="route-desc">Atualizar indicador / last value</span></div>
+  <div class="route"><span class="method PATCH">PATCH</span><span class="route-path">/api/v1/indicators/:id</span><span class="route-desc">Atualizar valor — appendHistory + autoRegisterSignal se amarelo/vermelho</span></div>
+
+  <h3>Playbook e Auditoria</h3>
+  <div class="route"><span class="method POST">POST</span><span class="route-path">/api/v1/playbook/gerar</span><span class="route-desc">Gerar Playbook DOCX (admin only) — capa + fases + indicadores + sinais + recomendações</span></div>
+  <div class="route"><span class="method GET">GET</span><span class="route-path">/api/v1/audit</span><span class="route-desc">Logs de auditoria (filtros: userId, action, from, to, limit)</span></div>
+  <div class="route"><span class="method GET">GET</span><span class="route-path">/api/v1/audit/stats</span><span class="route-desc">Contagem de eventos de auditoria agrupados por ação</span></div>
 
   <h3>Painel, Engine e Admin</h3>
   <div class="route"><span class="method GET">GET</span><span class="route-path">/api/v1/painel/project/:id</span><span class="route-desc">Dashboard HTML cliente (auth via <code>?token=</code> ou Bearer)</span></div>
   <div class="route"><span class="method GET">GET</span><span class="route-path">/api/v1/engine/methodologies</span><span class="route-desc">Listar metodologias do banco — retorna campo <code>steps</code> extraído do rich agentsConfig</span></div>
   <div class="route"><span class="method GET">GET</span><span class="route-path">/api/v1/engine/agents</span><span class="route-desc">Listar agentes do banco</span></div>
   <div class="route"><span class="method POST">POST</span><span class="route-path">/api/v1/engine/install</span><span class="route-desc">Instalar novo Motor (JSON) sem deploy</span></div>
-  <div class="route"><span class="method POST">POST</span><span class="route-path">/api/v1/export</span><span class="route-desc">Gerar relatório (PDF / DOCX / JSON)</span></div>
+  <div class="route"><span class="method POST">POST</span><span class="route-path">/api/v1/export</span><span class="route-desc">Gerar relatório (PDF / DOCX / JSON) com marca d'água CONFIDENCIAL</span></div>
   <div class="route"><span class="method GET">GET</span><span class="route-path">/api/v1/backup/list</span><span class="route-desc">Listar backups (admin only)</span></div>
   <div class="route"><span class="method POST">POST</span><span class="route-path">/api/v1/backup/generate</span><span class="route-desc">Gerar <code>.sql.gz</code> via pg_dump (admin only)</span></div>
   <div class="route"><span class="method GET">GET</span><span class="route-path">/api/v1/backup/download/:filename</span><span class="route-desc">Baixar backup (admin only)</span></div>
@@ -592,11 +609,26 @@ app.listen(3333)</pre>
         <strong>id</strong> <span>uuid PK</span><br>
         <strong>projectId</strong> <span>text FK → projects.id</span><br>
         <strong>name</strong> <span>text</span><br>
-        <strong>source</strong> <span>text (BCB/IBGE/Tavily/...)</span><br>
+        <strong>source</strong> <span>text (BCB/IBGE/FRED/...)</span><br>
         <strong>parametersJson</strong> <span>jsonb (thresholds, config)</span><br>
         <strong>lastValue</strong> <span>text | number nullable</span><br>
         <strong>lastCheckedAt</strong> <span>timestamp nullable</span><br>
-        <strong>status</strong> <span>'verde' | 'amarelo' | 'vermelho'</span>
+        <strong>status</strong> <span>'verde' | 'amarelo' | 'vermelho'</span><br>
+        <strong>valueHistory</strong> <span>jsonb default '[]' — array {value, timestamp}; prune 90 dias</span>
+      </div>
+    </div>
+    <div class="schema-card">
+      <div class="schema-head">audit_logs</div>
+      <div class="schema-body">
+        <strong>id</strong> <span>uuid PK</span><br>
+        <strong>userId</strong> <span>text nullable</span><br>
+        <strong>userName</strong> <span>text nullable</span><br>
+        <strong>action</strong> <span>text NOT NULL ('login', 'export', ...)</span><br>
+        <strong>resourceType</strong> <span>text nullable ('user', 'project', ...)</span><br>
+        <strong>resourceId</strong> <span>text nullable</span><br>
+        <strong>metadata</strong> <span>jsonb nullable</span><br>
+        <strong>ipAddress</strong> <span>text nullable</span><br>
+        <strong>createdAt</strong> <span>timestamp NOT NULL (append-only)</span>
       </div>
     </div>
     <div class="schema-card">
@@ -628,7 +660,7 @@ app.listen(3333)</pre>
     </table>
   </div>
 
-  <h3>buscar_dados_publicos — 51 Indicadores / 9 Fontes</h3>
+  <h3>buscar_dados_publicos — ~62 Indicadores / 12 Fontes</h3>
   <div class="tw">
     <table>
       <thead><tr><th>Fonte</th><th>Indicadores</th></tr></thead>
@@ -644,6 +676,9 @@ app.listen(3333)</pre>
         <tr><td>ONU Population</td><td><code>onu_populacao_total</code> · <code>onu_crescimento_populacao</code></td></tr>
         <tr><td>IBGE Países</td><td><code>ibge_paises_perfil</code> · <code>ibge_turistas</code> · <code>ibge_educacao</code></td></tr>
         <tr><td>ITU DataHub</td><td><code>itu_internet</code> · <code>itu_celular</code> · <code>itu_banda_larga_fixa</code> · <code>itu_banda_larga_movel</code> · <code>itu_idi</code></td></tr>
+        <tr><td><strong>FRED / Federal Reserve (EUA)</strong></td><td><code>federal_funds_rate</code> · <code>us_gdp</code> · <code>us_cpi</code> · <code>us_unemployment</code> · <code>us_10y_treasury</code> · <code>dxy_index</code> · <code>us_trade_balance</code> · <code>china_gdp_growth</code> — chave opcional: <code>FRED_API_KEY</code></td></tr>
+        <tr><td><strong>Câmara dos Deputados (BR)</strong></td><td><code>proposicoes_camara</code> · <code>votacoes_camara</code> — API aberta (dadosabertos.camara.leg.br)</td></tr>
+        <tr><td><strong>Senado Federal (BR)</strong></td><td><code>votacoes_senado</code> — API aberta (legis.senado.leg.br)</td></tr>
       </tbody>
     </table>
   </div>
@@ -781,8 +816,11 @@ const response = await generateText({
   <div class="sh"><div class="sn">10</div><h2>Variáveis de Ambiente (.env)</h2></div>
 
   <pre>ANTHROPIC_API_KEY=sk-ant-...           # obrigatório — LLM
-ANTHROPIC_MODEL=claude-opus-4-7        # modelo em uso
 LLM_PROVIDER=anthropic                 # 'anthropic' | 'ollama' (Provider Factory)
+
+# Ollama (só necessário se LLM_PROVIDER=ollama)
+OLLAMA_BASE_URL=http://ollama:11434/v1 # padrão Docker interno
+OLLAMA_MODEL=llama3.1:8b               # modelo a carregar no pre-warm
 
 TAVILY_API_KEY=tvly-...                # obrigatório — web_search (KLIO/KRATOS)
 
@@ -790,6 +828,7 @@ DATABASE_URL=postgres://postgres:postgres@olympus_db:5432/olympus  # dentro do D
 # DATABASE_URL=postgres://postgres:postgres@localhost:5432/olympus  # fora do Docker (seed/dev)
 
 JWT_SECRET=olympus_super_secret_key_2026
+JWT_EXPIRY=8h                          # '1h'|'4h'|'8h'|'24h'|'7d' — padrão 8h
 
 ALLOWED_ORIGIN=http://localhost:80
 
@@ -808,7 +847,10 @@ INLABS_PASSWORD=...
 
 # ITU DataHub — datahub.itu.int (cadastro gratuito)
 ITU_EMAIL=...
-ITU_PASSWORD=...</pre>
+ITU_PASSWORD=...
+
+# FRED — Federal Reserve Economic Data (opcional — sem chave funciona com limite menor)
+FRED_API_KEY=...</pre>
 
   <div class="warn"><strong>⚠ Cada variável em sua própria linha.</strong> <code>\n</code> literal concatena variáveis — API keys malformadas causam HTTP 403.</div>
 </section>
@@ -840,9 +882,14 @@ docker exec olympus_db psql -U postgres \
 cd packages/db
 npx drizzle-kit push
 
-# Seed completo:
+# Seed completo (agentes + metodologias):
 $env:DATABASE_URL=".../olympus"
-npx tsx apps/api/src/scripts/seed.ts</pre>
+npx tsx apps/api/src/scripts/seed.ts
+
+# Seed de demonstração (PoC — idempotente):
+docker exec olympus_api node \
+  apps/api/dist/scripts/seed-demo.js
+# → demo@stratsight.com.br / OlympusDemo2026!</pre>
     </div>
     <div>
       <h3>Desenvolvimento Local</h3>
@@ -878,7 +925,7 @@ docker compose up -d
 </div>
 
 <footer>
-  OLYMPUS v4.0 &nbsp;·&nbsp; StratSight Brasil &nbsp;·&nbsp; Maio 2026 &nbsp;·&nbsp; Confidencial &nbsp;·&nbsp; Architecture Map
+  OLYMPUS v4.0 &nbsp;·&nbsp; StratSight Brasil &nbsp;·&nbsp; Sprint 10 · Maio 2026 &nbsp;·&nbsp; Confidencial &nbsp;·&nbsp; Architecture Map
 </footer>
 </body>
 </html>

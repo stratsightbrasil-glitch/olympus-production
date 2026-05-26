@@ -9,5 +9,5 @@ config({ path: path.resolve(__dirname, '../../../.env') });
 
 const connectionString = process.env.DATABASE_URL || 'postgres://postgres:postgres@localhost:5432/olympus';
 
-const client = postgres(connectionString, { prepare: false });
+const client = postgres(connectionString, { prepare: false, onnotice: () => {} });
 export const db = drizzle(client, { schema });

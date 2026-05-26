@@ -262,7 +262,7 @@
   <div class="header-badge">StratSight Brasil · Strategic Foresight</div>
   <h1>OLYMPUS v4.0 — Histórico Consolidado de Arquitetura e Desenvolvimento</h1>
   <div class="subtitle">IA Agêntica · Motor ATHENA · Motor KRATOS · Monorepo TypeScript</div>
-  <div class="meta">Última atualização: 21 de Maio de 2026 (Sprint 9 — Stepper Dinâmico por Metodologia · Gauge SVG · Seleção HERMES) &nbsp;·&nbsp; Versão viva — atualizado a cada sprint</div>
+  <div class="meta">Última atualização: 23 de Maio de 2026 (Sprint 10 — FRED + Legislativo · Playbook · Audit · Rate Limiting · Hardening Ollama · PoC Seed) &nbsp;·&nbsp; Versão viva — atualizado a cada sprint</div>
 </header>
 
 <div class="layout">
@@ -1046,6 +1046,44 @@ swap=2GB</pre>
       <code>apps/api/src/routes/engine.ts</code>
     </div>
 
+    <h3 style="margin-top:28px">✅ Sprint 10 — Dados Globais · Playbook · Audit · Rate Limit · Hardening Ollama · PoC (23 Mai 2026)</h3>
+    <ul class="done-list">
+      <li><strong>FRED + Câmara + Senado:</strong> <code>dados-publicos.ts</code> — 8 séries FRED (Federal Funds Rate, US GDP, CPI, desemprego, T10Y, DXY, balança comercial, China GDP); proposições e votações da Câmara; votações plenárias do Senado. FRED_API_KEY opcional. Total de indicadores: ~62.</li>
+      <li><strong>Histórico de indicadores + Sparkline:</strong> <code>valueHistory jsonb</code> em <code>indicators</code>; <code>appendHistory()</code> com prune 90 dias; componente <code>Sparkline</code> SVG em <code>KratosPanel</code>; <code>IndicadorRow</code> com expand/collapse (tabela + sparkline ampliado).</li>
+      <li><strong>Auto-registro de sinais:</strong> <code>autoRegisterSignal()</code> em <code>indicators.ts</code> — sinal fraco criado automaticamente quando indicador entra em amarelo/vermelho; deduplicação por título+projectId.</li>
+      <li><strong>Filtro classificação:</strong> <code>KratosPanel.tsx</code> — chips confirmavel/ambiguo/ruido combinam com filtro statusRadar já existente.</li>
+      <li><strong>Playbook DOCX:</strong> <code>routes/playbook.ts</code> (novo) — <code>POST /api/v1/playbook/gerar</code>; capa + fases + síntese HERMES + tabela indicadores + tabela sinais + recomendações. Botão 📘 Playbook na CommandBar (admin only).</li>
+      <li><strong>Logs de auditoria:</strong> <code>schema.ts</code> tabela <code>audit_logs</code>; <code>utils/audit.ts</code> <code>logAudit()</code> silencioso; <code>routes/audit.ts</code> GET /audit + /audit/stats; evento login registrado.</li>
+      <li><strong>JWT_EXPIRY configurável:</strong> <code>auth.ts</code> <code>jwtExpirySeconds()</code> — env <code>JWT_EXPIRY</code> aceita 1h/4h/8h/24h/7d; padrão 8h.</li>
+      <li><strong>Marca d'água exports:</strong> <code>export.ts</code> — CSS <code>.watermark</code> position:fixed rotate(-45deg) opacity:0.06; texto = classificação do projeto; compatível com @media print.</li>
+      <li><strong>Rate limiting em memória:</strong> <code>middleware/rateLimit.ts</code> (novo) — bucket por userId; 5 análises/h + 10 exports/h; limpeza 5 min; single-instance.</li>
+      <li><strong>Health endpoint:</strong> <code>GET /health</code> público — DB, Anthropic, Tavily, LLM provider, version, uptime, latencyMs.</li>
+      <li><strong>Seed de demonstração:</strong> <code>scripts/seed-demo.ts</code> (novo) — idempotente; usuário demo@stratsight.com.br / OlympusDemo2026!; projeto sess_demo_msef_2026 com análise MSEF + 5 indicadores + 3 sinais.</li>
+      <li><strong>Fix pgvector NOTICE:</strong> <code>db.ts</code> <code>onnotice: () => {}</code> — suprime JSON NOTICE do PostgreSQL nos logs do container.</li>
+      <li><strong>Fix Ollama timeout:</strong> <code>index.ts</code> <code>setGlobalDispatcher(new Agent({headersTimeout:15min}))</code> + pre-warm <code>POST /api/generate keep_alive:-1</code> — corrige <code>UND_ERR_HEADERS_TIMEOUT</code> enquanto modelo carrega na GPU.</li>
+      <li><strong>undici dependency:</strong> <code>apps/api/package.json</code> <code>"undici": "^6.21.2"</code> adicionado.</li>
+    </ul>
+    <div class="callout" style="background:#e8f5e9;border-color:#4caf50;margin-top:12px">
+      <strong>Arquivos novos no Sprint 10:</strong>
+      <code>apps/api/src/routes/playbook.ts</code> &nbsp;·&nbsp;
+      <code>apps/api/src/routes/audit.ts</code> &nbsp;·&nbsp;
+      <code>apps/api/src/utils/audit.ts</code> &nbsp;·&nbsp;
+      <code>apps/api/src/middleware/rateLimit.ts</code> &nbsp;·&nbsp;
+      <code>apps/api/src/scripts/seed-demo.ts</code><br>
+      <strong>Modificados:</strong>
+      <code>packages/tools/src/dados-publicos.ts</code> &nbsp;·&nbsp;
+      <code>packages/db/src/schema.ts</code> &nbsp;·&nbsp;
+      <code>packages/db/src/db.ts</code> &nbsp;·&nbsp;
+      <code>apps/api/src/routes/indicators.ts</code> &nbsp;·&nbsp;
+      <code>apps/api/src/routes/auth.ts</code> &nbsp;·&nbsp;
+      <code>apps/api/src/routes/export.ts</code> &nbsp;·&nbsp;
+      <code>apps/api/src/index.ts</code> &nbsp;·&nbsp;
+      <code>apps/api/package.json</code> &nbsp;·&nbsp;
+      <code>apps/web/src/components/layout/KratosPanel.tsx</code> &nbsp;·&nbsp;
+      <code>apps/web/src/components/layout/CommandBar.tsx</code> &nbsp;·&nbsp;
+      <code>apps/web/src/App.tsx</code>
+    </div>
+
     <h3 style="margin-top:28px">⛔ BLOQUEADORES — Caminho Crítico para o Primeiro Contrato</h3>
     <div class="callout danger">
       <strong>Infraestrutura pronta. Próxima ação: executar o deploy e gerar o pacote USB.</strong>
@@ -1072,28 +1110,32 @@ swap=2GB</pre>
       <li><strong>Sem 5–8 · Pipeline para primeiro contrato:</strong> 3+ alvos ativos + proposta R$ 60K–120K em negociação.</li>
     </ul>
 
+    <h3 style="margin-top:28px">✅ Concluído no Sprint 10</h3>
+    <div class="backlog-grid">
+      <div class="backlog-card" style="border-left-color:#4caf50">
+        <div class="card-pri" style="color:#2e7d52">✅ Concluído — Sprint 10</div>
+        <div class="card-title">FRED API + Legislativo BR</div>
+        <div class="card-desc">8 séries FRED + Câmara (proposições/votações) + Senado. Total ~62 indicadores disponíveis.</div>
+      </div>
+      <div class="backlog-card" style="border-left-color:#4caf50">
+        <div class="card-pri" style="color:#2e7d52">✅ Concluído — Sprint 9</div>
+        <div class="card-title">Ollama Local (A5 antecipado)</div>
+        <div class="card-desc">Provider Factory + LLM Selector na UI. <code>JWT_EXPIRY</code>, pre-warm, timeout fix. Llama testado end-to-end.</div>
+      </div>
+      <div class="backlog-card" style="border-left-color:#4caf50">
+        <div class="card-pri" style="color:#2e7d52">✅ Concluído — Sprint 10</div>
+        <div class="card-title">Playbook Automatizado (C3)</div>
+        <div class="card-desc"><code>POST /api/v1/playbook/gerar</code> — DOCX com capa, fases, indicadores, sinais e recomendações. Botão admin na CommandBar.</div>
+      </div>
+      <div class="backlog-card" style="border-left-color:#4caf50">
+        <div class="card-pri" style="color:#2e7d52">✅ Concluído — Sprint 10</div>
+        <div class="card-title">Dashboard Gráficos KRATOS</div>
+        <div class="card-desc">Sparkline SVG inline por indicador. Expand/collapse com tabela de histórico 90 dias. Sem dependências externas.</div>
+      </div>
+    </div>
+
     <h3 style="margin-top:28px">🔲 Pendente — Prioridade Média (pós-deploy)</h3>
     <div class="backlog-grid">
-      <div class="backlog-card medium">
-        <div class="card-pri">Média · Mês 5–6</div>
-        <div class="card-title">FRED API + Legislativo</div>
-        <div class="card-desc"><code>buscar_dados_publicos</code> ampliada com FRED (Federal Funds Rate, GDP, CPI) + dados Câmara/Senado. Dois gaps mais solicitados por analistas de defesa e governo.</div>
-      </div>
-      <div class="backlog-card medium">
-        <div class="card-pri">Média · Mês 5–6</div>
-        <div class="card-title">Ollama Local (A5 antecipado)</div>
-        <div class="card-desc"><code>LLM_PROVIDER=ollama</code> + Llama 3.3 70B. Provider Factory já pronta — só configurar. Reduz custo Anthropic ~70% em tarefas simples. Demonstrável como "soberania de processamento".</div>
-      </div>
-      <div class="backlog-card medium">
-        <div class="card-pri">Média · Mês 6–7</div>
-        <div class="card-title">Playbook Automatizado (C3)</div>
-        <div class="card-desc">Rota <code>POST /playbook/gerar</code> + DOCX com metodologia + prompts + cases. Base técnica pronta (Motor Dinâmico). Com 2 projetos reais no banco, gera o Playbook v1.0 automaticamente.</div>
-      </div>
-      <div class="backlog-card medium">
-        <div class="card-pri">Média · Mês 6</div>
-        <div class="card-title">Dashboard Gráficos KRATOS</div>
-        <div class="card-desc">Chart.js inline no painel de indicadores — gráfico de linha 30 dias por indicador. Tabela <code>indicators</code> já existe. Torna o painel cliente vendável em demonstrações.</div>
-      </div>
       <div class="backlog-card medium">
         <div class="card-pri">Média · Mês 6</div>
         <div class="card-title">VPN + Dados Proprietários (B2)</div>
@@ -1103,6 +1145,16 @@ swap=2GB</pre>
         <div class="card-pri">Média · Mês 6</div>
         <div class="card-title">Sliding Window por Tokens</div>
         <div class="card-desc">Substituir <code>.slice(-12)</code> (arbitrário) por janela baseada em token count (tiktoken). Previne degradação em análises de 20+ turnos.</div>
+      </div>
+      <div class="backlog-card medium">
+        <div class="card-pri">Média · Mês 7</div>
+        <div class="card-title">Audit Frontend</div>
+        <div class="card-desc">Modal de visualização de <code>audit_logs</code> para admins — exportação CSV. Backend GET /audit + /audit/stats já implementados.</div>
+      </div>
+      <div class="backlog-card medium">
+        <div class="card-pri">Média · Mês 7–8</div>
+        <div class="card-title">Rate Limiting Redis (multi-instância)</div>
+        <div class="card-desc">Substituir bucket in-memory por Redis sliding window quando escalar para múltiplas instâncias. Single-instance atual é suficiente até 2º contrato.</div>
       </div>
     </div>
 

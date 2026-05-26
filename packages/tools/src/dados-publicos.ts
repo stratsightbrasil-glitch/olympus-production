@@ -260,6 +260,72 @@ const IBGE_PAISES_SERIES: Record<string, { indicadorId: number; nome: string; un
   ibge_educacao:   { indicadorId: 77819, nome: 'Gasto público em educação (IBGE/Países)',           unidade: '% PIB' },
 };
 
+// ─── FRED (Federal Reserve Economic Data — stlouisfed.org) ───────────────────
+// Sem chave: funciona com limite de taxa. Com FRED_API_KEY: sem limitações.
+const FRED_SERIES: Record<string, { seriesId: string; nome: string; unidade: string }> = {
+  federal_funds_rate: { seriesId: 'FEDFUNDS',         nome: 'Taxa Básica FED (Federal Funds Rate)', unidade: '% a.a.' },
+  us_gdp:             { seriesId: 'GDP',               nome: 'PIB EUA (nominal)',                    unidade: 'US$ bi' },
+  us_cpi:             { seriesId: 'CPIAUCSL',          nome: 'Inflação EUA (CPI)',                   unidade: 'índice' },
+  us_unemployment:    { seriesId: 'UNRATE',            nome: 'Desemprego EUA',                       unidade: '%' },
+  us_10y_treasury:    { seriesId: 'GS10',              nome: 'Juros 10 anos EUA (Treasury)',         unidade: '% a.a.' },
+  dxy_index:          { seriesId: 'DTWEXBGS',          nome: 'Índice Dólar (DXY)',                   unidade: 'índice' },
+  us_trade_balance:   { seriesId: 'BOPGSTB',           nome: 'Balança Comercial EUA',                unidade: 'US$ bi' },
+  china_gdp_growth:   { seriesId: 'MKTGDPCNA646NWDB', nome: 'PIB China (US$ corrente, Banco Mun.)', unidade: 'US$' },
+};
+
+async function fetchFRED(seriesId: string): Promise<string> {
+  const apiKey = process.env.FRED_API_KEY;
+  const params = new URLSearchParams({
+    series_id: seriesId, file_type: 'json', limit: '3', sort_order: 'desc',
+    ...(apiKey ? { api_key: apiKey } : {}),
+  });
+  const url = `https://api.stlouisfed.org/fred/series/observations?${params}`;
+  const res = await fetch(url, { signal: AbortSignal.timeout(10000) });
+  if (!res.ok) throw new Error(`FRED HTTP ${res.status}`);
+  const data: any = await res.json();
+  const obs: Array<{ date: string; value: string }> = data.observations ?? [];
+  return obs.filter(o => o.value !== '.').map(o => `${o.date}: ${o.value}`).join(' | ') || '(sem dados)';
+}
+
+// ─── Câmara dos Deputados (dadosabertos.camara.leg.br/api/v2) ─────────────────
+async function fetchCamara(endpoint: string, params: Record<string, string>): Promise<string> {
+  const qs = new URLSearchParams({ ...params, itens: '5' });
+  const url = `https://dadosabertos.camara.leg.br/api/v2/${endpoint}?${qs}`;
+  const res = await fetch(url, { headers: { Accept: 'application/json' }, signal: AbortSignal.timeout(12000) });
+  if (!res.ok) throw new Error(`Câmara HTTP ${res.status}`);
+  const data: any = await res.json();
+  const items: any[] = data.dados ?? [];
+  if (items.length === 0) return '(sem resultados)';
+  if (endpoint === 'proposicoes') {
+    return items.map(p =>
+      `[${p.siglaTipo ?? '?'} ${p.numero ?? ''}/${p.ano ?? ''}] ${(p.ementa ?? '').slice(0, 120)}`
+    ).join('\n');
+  }
+  if (endpoint === 'votacoes') {
+    return items.map(v =>
+      `[${(v.data ?? '').slice(0, 10)}] ${v.proposicaoObjeto ?? v.descricao ?? v.siglaOrgao ?? '—'}`
+    ).join('\n');
+  }
+  return items.map(i => JSON.stringify(i)).slice(0, 3).join('\n');
+}
+
+// ─── Senado Federal (legis.senado.leg.br/dadosabertos) ───────────────────────
+async function fetchSenado(path: string, params?: Record<string, string>): Promise<string> {
+  const qs = params ? `?${new URLSearchParams(params)}` : '';
+  const url = `https://legis.senado.leg.br/dadosabertos/${path}${qs}`;
+  const res = await fetch(url, { headers: { Accept: 'application/json' }, signal: AbortSignal.timeout(12000) });
+  if (!res.ok) throw new Error(`Senado HTTP ${res.status}`);
+  const data: any = await res.json();
+  // Senado Matérias recentes
+  const materias = data?.ListaMateriasRecentes?.Materias?.Materia
+    ?? data?.VotacoesRecentes?.Votacoes?.Votacao ?? [];
+  const arr: any[] = Array.isArray(materias) ? materias : [materias];
+  if (arr.length === 0) return JSON.stringify(data).slice(0, 400);
+  return arr.slice(0, 5).map((m: any) =>
+    `[${m.Ano ?? m.DataSessao?.slice(0, 10) ?? '?'}] ${m.DescricaoIdentificacao ?? m.DescricaoVotacao ?? m.Ementa ?? '—'}`.slice(0, 150)
+  ).join('\n');
+}
+
 // ─── ITU DataHub ──────────────────────────────────────────────────────────────
 let _ituToken: string | null = null;
 let _ituTokenTs = 0;
@@ -403,20 +469,28 @@ const ALL_INDICATORS = [
   'ibge_pais_perfil', 'ibge_turistas', 'ibge_educacao',
   // ITU DataHub
   'itu_internet', 'itu_celular', 'itu_banda_larga', 'itu_movel_bb', 'itu_idi',
+  // FRED (Federal Reserve — EUA)
+  'federal_funds_rate', 'us_gdp', 'us_cpi', 'us_unemployment',
+  'us_10y_treasury', 'dxy_index', 'us_trade_balance', 'china_gdp_growth',
+  // Legislativo Brasileiro
+  'proposicoes_camara', 'votacoes_camara', 'votacoes_senado',
 ];
 
 export const dadosPublicosTool: Tool<DadosPublicosArgs> = {
   name: 'buscar_dados_publicos',
-  description: `Busca indicadores macroeconômicos, sociais e financeiros em APIs oficiais nacionais e internacionais, além de atos normativos do Diário Oficial da União.
+  description: `Busca indicadores macroeconômicos, sociais, financeiros e legislativos em APIs oficiais nacionais e internacionais, além de atos normativos do Diário Oficial da União.
 
 FONTES NACIONAIS (Brasil):
 • BCB/SGS: selic, cdi, ipca, ipca_12m, igpm, cambio_venda, cambio_compra, reservas, divida_pib, credito_pib, ibc_br
 • IBGE: desemprego, pib_tri, pib_anual
 • IPEA Data: divida_bruta, tjlp, divida_externa, igpdi, fbkf
 • Comex Stat (MDic): exportacoes, importacoes, balanca_comercial
+• Câmara dos Deputados: proposicoes_camara (proposições dos últimos 30 dias), votacoes_camara
+• Senado Federal: votacoes_senado (votações recentes em plenário)
 • DOU Seção 1 (INLABS): use termo_dou para buscar atos normativos recentes
 
 FONTES INTERNACIONAIS (use parâmetro "pais" com ISO3, padrão BRA):
+• FRED (Federal Reserve — EUA, sem chave ou com FRED_API_KEY): federal_funds_rate, us_gdp, us_cpi, us_unemployment, us_10y_treasury, dxy_index, us_trade_balance, china_gdp_growth
 • Banco Mundial (WB): wb_pib, wb_crescimento, wb_inflacao_wb, wb_conta_corrente, wb_divida_central, wb_fdi, wb_desemprego, wb_populacao, wb_gini, wb_exportacoes, wb_importacoes
 • FMI/WEO (inclui previsões marcadas com *): imf_crescimento, imf_inflacao, imf_conta_corrente, imf_divida_publica, imf_desemprego, imf_saldo_fiscal
 • OMS/WHO (GHO): who_expectativa_vida, who_mortalidade_infantil, who_mortalidade_materna, who_cobertura_vacinas
@@ -425,7 +499,8 @@ FONTES INTERNACIONAIS (use parâmetro "pais" com ISO3, padrão BRA):
 • ITU DataHub: itu_internet, itu_celular, itu_banda_larga, itu_movel_bb, itu_idi
 
 Países disponíveis para ONU: BRA, USA, CHN, RUS, IND, ARG, COL, MEX, PER, CHL, DEU, FRA, GBR, ESP, ITA, JPN, ZAF.
-Países disponíveis para IBGE Países/ITU: BRA, USA, ARG, COL, MEX, DEU, FRA, GBR, ESP, ITA, CHN, IND, JPN, ZAF e outros (ISO3).`,
+Países disponíveis para IBGE Países/ITU: BRA, USA, ARG, COL, MEX, DEU, FRA, GBR, ESP, ITA, CHN, IND, JPN, ZAF e outros (ISO3).
+FRED: sempre EUA (parâmetro "pais" ignorado).`,
   schema: {
     type: 'object',
     properties: {
@@ -450,7 +525,7 @@ Países disponíveis para IBGE Países/ITU: BRA, USA, ARG, COL, MEX, DEU, FRA, G
 
   execute: async (args: DadosPublicosArgs, _context: any) => {
     const pais = (args.pais ?? 'BRA').toUpperCase();
-    const linhas: string[] = [`[DADOS OFICIAIS — BCB · IBGE · IPEA · COMEX · WB · FMI · OMS · ONU · IBGE-PAÍSES · ITU · DOU | país: ${pais}]`];
+    const linhas: string[] = [`[DADOS OFICIAIS — BCB · IBGE · IPEA · COMEX · WB · FMI · OMS · ONU · IBGE-PAÍSES · ITU · FRED · CÂMARA · SENADO · DOU | país: ${pais}]`];
 
     // ── Indicadores ──────────────────────────────────────────────────────────
     if (args.indicadores?.length > 0) {
@@ -526,6 +601,31 @@ Países disponíveis para IBGE Países/ITU: BRA, USA, ARG, COL, MEX, DEU, FRA, G
           try { return `• ${s.nome} (${s.unidade}) [ITU/${pais}]: ${await fetchItu(s.code, pais)}`; }
           catch (e: any) { return `• ${s.nome}: indisponível (${e.message})`; }
         }
+        // ── FRED (Federal Reserve) ──
+        if (FRED_SERIES[ind]) {
+          const s = FRED_SERIES[ind];
+          try { return `• ${s.nome} (${s.unidade}) [FRED/EUA]: ${await fetchFRED(s.seriesId)}`; }
+          catch (e: any) { return `• ${s.nome}: indisponível (${e.message})`; }
+        }
+        // ── Câmara dos Deputados ──
+        if (ind === 'proposicoes_camara') {
+          try {
+            const hoje = new Date().toISOString().slice(0, 10);
+            const inicio = new Date(Date.now() - 30 * 24 * 3600 * 1000).toISOString().slice(0, 10);
+            return `• Proposições recentes (Câmara) [BR]: ${await fetchCamara('proposicoes', { dataInicio: inicio, dataFim: hoje, ordem: 'DESC', ordenarPor: 'id' })}`;
+          } catch (e: any) { return `• Proposições (Câmara): indisponível (${e.message})`; }
+        }
+        if (ind === 'votacoes_camara') {
+          try {
+            return `• Votações recentes (Câmara) [BR]: ${await fetchCamara('votacoes', { ordem: 'DESC', ordenarPor: 'dataHoraRegistro' })}`;
+          } catch (e: any) { return `• Votações (Câmara): indisponível (${e.message})`; }
+        }
+        // ── Senado Federal ──
+        if (ind === 'votacoes_senado') {
+          try {
+            return `• Votações recentes (Senado) [BR]: ${await fetchSenado('plenario/votacao/recente')}`;
+          } catch (e: any) { return `• Votações (Senado): indisponível (${e.message})`; }
+        }
         return `• "${ind}": indicador não reconhecido.`;
       });
 
@@ -542,7 +642,7 @@ Países disponíveis para IBGE Países/ITU: BRA, USA, ARG, COL, MEX, DEU, FRA, G
       catch (e: any) { linhas.push(`⚠️ ${e.message}`); }
     }
 
-    linhas.push('\nFontes: api.bcb.gov.br · ibge.gov.br · ipeadata.gov.br · comexstat.mdic.gov.br · api.worldbank.org · imf.org/datamapper · ghoapi.azureedge.net · population.un.org · servicodados.ibge.gov.br/paises · api.datahub.itu.int · inlabs.in.gov.br');
+    linhas.push('\nFontes: api.bcb.gov.br · ibge.gov.br · ipeadata.gov.br · comexstat.mdic.gov.br · api.worldbank.org · imf.org/datamapper · ghoapi.azureedge.net · population.un.org · servicodados.ibge.gov.br/paises · api.datahub.itu.int · api.stlouisfed.org/fred · dadosabertos.camara.leg.br · legis.senado.leg.br · inlabs.in.gov.br');
     const resultado = linhas.join('\n');
     console.log(`[DadosPublicos] ✅ Concluído.`);
     return resultado;

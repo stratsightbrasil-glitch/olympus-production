@@ -2,8 +2,48 @@ import { Hono } from 'hono';
 import { Document, Packer, Paragraph, TextRun, HeadingLevel,
          AlignmentType, BorderStyle, Table, TableRow, TableCell,
          WidthType, ShadingType, Header, Footer, PageNumber } from 'docx';
+import { db, methodologyPhases, methodologies } from '@olympus/db';
+import { eq } from 'drizzle-orm';
+import { parseMarkdownToHtml } from '../utils/markdown';
 
 const exportRoutes = new Hono();
+
+interface PhaseInfo { label: string; phaseNum: number; color: string; }
+
+const PHASE_PALETTE = ['#1565C0','#4527A0','#B71C1C','#BF360C','#37474F','#004D40','#1B3A2D'];
+
+async function resolveAgentPhases(methodologySlug: string): Promise<Map<string, PhaseInfo>> {
+  try {
+    const method = await db.query.methodologies.findFirst({
+      where: eq(methodologies.slug, methodologySlug),
+    });
+    if (!method) return new Map();
+    const phases = await db.select().from(methodologyPhases)
+      .where(eq(methodologyPhases.methodologyId, method.id))
+      .orderBy(methodologyPhases.phaseNum);
+    const map = new Map<string, PhaseInfo>();
+    for (const phase of phases) {
+      if (!map.has(phase.agentRole)) {
+        map.set(phase.agentRole, {
+          label: phase.label,
+          phaseNum: phase.phaseNum,
+          color: PHASE_PALETTE[Math.min(phase.phaseNum - 1, PHASE_PALETTE.length - 1)],
+        });
+      }
+    }
+    return map;
+  } catch { return new Map(); }
+}
+
+function lookupPhase(phaseMap: Map<string, PhaseInfo>, agentKey: string): PhaseInfo {
+  const exact = phaseMap.get(agentKey);
+  if (exact) return exact;
+  if (agentKey.startsWith('HERMES')) {
+    const base = phaseMap.get('HERMES');
+    if (base) return base;
+  }
+  return { label: 'Análise', phaseNum: 0, color: '#1B3A2D' };
+}
 
 const escHtml = (s: string) => (s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#x27;');
 
@@ -25,7 +65,7 @@ function parseInline(text: string, size: number): any[] {
   return runs.length > 0 ? runs : [new TextRun({ text, size })];
 }
 
-function buildDocx(projeto: any, messages: any[]) {
+function buildDocx(projeto: any, messages: any[], phaseMap: Map<string, PhaseInfo>) {
   const { nome, cliente, analista, horizonte, classificacao } = projeto;
   const children: any[] = [];
 
@@ -63,14 +103,7 @@ function buildDocx(projeto: any, messages: any[]) {
   children.push(new Table({ rows: metaRows, width: { size: 100, type: WidthType.PERCENTAGE } }));
   children.push(new Paragraph({ children: [new TextRun({ text: '' })], pageBreakBefore: true }));
 
-  const DOCX_PHASE_LABELS: Record<string, string> = {
-    SCOPUS: 'Enquadramento Estratégico', KLIO: 'Análise Ambiental',
-    PYTHIA: 'Cenários Prospectivos', MNEMOSYNE: 'Narrativas de Cenários',
-    THEMIS: 'Implicações e Alertas', KRATOS: 'Monitoramento Contínuo',
-    HERMES: 'Síntese e Conclusão', HERMES_GRUMBACH: 'Síntese e Conclusão',
-    HERMES_GODET: 'Síntese e Conclusão', HERMES_SIEX: 'Síntese e Conclusão',
-  };
-  const DOCX_AGENT_MARKER_RE = /\*\*(HERMES(?:_\w+)?|SCOPUS|KLIO|PYTHIA|MNEMOSYNE|THEMIS|KRATOS|HERMES_REVISOR)\*\*\s*[··•\-]\s*/g;
+  const DOCX_AGENT_MARKER_RE = /\*\*[A-Z][A-Z_]*\*\*\s*[··•\-]\s*/g;
 
   const filtered = messages.filter(m =>
     m && m.role === 'assistant' && m.content?.trim() &&
@@ -79,18 +112,14 @@ function buildDocx(projeto: any, messages: any[]) {
 
   const docxPhasesSeen = new Set<string>();
   for (const msg of filtered) {
-    const upper = msg.content.toUpperCase().slice(0, 300);
-    let agente = 'HERMES';
-    for (const a of ['HERMES_GRUMBACH','HERMES_GODET','HERMES_SIEX','KRATOS','MNEMOSYNE','THEMIS','PYTHIA','KLIO','SCOPUS','HERMES']) {
-      if (upper.includes(a)) { agente = a; break; }
-    }
-    const phaseLabel = DOCX_PHASE_LABELS[agente] || 'Análise';
-    // Evita repetir o mesmo cabeçalho de fase (ex: múltiplas mensagens do HERMES)
-    if (!docxPhasesSeen.has(phaseLabel) || agente === 'HERMES') {
-      if (!docxPhasesSeen.has(phaseLabel)) {
-        docxPhasesSeen.add(phaseLabel);
-        children.push(new Paragraph({ children: [new TextRun({ text: phaseLabel, bold: true, size: 20, color: 'FFFFFF' })], spacing: { before: 300, after: 0 }, shading: { type: ShadingType.SOLID, fill: '1B3A2D' } }));
-      }
+    const markerMatch = /\*\*([A-Z][A-Z_]*)\*\*\s*[··•\-]/.exec(msg.content.slice(0, 300));
+    const agente = markerMatch?.[1] ?? (msg.agentName ?? 'HERMES');
+    const phaseInfo = lookupPhase(phaseMap, agente);
+    const phaseLabel = phaseInfo.label;
+    const phaseFill = phaseInfo.color.replace('#', '');
+    if (!docxPhasesSeen.has(phaseLabel)) {
+      docxPhasesSeen.add(phaseLabel);
+      children.push(new Paragraph({ children: [new TextRun({ text: phaseLabel, bold: true, size: 20, color: 'FFFFFF' })], spacing: { before: 300, after: 0 }, shading: { type: ShadingType.SOLID, fill: phaseFill } }));
     }
 
       // Remove todos os marcadores de agente do conteúdo antes de processar
@@ -136,127 +165,25 @@ function buildDocx(projeto: any, messages: any[]) {
   });
 }
 
-function buildHtml(projeto: any, messages: any[], tipo: string = 'relatorio') {
+function buildHtml(projeto: any, messages: any[], tipo: string = 'relatorio', phaseMap: Map<string, PhaseInfo> = new Map()) {
   const { nome, cliente, analista, horizonte, classificacao } = projeto;
   const filename = `${(nome || 'Relatorio').replace(/[<>:"/\\|?*]/g,'').replace(/\s+/g,'_')}_${tipo}`;
   const agora = new Date().toLocaleDateString('pt-BR', { day:'2-digit', month:'long', year:'numeric', hour:'2-digit', minute:'2-digit', timeZone: 'America/Sao_Paulo' });
 
-  // Mapeamento agente → fase da metodologia (sem expor nomes internos ao cliente)
-  const PHASE_LABELS: Record<string, string> = {
-    SCOPUS:    'Enquadramento Estratégico',
-    KLIO:      'Análise Ambiental',
-    PYTHIA:    'Cenários Prospectivos',
-    MNEMOSYNE: 'Narrativas de Cenários',
-    THEMIS:    'Implicações e Alertas',
-    KRATOS:    'Monitoramento Contínuo',
-    HERMES:    'Síntese e Conclusão',
-    HERMES_GRUMBACH: 'Síntese e Conclusão',
-    HERMES_GODET:    'Síntese e Conclusão',
-    HERMES_SIEX:     'Síntese e Conclusão',
-  };
-  const PHASE_COLORS: Record<string, string> = {
-    SCOPUS: '#1565C0', KLIO: '#4527A0', PYTHIA: '#B71C1C',
-    MNEMOSYNE: '#BF360C', THEMIS: '#37474F', KRATOS: '#004D40',
-    HERMES: '#1B3A2D', HERMES_GRUMBACH: '#1B3A2D', HERMES_GODET: '#1B3A2D', HERMES_SIEX: '#1B3A2D',
-  };
 
-  // ── Markdown → HTML ──────────────────────────────────────────────────────────
-  const mdToHtml = (text: string): string => {
-    if (!text) return '';
-    const inline = (s: string) => escHtml(s)
-      .replace(/\*\*\*(.+?)\*\*\*/g, '<strong><em>$1</em></strong>')
-      .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-      .replace(/\*(.+?)\*/g, '<em>$1</em>')
-      .replace(/`(.+?)`/g, '<code>$1</code>');
-
-    const lines = text.split('\n');
-    const out: string[] = [];
-    let ul = false, ol = false;
-    let tableRows: string[][] = [], inTable = false, tableFirstRow = true;
-
-    const flushList = () => {
-      if (ul) { out.push('</ul>'); ul = false; }
-      if (ol) { out.push('</ol>'); ol = false; }
-    };
-    const flushTable = () => {
-      if (!inTable || tableRows.length === 0) return;
-      const [head, ...body] = tableRows;
-      out.push('<table>');
-      out.push('<thead><tr>' + head.map(c => `<th>${inline(c)}</th>`).join('') + '</tr></thead>');
-      if (body.length) {
-        out.push('<tbody>');
-        body.forEach(row => out.push('<tr>' + row.map(c => `<td>${inline(c)}</td>`).join('') + '</tr>'));
-        out.push('</tbody>');
-      }
-      out.push('</table>');
-      tableRows = []; inTable = false; tableFirstRow = true;
-    };
-
-    for (const line of lines) {
-      const t = line.trim();
-      // Table
-      if (/^\|/.test(t) && /\|$/.test(t)) {
-        flushList();
-        if (/^[\s|:-]+$/.test(t)) { tableFirstRow = false; continue; }
-        tableRows.push(t.split('|').map(c => c.trim()).filter(Boolean));
-        inTable = true;
-        continue;
-      }
-      if (inTable) flushTable();
-      // Headings
-      if (/^####\s/.test(line)) { flushList(); out.push(`<h4>${inline(line.replace(/^####\s*/,''))}</h4>`); continue; }
-      if (/^###\s/.test(line))  { flushList(); out.push(`<h3>${inline(line.replace(/^###\s*/,''))}</h3>`); continue; }
-      if (/^##\s/.test(line))   { flushList(); out.push(`<h2>${inline(line.replace(/^##\s*/,''))}</h2>`); continue; }
-      if (/^#\s/.test(line))    { flushList(); out.push(`<h1>${inline(line.replace(/^#\s*/,''))}</h1>`); continue; }
-      // HR
-      if (/^[-─═*]{3,}$/.test(t)) { flushList(); out.push('<hr>'); continue; }
-      // Lists
-      if (/^\s*[-*•]\s/.test(line)) {
-        if (ol) { out.push('</ol>'); ol = false; }
-        if (!ul) { out.push('<ul>'); ul = true; }
-        out.push(`<li>${inline(line.replace(/^\s*[-*•]\s+/,''))}</li>`);
-        continue;
-      }
-      if (/^\s*\d+\.\s/.test(line)) {
-        if (ul) { out.push('</ul>'); ul = false; }
-        if (!ol) { out.push('<ol>'); ol = true; }
-        out.push(`<li>${inline(line.replace(/^\s*\d+\.\s+/,''))}</li>`);
-        continue;
-      }
-      // Empty — skip; CSS margins handle spacing between block elements
-      if (!t) { flushList(); continue; }
-      // Paragraph
-      flushList();
-      out.push(`<p>${inline(t)}</p>`);
-    }
-    flushList(); flushTable();
-    return out.join('\n');
-  };
+  const mdToHtml = (text: string) => parseMarkdownToHtml(text);
 
   // ── Body ─────────────────────────────────────────────────────────────────────
-  // Remove TODOS os marcadores de agente ("**AGENTE** · ") do conteúdo — globalmente
-  const KNOWN_AGENTS = ['HERMES_GRUMBACH','HERMES_GODET','HERMES_SIEX','HERMES_REVISOR','HERMES','KRATOS','MNEMOSYNE','THEMIS','PYTHIA','KLIO','SCOPUS'];
-  const AGENT_MARKER_RE = new RegExp(`\\*\\*(${KNOWN_AGENTS.join('|')})\\*\\*\\s*[··•\\-]\\s*`, 'g');
+  const AGENT_MARKER_RE = /\*\*[A-Z][A-Z_]*\*\*\s*[··•\-]\s*/g;
 
   const stripAllAgentMarkers = (text: string): string => {
-    // 1. Remove **AGENT** · markdown markers
     let result = text.replace(AGENT_MARKER_RE, '');
-    // 2. Remove plain-text agent coordination lines (e.g. "MNEMOSYNE entregou a Seção 1...")
+    // Remove linhas de coordenação de agente (ex: "MNEMOSYNE entregou a Seção 1...")
     result = result.split('\n').filter(line => {
       const t = line.trim();
-      return !KNOWN_AGENTS.some(agent =>
-        t.startsWith(agent) && t.length > agent.length && /[\s,.:;]/.test(t[agent.length])
-      );
+      return !/^[A-Z][A-Z_]{3,}[\s,.:;]/.test(t);
     }).join('\n');
     return result;
-  };
-
-  // Detecta agente pela assinatura no início do conteúdo
-  const detectAgent = (content: string): string => {
-    const upper = content.slice(0, 300).toUpperCase();
-    const ORDER = ['HERMES_GRUMBACH','HERMES_GODET','HERMES_SIEX','KRATOS','MNEMOSYNE','THEMIS','PYTHIA','KLIO','SCOPUS','HERMES'];
-    for (const a of ORDER) { if (upper.includes(a)) return a; }
-    return 'HERMES';
   };
 
   // Para o relatório padrão (single message): renderiza limpo, sem cabeçalho de agente
@@ -279,9 +206,11 @@ function buildHtml(projeto: any, messages: any[], tipo: string = 'relatorio') {
     // Estendido: uma seção por agente/fase, sem expor nomes de agentes
     const phasesSeen = new Set<string>();
     for (const msg of agentMsgsOnly) {
-      const agente = detectAgent(msg.content);
-      const phaseLabel = PHASE_LABELS[agente] || 'Análise';
-      const color = PHASE_COLORS[agente] || '#1B3A2D';
+      const markerMatch = /\*\*([A-Z][A-Z_]*)\*\*\s*[··•\-]/.exec(msg.content.slice(0, 300));
+      const agente = markerMatch?.[1] ?? (msg.agentName ?? 'HERMES');
+      const phaseInfo = lookupPhase(phaseMap, agente);
+      const phaseLabel = phaseInfo.label;
+      const color = phaseInfo.color;
       // Evita repetir a mesma fase seguida (ex: múltiplas mensagens de HERMES)
       const phaseKey = agente;
       const cleanContent = stripAllAgentMarkers(msg.content);
@@ -320,6 +249,9 @@ body { font-family: 'Segoe UI', Inter, system-ui, -apple-system, sans-serif; fon
 .save-bar-hint { font-size: 11px; opacity: .65; }
 .save-btn { background: #C9A84C; color: #1B3A2D; font-weight: 800; border: none; padding: 7px 20px; border-radius: 4px; cursor: pointer; font-size: 12px; white-space: nowrap; letter-spacing: .3px; }
 .save-btn:hover { background: #d4b45a; }
+/* ── Marca d'água ── */
+.watermark { position: fixed; top: 50%; left: 50%; transform: translate(-50%,-50%) rotate(-45deg); font-size: 110px; font-weight: 900; color: rgba(180,0,0,0.06); white-space: nowrap; pointer-events: none; z-index: 0; user-select: none; letter-spacing: 4px; }
+@media print { .watermark { position: fixed; top: 50%; left: 50%; } }
 
 /* ── Cover ── */
 .cover { display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 94vh; padding: 60px 40px; page-break-after: always; text-align: center; }
@@ -411,6 +343,8 @@ tr:nth-child(even) td { background: #f9fbfa; }
 </head>
 <body>
 
+<div class="watermark" aria-hidden="true">${(classificacao || 'CONFIDENCIAL').toUpperCase()}</div>
+
 <div class="save-bar">
   <div class="save-bar-left">
     <span>📄</span>
@@ -471,43 +405,8 @@ function buildEstimativaHtml(projeto: any, messages: any[]) {
   const interpretacaoBlock= getBlock(['FATORES DE INFLUÊNCIA', 'HIPÓTESE', 'DELINEAMENTO', 'INTERPRETAÇÃO', 'FASE 4']);
   const conclusaoBlock    = getBlock(['H1', 'H2', 'PROBABILIDADE ESTIMADA', 'CONCLUSÃO', 'FASE 5', 'FORMALIZAÇÃO']);
 
-  // Markdown → HTML inline (reutiliza lógica similar ao buildHtml)
-  const escH = (s: string) => (s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-  const inline = (s: string) => escH(s)
-    .replace(/\*\*\*(.+?)\*\*\*/g,'<strong><em>$1</em></strong>')
-    .replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>')
-    .replace(/\*(.+?)\*/g,'<em>$1</em>')
-    .replace(/`(.+?)`/g,'<code>$1</code>');
-
-  const md2html = (text: string): string => {
-    if (!text) return '<p><em>(sem conteúdo)</em></p>';
-    const lines = text.split('\n');
-    const out: string[] = [];
-    let ul = false, ol = false;
-    let tableRows: string[][] = [], inTable = false;
-
-    const flushList  = () => { if (ul) { out.push('</ul>'); ul=false; } if (ol) { out.push('</ol>'); ol=false; } };
-    const flushTable = () => {
-      if (!inTable || tableRows.length === 0) return;
-      const [head, ...body] = tableRows;
-      out.push('<table><thead><tr>' + head.map(c=>`<th>${inline(c)}</th>`).join('') + '</tr></thead>');
-      if (body.length) { out.push('<tbody>'); body.forEach(r=>out.push('<tr>'+r.map(c=>`<td>${inline(c)}</td>`).join('')+'</tr>')); out.push('</tbody>'); }
-      out.push('</table>'); tableRows=[]; inTable=false;
-    };
-    for (const line of lines) {
-      const t = line.trim();
-      if (/^\|/.test(t) && /\|$/.test(t)) { flushList(); if (/^[\s|:-]+$/.test(t)) continue; tableRows.push(t.split('|').map(c=>c.trim()).filter(Boolean)); inTable=true; continue; }
-      if (inTable) flushTable();
-      if (/^#{1,4}\s/.test(line)) { flushList(); const lvl=line.match(/^(#+)/)?.[1].length||1; const txt=line.replace(/^#+\s*/,''); out.push(`<h${lvl}>${inline(txt)}</h${lvl}>`); continue; }
-      if (/^[-─═*]{3,}$/.test(t)) { flushList(); out.push('<hr>'); continue; }
-      if (/^\s*[-*•]\s/.test(line)) { if (ol){out.push('</ol>');ol=false;} if(!ul){out.push('<ul>');ul=true;} out.push(`<li>${inline(line.replace(/^\s*[-*•]\s+/,''))}</li>`); continue; }
-      if (/^\s*\d+\.\s/.test(line)) { if (ul){out.push('</ul>');ul=false;} if(!ol){out.push('<ol>');ol=true;} out.push(`<li>${inline(line.replace(/^\s*\d+\.\s+/,''))}</li>`); continue; }
-      if (!t) { flushList(); continue; }
-      flushList(); out.push(`<p>${inline(t)}</p>`);
-    }
-    flushList(); flushTable();
-    return out.join('\n');
-  };
+  const md2html = (text: string) =>
+    parseMarkdownToHtml(text, { emptyPlaceholder: '<p><em>(sem conteúdo)</em></p>' });
 
   const css = `
 @page { margin: 2.5cm 3cm 2.5cm; size: A4; }
@@ -594,12 +493,12 @@ tr:nth-child(even) td { background:#f9f9f9; }
     <div class="doc-titulo">Estimativa</div>
     <div class="doc-subtitulo">Sistema de Inteligência do Exército (SIEx) · EB70-MT-10.401</div>
     <div class="doc-meta">
-      <span><strong>Assunto:</strong> ${escH(nome || '—')}</span>
+      <span><strong>Assunto:</strong> ${escHtml(nome || '—')}</span>
       <span><strong>Data:</strong> ${agora}</span>
     </div>
     <div class="doc-meta">
-      <span><strong>Usuário:</strong> ${escH(cliente || analista || '—')}</span>
-      <span><strong>Horizonte:</strong> ${escH(horizonte || '—')}</span>
+      <span><strong>Usuário:</strong> ${escHtml(cliente || analista || '—')}</span>
+      <span><strong>Horizonte:</strong> ${escHtml(horizonte || '—')}</span>
     </div>
   </div>
 
@@ -648,7 +547,9 @@ exportRoutes.post('/estimativa', async (c) => {
 exportRoutes.post('/docx', async (c) => {
   try {
     const { projeto, messages } = (await c.req.json()) as any;
-    const doc = buildDocx(projeto || {}, messages || []);
+    const slug = (projeto?.metodologia || 'msef').toLowerCase();
+    const phaseMap = await resolveAgentPhases(slug);
+    const doc = buildDocx(projeto || {}, messages || [], phaseMap);
     const buffer = await Packer.toBuffer(doc);
     const filename = `StratSight_${(projeto?.nome || 'Cenarios').replace(/\s+/g, '_')}_${new Date().toISOString().slice(0,10)}.docx`;
     return new Response(buffer as any, { status: 200, headers: { 'Content-Type': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'Content-Disposition': `attachment; filename="${filename}"` } });
@@ -658,7 +559,9 @@ exportRoutes.post('/docx', async (c) => {
 exportRoutes.post('/pdf', async (c) => {
   try {
     const { projeto, messages, tipo } = (await c.req.json()) as any;
-    const html = buildHtml(projeto || {}, messages || [], tipo || 'relatorio');
+    const slug = (projeto?.metodologia || 'msef').toLowerCase();
+    const phaseMap = await resolveAgentPhases(slug);
+    const html = buildHtml(projeto || {}, messages || [], tipo || 'relatorio', phaseMap);
     return new Response(html, { status: 200, headers: { 'Content-Type': 'text/html; charset=utf-8' } });
   } catch (e: any) { return c.json({ error: e.message }, 500); }
 });

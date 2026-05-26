@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { AgentMark } from '../ui/AgentMark';
 import type { Agent } from '../ui/AgentMark/types';
 import type { MethodologyStep } from '../../data/methodologySteps';
-import { METHODOLOGY_DEFS, DEFAULT_STEPS } from '../../data/methodologySteps';
+import { DEFAULT_STEPS } from '../../data/methodologySteps';
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
 
@@ -18,6 +18,7 @@ interface CommandBarProps {
   onToggleSidebar: () => void;
   onNovaSessao: () => void;
   onGerarRelatorio: () => void;
+  onGerarPlaybook?: () => void;
   onCopyClientLink: () => void;
   onToggleKratos?: () => void;
   // Linha 2 — subbar (dados do projeto)
@@ -25,6 +26,7 @@ interface CommandBarProps {
   horizonte?: string;
   questaoEstrategica?: string;
   classificacao?: string;
+  teamName?: string;
   // Linha 3 — stepper dinâmico
   methodologyName?: string;
   methodologySteps?: MethodologyStep[];
@@ -38,9 +40,7 @@ interface CommandBarProps {
 
 // ─── Constantes ───────────────────────────────────────────────────────────────
 
-// Mantido apenas para retrocompatibilidade com usos externos se houver.
-// O CommandBar usa methodologySteps prop ou fallback via METHODOLOGY_DEFS.
-const _MSEF_STEPS_LEGACY = METHODOLOGY_DEFS['MSEF'] ?? DEFAULT_STEPS;
+
 
 const CLASSIF_COLORS: Record<string, { bg: string; color: string; border: string }> = {
   confidencial: { bg: '#FFF3E0', color: '#E65100', border: '#FFB74D' },
@@ -55,7 +55,7 @@ const CLASSIF_COLORS: Record<string, { bg: string; color: string; border: string
 function EngineChip({ mode }: { mode: string }) {
   const isKratos = mode === 'monitoring';
   const label = isKratos ? 'KRATOS' : 'ATHENA';
-  const agent: Agent = isKratos ? 'KRATOS' : 'HERMES';
+  const agent: Agent = isKratos ? 'KRATOS' : 'ATHENA';
   return (
     <div style={{
       display: 'flex', alignItems: 'center', gap: 7,
@@ -244,14 +244,16 @@ function LlmSelector({
 
 export function CommandBar({
   mode, projetoNome, progressAgent, streamingText, currentStep, user,
-  mainView, onToggleSidebar, onNovaSessao, onGerarRelatorio, onCopyClientLink, onToggleKratos,
-  cliente, horizonte, questaoEstrategica, classificacao,
+  mainView, onToggleSidebar, onNovaSessao, onGerarRelatorio, onGerarPlaybook, onCopyClientLink, onToggleKratos,
+  cliente, horizonte, questaoEstrategica, classificacao, teamName,
   methodologyName = 'MSEF', methodologySteps,
   llmConfig, anthropicModels, ollamaModels, ollamaAvailable, onLlmChange,
 }: CommandBarProps) {
-  const steps: MethodologyStep[] = methodologySteps ?? METHODOLOGY_DEFS[methodologyName] ?? DEFAULT_STEPS;
+  const steps: MethodologyStep[] = methodologySteps ?? DEFAULT_STEPS;
   const isCliente = user?.role === 'cliente';
   const activeAgent = progressAgent || (streamingText ? 'HERMES' : '');
+  const activeStep = activeAgent ? (steps.find(s => s.agent === activeAgent) ?? steps.find(s => s.num === currentStep)) : undefined;
+  const agentChipText = activeStep ? `${activeAgent} · ${activeStep.label}` : activeAgent;
 
   const btnBase: React.CSSProperties = {
     background: 'none',
@@ -267,7 +269,7 @@ export function CommandBar({
   const classifKey = (classificacao || '').toLowerCase();
   const classifStyle = CLASSIF_COLORS[classifKey] ?? CLASSIF_COLORS.confidencial;
 
-  const hasSubbar = !!(projetoNome && (cliente || horizonte || questaoEstrategica || classificacao));
+  const hasSubbar = !!(projetoNome && (cliente || horizonte || questaoEstrategica || classificacao || teamName));
   const hasStepper = !!(projetoNome && mode !== 'monitoring');
 
   return (
@@ -319,29 +321,17 @@ export function CommandBar({
         {/* Engine chip */}
         <EngineChip mode={mode} />
 
-        {/* Título do projeto */}
-        {projetoNome && (
-          <div style={{
-            fontFamily: "'DM Mono','Cascadia Code',monospace",
-            fontSize: 10.5, letterSpacing: '1.6px', color: '#A3C9AE',
-            textTransform: 'uppercase', fontWeight: 600,
-            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-            maxWidth: 240, flex: 1, minWidth: 0,
-          }}>
-            {projetoNome}
-          </div>
-        )}
-
         {/* Agente ativo */}
         {activeAgent && (
           <div style={{
             display: 'flex', alignItems: 'center', gap: 6,
             background: 'rgba(255,255,255,.06)', border: '1px solid rgba(255,255,255,.08)',
-            borderRadius: 20, padding: '4px 10px',
-            fontSize: 10.5, color: '#A3C9AE', flexShrink: 0,
+            borderRadius: 20, padding: '4px 12px',
+            fontSize: 10.5, color: '#A3C9AE',
+            whiteSpace: 'nowrap' as const,
           }}>
             <div style={{ width: 6, height: 6, borderRadius: '50%', background: '#4CAF50', boxShadow: '0 0 6px #4CAF50', animation: 'pulse-dot 2s ease-in-out infinite', flexShrink: 0 }} />
-            {activeAgent} analisando
+            {agentChipText} analisando
           </div>
         )}
 
@@ -371,6 +361,18 @@ export function CommandBar({
               ↓ Exportar
             </button>
 
+            {onGerarPlaybook && projetoNome && (
+              <button
+                onClick={onGerarPlaybook}
+                style={btnBase}
+                onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,.07)'; e.currentTarget.style.color = '#fff'; }}
+                onMouseLeave={e => { e.currentTarget.style.background = 'none'; e.currentTarget.style.color = '#A3C9AE'; }}
+                title="Gerar Playbook DOCX"
+              >
+                📘 Playbook
+              </button>
+            )}
+
             {projetoNome && (
               <button
                 onClick={onCopyClientLink}
@@ -379,7 +381,7 @@ export function CommandBar({
                 onMouseLeave={e => { e.currentTarget.style.background = 'none'; e.currentTarget.style.color = '#A3C9AE'; }}
                 title="Link do cliente"
               >
-                ⎘ Link
+                🔗 Link
               </button>
             )}
 
@@ -455,6 +457,10 @@ export function CommandBar({
           display: 'flex', alignItems: 'center',
           padding: '0 22px', gap: 18, overflow: 'hidden',
         }}>
+          {teamName && (
+            <MetaPair label="Equipe" value={teamName} />
+          )}
+          {teamName && (cliente || horizonte) && <Divider />}
           {cliente && (
             <MetaPair label="Cliente" value={cliente} />
           )}
@@ -463,10 +469,11 @@ export function CommandBar({
             <MetaPair label="Horizonte" value={horizonte} />
           )}
           {horizonte && questaoEstrategica && <Divider />}
-          {questaoEstrategica && (
-            <MetaPair label="QEC" value={questaoEstrategica} truncate />
-          )}
-          <div style={{ flex: 1 }} />
+          <div style={{ flex: 1, minWidth: 0 }}>
+            {questaoEstrategica && (
+              <MetaPair label="QEC" value={questaoEstrategica} truncate />
+            )}
+          </div>
           {classificacao && (
             <div style={{
               fontFamily: "'DM Mono','Cascadia Code',monospace",
@@ -559,7 +566,6 @@ function MetaPair({ label, value, truncate }: { label: string; value: string; tr
         overflow: truncate ? 'hidden' : undefined,
         textOverflow: truncate ? 'ellipsis' : undefined,
         whiteSpace: truncate ? 'nowrap' : undefined,
-        maxWidth: truncate ? 260 : undefined,
       }}>
         {value}
       </span>

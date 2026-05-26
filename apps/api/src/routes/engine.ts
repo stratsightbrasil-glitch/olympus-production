@@ -1,5 +1,6 @@
 import { Hono } from 'hono';
-import { db, tools, techniques, agents, methodologies } from '@olympus/db';
+import { db, tools, techniques, agents, methodologies, methodologyPhases } from '@olympus/db';
+import { eq } from 'drizzle-orm';
 
 const engineRoutes = new Hono();
 
@@ -88,16 +89,24 @@ engineRoutes.post('/install', async (c) => {
 });
 
 // Endpoint para listar as metodologias disponíveis
-// Retorna dados completos incluindo steps (do agentsConfig rico quando disponível)
+// Retorna dados completos incluindo steps derivados de methodology_phases (banco)
 engineRoutes.get('/methodologies', async (c) => {
   try {
-    const list = await db.query.methodologies.findMany();
+    const [list, phases] = await Promise.all([
+      db.query.methodologies.findMany(),
+      db.select({
+        methodologyId: methodologyPhases.methodologyId,
+        num:           methodologyPhases.phaseNum,
+        agent:         methodologyPhases.agentRole,
+        label:         methodologyPhases.label,
+      }).from(methodologyPhases).orderBy(methodologyPhases.phaseNum),
+    ]);
+
     return c.json(list.map(m => {
-      const cfg = m.agentsConfig;
-      const steps = (cfg && !Array.isArray(cfg) && Array.isArray((cfg as any).steps))
-        ? (cfg as any).steps
-        : null;
-      return { ...m, steps };
+      const steps = phases
+        .filter(p => p.methodologyId === m.id)
+        .map(p => ({ num: p.num, agent: p.agent, label: p.label }));
+      return { ...m, steps: steps.length > 0 ? steps : null };
     }));
   } catch (e: any) {
     return c.json({ error: e.message }, 500);

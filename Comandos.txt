@@ -8,7 +8,7 @@ npm install
 
 # 3. Build e subida completa
 docker compose build --no-cache
-docker compose up -d
+docker compose up -d && docker compose --profile ollama up -d
 
 # 4. Schema no banco (após -v que apagou os volumes)
 docker exec olympus_db psql -U postgres -d olympus -c "CREATE EXTENSION IF NOT EXISTS vector;"

@@ -1,6 +1,7 @@
 import cron from 'node-cron';
 import { db, projects, messages } from '@olympus/db';
 import { eq, and, isNull, asc } from 'drizzle-orm';
+import { sql } from 'drizzle-orm';
 import { sign } from 'hono/jwt';
 import { sendEmail } from './mailer';
 
@@ -29,7 +30,7 @@ export function buildKratosEmailHtml(projectName: string, conteudo: string): str
       <p style="margin:6px 0">${html}</p>
     </div>
     <p style="margin-top:24px;font-size:11px;color:#aaa">
-      Gerado automaticamente pelo KRONOS · OLYMPUS v1.0 · StratSight Brasil<br>
+      Gerado automaticamente pelo KRATOS · OLYMPUS v1.0 · StratSight Brasil<br>
       Este relatório é confidencial e destinado exclusivamente ao destinatário indicado.
     </p>
   </div>
@@ -43,13 +44,13 @@ interface KratosTask {
   app: any;
 }
 
-class KronosOrchestrator {
+class KratosOrchestrator {
   private queue: KratosTask[] = [];
   private isProcessing = false;
 
   addTask(task: KratosTask) {
     this.queue.push(task);
-    console.log(`[KRONOS] 📥 Projeto "${task.projectName}" entrou na Fila de Processamento (Posição: ${this.queue.length}).`);
+    console.log(`[KRATOS] 📥 Projeto "${task.projectName}" entrou na Fila de Processamento (Posição: ${this.queue.length}).`);
     this.processQueue();
   }
 
@@ -57,19 +58,20 @@ class KronosOrchestrator {
     if (this.isProcessing || this.queue.length === 0) return;
     this.isProcessing = true;
 
-    console.log(`[KRONOS] ⚙️ Iniciando processamento em lote da fila...`);
+    console.log(`[KRATOS] ⚙️ Iniciando processamento em lote da fila...`);
     while (this.queue.length > 0) {
       const task = this.queue.shift();
       if (task) {
         await this.runKratos(task);
         if (this.queue.length > 0) {
-          console.log(`[KRONOS] ⏱️ Resfriamento de 15s (Rate Limit) antes do próximo...`);
-          await new Promise(r => setTimeout(r, 15000));
+          const cooldown = await getKratosCooldown();
+          console.log(`[KRATOS] ⏱️ Resfriamento de ${cooldown / 1000}s (Rate Limit) antes do próximo...`);
+          await new Promise(r => setTimeout(r, cooldown));
         }
       }
     }
     this.isProcessing = false;
-    console.log(`[KRONOS] ✅ Lote concluído. Fila vazia.`);
+    console.log(`[KRATOS] ✅ Lote concluído. Fila vazia.`);
   }
 
   private async runKratos(task: KratosTask) {
@@ -147,7 +149,22 @@ class KronosOrchestrator {
   }
 }
 
-const kronos = new KronosOrchestrator();
+async function getKratosCooldown(): Promise<number> {
+  try {
+    const result = await db.execute(
+      sql`SELECT value FROM platform_settings WHERE key = 'kronos_cooldown_ms'`
+    );
+    const rows = (result as any).rows ?? result;
+    if (rows.length > 0) {
+      const v = rows[0].value;
+      const ms = typeof v === 'number' ? v : Number(v);
+      if (ms > 0) return ms;
+    }
+  } catch { /* fallback */ }
+  return 15_000;
+}
+
+const kratos = new KratosOrchestrator();
 let activeJobs: Record<string, any> = {};
 
 export async function reloadCronJobs(app: any = null) {
@@ -160,7 +177,7 @@ export async function reloadCronJobs(app: any = null) {
     ativos.forEach(p => {
       if (p.kratosCron && cron.validate(p.kratosCron)) {
         activeJobs[p.id] = cron.schedule(p.kratosCron, () => {
-          kronos.addTask({ projectId: p.id, projectName: p.name, metodologia: p.methodology, app });
+          kratos.addTask({ projectId: p.id, projectName: p.name, metodologia: p.methodology, app });
         });
         console.log(`⏰ Automação agendada para [${p.name}]: ${p.kratosCron}`);
       }
