@@ -48,6 +48,25 @@ export async function getLLMConfig(): Promise<{ provider: string; model: string 
   };
 }
 
+// ── Helper: carregar mapeamento de tiers de modelo ────────────────────────────
+// tier labels ('economy', 'premium') → IDs de modelo Anthropic
+// Armazenado em platform_settings.llm_tiers como JSONB.
+// Retorna {} se a chave não existir — Agent.ts usará modelOverride como ID direto (compatibilidade).
+export async function getLLMTiers(): Promise<Record<string, string>> {
+  try {
+    const result = await db.execute(
+      sql`SELECT value FROM platform_settings WHERE key = 'llm_tiers'`
+    );
+    const rows = (result as any).rows ?? result;
+    const row = rows[0];
+    if (row?.value) {
+      const parsed = typeof row.value === 'string' ? JSON.parse(row.value) : row.value;
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) return parsed;
+    }
+  } catch { /* fallback */ }
+  return {};
+}
+
 // ── Helper: busca modelos Ollama disponíveis ──────────────────────────────────
 async function getOllamaModels(): Promise<{ available: boolean; models: { id: string; size?: number }[] }> {
   const baseURL = (process.env.OLLAMA_BASE_URL || 'http://ollama:11434/v1').replace(/\/v1\/?$/, '');
@@ -64,16 +83,18 @@ async function getOllamaModels(): Promise<{ available: boolean; models: { id: st
 
 // ── GET /api/v1/settings ── lê configurações (qualquer usuário autenticado) ────
 settingsRoutes.get('/', async (c) => {
-  const [llm, ollama, anthropicModels] = await Promise.all([
+  const [llm, ollama, anthropicModels, llmTiers] = await Promise.all([
     getLLMConfig(),
     getOllamaModels(),
     getAnthropicModels(),
+    getLLMTiers(),
   ]);
   return c.json({
     llm,
     anthropicModels,
     ollamaModels: ollama.models,
     ollamaAvailable: ollama.available,
+    llmTiers,
   });
 });
 
@@ -123,6 +144,32 @@ settingsRoutes.patch('/anthropic-models', async (c) => {
     ON CONFLICT (key) DO UPDATE SET value = ${value}::jsonb, updated_at = NOW()
   `);
   return c.json({ ok: true, models });
+});
+
+// ── PATCH /api/v1/settings/llm-tiers ── mapeia tier labels → model IDs (admin) ─
+settingsRoutes.patch('/llm-tiers', async (c) => {
+  const payload = c.get('jwtPayload') as any;
+  if (!payload || payload.role !== 'admin') {
+    return c.json({ error: 'Apenas administradores podem alterar os tiers de modelo.' }, 403);
+  }
+  const body = await c.req.json() as any;
+  const tiers = body.tiers as Record<string, string>;
+  if (!tiers || typeof tiers !== 'object' || Array.isArray(tiers)) {
+    return c.json({ error: 'Campo "tiers" deve ser um objeto { tierLabel: modelId }.' }, 400);
+  }
+  const VALID_TIERS = ['economy', 'premium'];
+  for (const k of Object.keys(tiers)) {
+    if (!VALID_TIERS.includes(k)) {
+      return c.json({ error: `Tier inválido: "${k}". Tiers suportados: ${VALID_TIERS.join(', ')}` }, 400);
+    }
+  }
+  const value = JSON.stringify(tiers);
+  await db.execute(sql`
+    INSERT INTO platform_settings (key, value, updated_at)
+    VALUES ('llm_tiers', ${value}::jsonb, NOW())
+    ON CONFLICT (key) DO UPDATE SET value = ${value}::jsonb, updated_at = NOW()
+  `);
+  return c.json({ ok: true, llmTiers: tiers });
 });
 
 // ── GET /api/v1/settings/ollama-models ── mantido para compatibilidade ────────

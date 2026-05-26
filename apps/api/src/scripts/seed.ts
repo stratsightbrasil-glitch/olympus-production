@@ -99,7 +99,7 @@ Formato de entrega: análise estruturada com seções delimitadas, tabelas quand
 
 IMPORTANTE: Inicie sempre com "**SCOPUS** · ".`,
         toolsConfig: ['web_search', 'buscar_documentos_internos', 'avaliar_fonte', 'declarar_julgamento', 'registrar_hipotese_alternativa'],
-        modelOverride: 'claude-sonnet-4-6',
+        modelOverride: 'economy',
       },
 
       // ── KLIO ──────────────────────────────────────────────────────────────────
@@ -128,7 +128,7 @@ Formato de entrega: análise por domínio com dados de suporte, tendências iden
 
 IMPORTANTE: Inicie sempre com "**KLIO** · ".`,
         toolsConfig: ['web_search', 'buscar_dados_publicos', 'buscar_documentos_internos', 'avaliar_fonte', 'declarar_julgamento', 'registrar_hipotese_alternativa', 'registrar_sinal', 'buscar_sinais'],
-        modelOverride: 'claude-opus-4-7',
+        modelOverride: 'premium',
       },
 
       // ── PYTHIA ────────────────────────────────────────────────────────────────
@@ -158,7 +158,7 @@ Formato de entrega: fichas de cenário com nome, premissas, narrativa, probabili
 
 IMPORTANTE: Inicie sempre com "**PYTHIA** · ".`,
         toolsConfig: ['web_search', 'buscar_dados_publicos', 'avaliar_fonte', 'declarar_julgamento', 'registrar_hipotese_alternativa'],
-        modelOverride: 'claude-opus-4-7',
+        modelOverride: 'premium',
       },
 
       // ── MNEMOSYNE ─────────────────────────────────────────────────────────────
@@ -186,7 +186,7 @@ Formato de entrega: narrativas em prosa fluída, 300-600 palavras por cenário.
 
 IMPORTANTE: Inicie sempre com "**MNEMOSYNE** · ".`,
         toolsConfig: ['web_search'],
-        modelOverride: 'claude-opus-4-7',
+        modelOverride: 'premium',
       },
 
       // ── THEMIS ────────────────────────────────────────────────────────────────
@@ -215,7 +215,7 @@ Formato de entrega: tabela riscos/oportunidades por cenário + alertas + indica�
 
 IMPORTANTE: Inicie sempre com "**THEMIS** · ".`,
         toolsConfig: ['web_search', 'buscar_sinais', 'avaliar_fonte', 'declarar_julgamento', 'registrar_hipotese_alternativa'],
-        modelOverride: 'claude-opus-4-7',
+        modelOverride: 'premium',
       },
 
       // ── KRATOS ────────────────────────────────────────────────────────────────
@@ -245,7 +245,7 @@ Formato do Relatório de Acompanhamento (padrão para qualquer metodologia):
 
 IMPORTANTE: Inicie sempre com "**KRATOS** · ".`,
         toolsConfig: ['web_search', 'buscar_dados_publicos', 'buscar_sinais', 'registrar_sinal', 'atualizar_sentinela'],
-        modelOverride: 'claude-sonnet-4-6',
+        modelOverride: 'economy',
       },
 
       // ── ATHENA ────────────────────────────────────────────────────────
@@ -288,7 +288,7 @@ AVALIAÇÃO FINAL:
 
 IMPORTANTE: Inicie sempre com "**ATHENA** · ".`,
         toolsConfig: ['avaliar_fonte', 'declarar_julgamento', 'registrar_hipotese_alternativa'],
-        modelOverride: 'claude-opus-4-7',
+        modelOverride: 'premium',
       },
 
       // ── OLYMPUS (Orquestrador de Planejamento Estratégico) ───────────────────

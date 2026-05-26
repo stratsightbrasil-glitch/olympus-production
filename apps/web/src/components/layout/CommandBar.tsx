@@ -36,6 +36,9 @@ interface CommandBarProps {
   ollamaModels?: { id: string; size?: number }[];
   ollamaAvailable?: boolean;
   onLlmChange?: (config: { provider: string; model: string }) => void;
+  /** Mapeamento tier→modelId (admin only). Ausente = sem controle de tiers na UI. */
+  llmTiers?: Record<string, string>;
+  onTierChange?: (tiers: Record<string, string>) => void;
 }
 
 // ─── Constantes ───────────────────────────────────────────────────────────────
@@ -102,13 +105,15 @@ function modelShortLabel(provider: string, model: string): string {
 }
 
 function LlmSelector({
-  llmConfig, anthropicModels, ollamaModels, ollamaAvailable, onLlmChange,
+  llmConfig, anthropicModels, ollamaModels, ollamaAvailable, onLlmChange, llmTiers, onTierChange,
 }: {
   llmConfig: { provider: string; model: string };
   anthropicModels: { id: string; label: string }[];
   ollamaModels: { id: string; size?: number }[];
   ollamaAvailable: boolean;
   onLlmChange?: (c: { provider: string; model: string }) => void;
+  llmTiers?: Record<string, string>;
+  onTierChange?: (tiers: Record<string, string>) => void;
 }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -234,6 +239,47 @@ function LlmSelector({
               </div>
             );
           })}
+
+          {/* Tiers de Agentes — visível apenas para admin com Anthropic ativo */}
+          {onTierChange && llmConfig.provider === 'anthropic' && llmTiers && (
+            <>
+              <div style={{ height: 1, background: 'rgba(255,255,255,.08)', margin: '6px 0' }} />
+              <div style={{ padding: '4px 12px 6px', fontSize: 9, color: '#6A9A7A', fontFamily: "'DM Mono',monospace", letterSpacing: 1.2, textTransform: 'uppercase' }}>
+                ⚙ Tiers de Agentes
+              </div>
+              {(['economy', 'premium'] as const).map(tier => {
+                const TIER_LABELS: Record<string, string> = {
+                  economy: 'Economy  (SCOPUS, KRATOS)',
+                  premium:  'Premium  (PYTHIA, KLIO, THEMIS…)',
+                };
+                const currentModelId = llmTiers[tier] ?? '';
+                const models = anthropicModels.length > 0 ? anthropicModels : ANTHROPIC_DEFAULT;
+                return (
+                  <div key={tier} style={{ padding: '4px 12px 6px', display: 'flex', flexDirection: 'column', gap: 3 }}>
+                    <span style={{ fontSize: 10, color: '#6A9A7A', fontFamily: "'DM Mono',monospace" }}>
+                      {TIER_LABELS[tier]}
+                    </span>
+                    <select
+                      value={currentModelId}
+                      onChange={e => onTierChange({ ...llmTiers, [tier]: e.target.value })}
+                      onClick={e => e.stopPropagation()}
+                      style={{
+                        background: '#13221A', border: '1px solid rgba(255,255,255,.18)',
+                        borderRadius: 4, color: '#C9A84C', fontSize: 11,
+                        fontFamily: "'DM Mono',monospace", padding: '3px 6px', cursor: 'pointer',
+                        width: '100%',
+                      }}
+                    >
+                      <option value="" disabled>— escolha um modelo —</option>
+                      {models.map(m => (
+                        <option key={m.id} value={m.id}>{m.label}</option>
+                      ))}
+                    </select>
+                  </div>
+                );
+              })}
+            </>
+          )}
         </div>
       )}
     </div>
@@ -247,7 +293,7 @@ export function CommandBar({
   mainView, onToggleSidebar, onNovaSessao, onGerarRelatorio, onGerarPlaybook, onCopyClientLink, onToggleKratos,
   cliente, horizonte, questaoEstrategica, classificacao, teamName,
   methodologyName = 'MSEF', methodologySteps,
-  llmConfig, anthropicModels, ollamaModels, ollamaAvailable, onLlmChange,
+  llmConfig, anthropicModels, ollamaModels, ollamaAvailable, onLlmChange, llmTiers, onTierChange,
 }: CommandBarProps) {
   const steps: MethodologyStep[] = methodologySteps ?? DEFAULT_STEPS;
   const isCliente = user?.role === 'cliente';
@@ -345,6 +391,8 @@ export function CommandBar({
             ollamaModels={ollamaModels || []}
             ollamaAvailable={!!ollamaAvailable}
             onLlmChange={onLlmChange}
+            llmTiers={llmTiers}
+            onTierChange={onTierChange}
           />
         )}
 

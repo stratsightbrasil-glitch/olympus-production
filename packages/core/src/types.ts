@@ -22,6 +22,12 @@ export interface AgentContext {
   connectivityMode?: "ONLINE" | "SOBERANO" | "AIR_GAPPED";
   /** Âncora de contexto estruturado — injetada no system prompt quando há eventos aprovados */
   anchorContext?: string;
+  /**
+   * Mapeamento de tier de capacidade → ID de modelo Anthropic, carregado de platform_settings.
+   * Ex: { economy: 'claude-sonnet-4-6', premium: 'claude-opus-4-7' }
+   * Permite trocar modelos por todos os agentes de um tier sem alterar código ou seed.
+   */
+  llmTiers?: Record<string, string>;
 }
 
 export interface Tool<T = any> {

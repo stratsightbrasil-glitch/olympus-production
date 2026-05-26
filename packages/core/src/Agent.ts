@@ -460,15 +460,21 @@ export class Agent {
       aiTools[t.name] = myTool;
     }
 
-    // ── P3: Model routing — from DB field, not hardcoded map ─────────────────
-    // this.modelOverride comes from agents.model_override (seed.ts populates it).
-    // Only applied when using Anthropic — Ollama uses its own model selection.
+    // ── P3: Model routing — tier→model resolution via platform_settings ──────
+    // agents.model_override armazena um label de tier ('economy' | 'premium') ou,
+    // como fallback de compatibilidade, um ID de modelo direto (ex: 'claude-sonnet-4-6').
+    // context.llmTiers carrega o mapa { economy: '<model-id>', premium: '<model-id>' }
+    // de platform_settings — atualizável pela UI de Settings sem alterar código ou seed.
     const isAnthropic = (context.llmConfig?.provider ?? 'anthropic') === 'anthropic';
-    const effectiveModel = isAnthropic && this.modelOverride ? this.modelOverride : undefined;
+    const rawOverride  = this.modelOverride;                             // tier label ou ID direto
+    const resolvedModel = rawOverride
+      ? ((context.llmTiers ?? {})[rawOverride] ?? rawOverride)          // tier→ID ou passthrough
+      : undefined;
+    const effectiveModel = isAnthropic && resolvedModel ? resolvedModel : undefined;
     const effectiveConfig = effectiveModel
       ? { provider: 'anthropic' as const, model: effectiveModel }
       : context.llmConfig;
-    if (effectiveModel) console.log(`[${this.name}] Modelo override → ${effectiveModel}`);
+    if (effectiveModel) console.log(`[${this.name}] Tier [${rawOverride}] → ${effectiveModel}`);
 
     // ── vizMode — controla profundidade de orquestração e limite de tokens ────
     // "etapa"    (padrão): análise por etapa de metodologia, maxTokens=32_000

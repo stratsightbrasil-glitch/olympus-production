@@ -193,6 +193,13 @@ serve({ fetch: app.fetch, port, hostname: '0.0.0.0' });
           { id: 'claude-haiku-4-5-20251001',  label: 'Claude Haiku 4.5'  },
         ]})
         .onConflictDoNothing();
+      // Mapeamento de tiers de agentes → IDs de modelo.
+      // 'economy': agentes com tarefas mais mecânicas (ex: SCOPUS, KRATOS)
+      // 'premium': agentes com raciocínio profundo (ex: PYTHIA, KLIO, THEMIS)
+      // onConflictDoNothing preserva customizações feitas via UI de Settings.
+      await db.insert(platformSettings)
+        .values({ key: 'llm_tiers', value: { economy: 'claude-sonnet-4-6', premium: 'claude-opus-4-7' } })
+        .onConflictDoNothing();
       console.log('[Settings] ✅ platform_settings inicializada.');
 
       await reloadCronJobs(app);

@@ -6,6 +6,7 @@ export function useLlmConfig(token: string | null) {
   const [anthropicModels, setAnthropicModels] = useState<AnthropicModel[]>([]);
   const [ollamaModels, setOllamaModels] = useState<OllamaModel[]>([]);
   const [ollamaAvailable, setOllamaAvailable] = useState(false);
+  const [llmTiers, setLlmTiers] = useState<Record<string, string>>({});
 
   const reqHeaders = { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` };
 
@@ -16,6 +17,7 @@ export function useLlmConfig(token: string | null) {
       .then(d => {
         if (d?.llm) setLlmConfig(d.llm);
         if (d?.anthropicModels) setAnthropicModels(d.anthropicModels);
+        if (d?.llmTiers) setLlmTiers(d.llmTiers);
       })
       .catch(() => {});
     fetch('/api/v1/settings/ollama-models', { headers: reqHeaders })
@@ -38,5 +40,17 @@ export function useLlmConfig(token: string | null) {
     } catch { alert('Erro na requisição'); }
   };
 
-  return { llmConfig, anthropicModels, ollamaModels, ollamaAvailable, handleLlmChange };
+  const handleTierChange = async (tiers: Record<string, string>) => {
+    try {
+      const res = await fetch('/api/v1/settings/llm-tiers', {
+        method: 'PATCH',
+        headers: reqHeaders,
+        body: JSON.stringify({ tiers }),
+      });
+      if (res.ok) setLlmTiers(tiers);
+      else alert((await res.json()).error || 'Erro ao alterar tiers de modelo');
+    } catch { alert('Erro na requisição'); }
+  };
+
+  return { llmConfig, anthropicModels, ollamaModels, ollamaAvailable, llmTiers, handleLlmChange, handleTierChange };
 }

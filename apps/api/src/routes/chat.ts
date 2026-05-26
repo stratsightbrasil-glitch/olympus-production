@@ -7,7 +7,7 @@ import { ragTool } from '../tools/rag';
 import { createSignalTools } from '../tools/signals';
 import { createAnalyticStandardsTools } from '../tools/analytic-standards';
 import { getTechniqueInstructions } from '../tools/technique-engine';
-import { getLLMConfig } from './settings';
+import { getLLMConfig, getLLMTiers } from './settings';
 import { eq, inArray, and, asc } from 'drizzle-orm';
 
 const chatRoutes = new Hono();
@@ -158,7 +158,10 @@ async function runAnalysis(body: any, jwtPayload: any, cb: AnalysisCallbacks, op
   const metodologiaName = (body.metodologia as string) || 'MSEF';
   const projectName   = body.projectName || 'Novo Projeto';
   const teamId        = body.teamId || null;
-  const llmConfig     = await getLLMConfig();   // lê configuração ativa do banco
+  const [llmConfig, llmTiers] = await Promise.all([
+    getLLMConfig(),   // modelo global ativo
+    getLLMTiers(),    // mapa { economy: '<id>', premium: '<id>' } de platform_settings
+  ]);
 
   const inputMsgStr = typeof rawInputMsg === 'string'
     ? rawInputMsg
@@ -334,6 +337,7 @@ async function runAnalysis(body: any, jwtPayload: any, cb: AnalysisCallbacks, op
     methodology: metodologiaName as any,
     memory: buildMemoryWindow(dbMessagesForMemory),
     llmConfig,
+    llmTiers,
     phases,
     agentMethodPrompts: agentPromptMap,
     connectivityMode,

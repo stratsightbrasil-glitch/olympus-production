@@ -304,6 +304,8 @@ function App() {
           ollamaModels={llm.ollamaModels}
           ollamaAvailable={llm.ollamaAvailable}
           onLlmChange={user?.role === 'admin' ? llm.handleLlmChange : undefined}
+          llmTiers={llm.llmTiers}
+          onTierChange={user?.role === 'admin' ? llm.handleTierChange : undefined}
         />
 
         <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
