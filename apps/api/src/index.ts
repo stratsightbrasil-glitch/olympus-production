@@ -42,6 +42,7 @@ import settingsRoutes from './routes/settings';
 import teamsRoutes from './routes/teams';
 import playbookRoutes from './routes/playbook';
 import auditRoutes from './routes/audit';
+import eventsRoutes from './routes/events';
 import { rateLimitAnalysis, rateLimitExport } from './middleware/rateLimit';
 
 const app = new Hono();
@@ -114,6 +115,7 @@ const PROTECTED_PREFIXES = [
   '/api/v1/kratos',
   '/api/v1/settings',
   '/api/v1/teams',
+  '/api/v1/events',
   '/api/v1/test-email',
 ];
 for (const prefix of PROTECTED_PREFIXES) {
@@ -140,6 +142,7 @@ app.route('/api/v1/settings', settingsRoutes);
 app.route('/api/v1/teams', teamsRoutes);
 app.route('/api/v1/playbook', playbookRoutes);
 app.route('/api/v1/audit', auditRoutes);
+app.route('/api/v1/events', eventsRoutes);
 app.route('/api/docs', docsRoutes);
 
 // Rota de Teste do Nodemailer (KRATOS Mock) — auth via PROTECTED_PREFIXES

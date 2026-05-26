@@ -18,10 +18,20 @@ export const tavilySearchTool: Tool<TavilyArgs> = {
     required: ['query']
   } as any,
 
-  execute: async (args: TavilyArgs, _context: any) => {
+  execute: async (args: TavilyArgs, context: any) => {
+    // ── Modo de soberania: bloqueia acesso externo em AIR_GAPPED ──────────────
+    const connectivity = context?.connectivityMode ?? 'ONLINE';
+    if (connectivity === 'AIR_GAPPED') {
+      return '[BLOQUEADO — AIR_GAPPED] Acesso à internet proibido neste modo de soberania. Use "buscar_documentos_internos" para consultar documentos indexados localmente.';
+    }
+
     const apiKey = process.env.TAVILY_API_KEY;
     if (!apiKey) {
       return 'Erro do Sistema: A variável TAVILY_API_KEY não foi configurada. Informe o usuário de que o sistema não está com acesso à internet no momento.';
+    }
+
+    if (connectivity === 'SOBERANO') {
+      console.warn('[Tavily] Modo SOBERANO — busca autorizada mas intenção analítica não deve ser exposta externamente.');
     }
 
     console.log(`[Tavily] 🌐 Buscando: "${args.query}"`);

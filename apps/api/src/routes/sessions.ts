@@ -72,6 +72,19 @@ sessionsRoutes.delete('/:id', async (c) => {
   } catch (e: any) { return c.json({ error: e.message }, 500); }
 });
 
+// GET /sessions/:id/messages — histórico de mensagens da sessão (server-authoritative)
+// Usado pela UI para renderizar o chat e pelo runAnalysis para carregar memória.
+sessionsRoutes.get('/:id/messages', async (c) => {
+  try {
+    const projectId = c.req.param('id');
+    const msgs = await db.query.messages.findMany({
+      where: eq(messages.projectId, projectId),
+      orderBy: [asc(messages.createdAt)],
+    });
+    return c.json(msgs);
+  } catch (e: any) { return c.json({ error: e.message }, 500); }
+});
+
 sessionsRoutes.delete('/:id/messages/:msgId', async (c) => {
   try {
     const projectId = c.req.param('id');

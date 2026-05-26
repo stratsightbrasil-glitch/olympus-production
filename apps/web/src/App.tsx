@@ -7,6 +7,7 @@ import { Sidebar } from './components/layout/Sidebar';
 import { InputZone } from './components/chat/InputZone';
 import { RightPanel } from './components/layout/RightPanel';
 import { KratosPanel } from './components/layout/KratosPanel';
+import { EventsPanel } from './components/layout/EventsPanel';
 import { LoginPage } from './components/auth/LoginPage';
 import { NewSessionModal } from './components/modals/NewSessionModal';
 import { ProjectSettingsModal } from './components/modals/ProjectSettingsModal';
@@ -22,6 +23,7 @@ import { useLlmConfig } from './hooks/useLlmConfig';
 import { useAttachments, ACCEPTED_TYPES } from './hooks/useAttachments';
 import { useChat } from './hooks/useChat';
 import { useExport } from './hooks/useExport';
+import { useEvents } from './hooks/useEvents';
 import type { ActiveModal } from './types';
 
 const ATHENA_SLUGS = new Set(['msef', 'godet', 'grumbach', 'macroplan', 'futures', 'siex', 'alta']);
@@ -69,9 +71,15 @@ function App() {
   });
 
   const exports = useExport(token, projectState.projeto, chat.messages);
+  const events = useEvents(token);
 
   // ── Effects ──────────────────────────────────────────────────────────────
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [chat.messages, chat.loading]);
+
+  // Recarrega eventos propostos quando a sessão muda ou quando o chat finaliza
+  useEffect(() => {
+    if (projectState.sessionId) events.carregarEventos(projectState.sessionId);
+  }, [projectState.sessionId, chat.loading]);
 
   useEffect(() => {
     if (!token) return;
@@ -366,14 +374,24 @@ function App() {
           )}
 
           {mainView === 'chat' && (
-            <RightPanel
-              projeto={projectState.projeto}
-              indicadores={projectData.indicadores}
-              weakSignals={projectData.weakSignals}
-              signalStats={projectData.signalStats}
-              onRefreshIndicators={() => projectData.carregarIndicadores(projectState.sessionId)}
-              onRefreshSignals={() => projectData.carregarSinais(projectState.sessionId)}
-            />
+            <>
+              <EventsPanel
+                proposedEvents={events.proposedEvents}
+                loading={events.loading}
+                onApprove={events.aprovarEvento}
+                onReject={events.rejeitarEvento}
+                onAprovarTodos={events.aprovarTodos}
+                onRefresh={() => events.carregarEventos(projectState.sessionId)}
+              />
+              <RightPanel
+                projeto={projectState.projeto}
+                indicadores={projectData.indicadores}
+                weakSignals={projectData.weakSignals}
+                signalStats={projectData.signalStats}
+                onRefreshIndicators={() => projectData.carregarIndicadores(projectState.sessionId)}
+                onRefreshSignals={() => projectData.carregarSinais(projectState.sessionId)}
+              />
+            </>
           )}
         </div>
 
