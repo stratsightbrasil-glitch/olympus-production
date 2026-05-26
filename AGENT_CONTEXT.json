@@ -1,30 +1,32 @@
 {
   "project": "OLYMPUS v4.0",
-  "description": "Multi-agent strategic foresight platform. Monorepo TypeScript: Hono API + React frontend + PostgreSQL + pgvector. 9 AI agents (Claude claude-opus-4-7) running MSEF/GRUMBACH/GODET methodologies.",
-  "lastUpdated": "2026-04-26",
-  "workingDir": "D:/Pessoais/DEV/Olympus_v4",
+  "description": "Multi-agent strategic foresight platform. Monorepo TypeScript: Hono API + React frontend + PostgreSQL + pgvector. 9 AI agents running MSEF/GRUMBACH/GODET methodologies.",
+  "lastUpdated": "2026-05-26",
+  "lastCommit": "111ec4e",
+  "workingDir": "D:/Pessoais/DEV/Olympus",
+  "note": "Pasta foi renomeada de Olympus_v4 para Olympus em 2026-05-26. Atualizar settings.local.json se necessário.",
 
   "monorepo": {
     "manager": "npm workspaces",
     "packages": {
-      "@olympus/core": "packages/core/src/ — Agent.ts, Orchestrator.ts, types.ts",
-      "@olympus/db":   "packages/db/src/   — db.ts, schema.ts (9 Drizzle tables)",
-      "@olympus/tools":"packages/tools/src/ — tavily.ts, dados-publicos.ts, embed.ts",
-      "@olympus/api":  "apps/api/src/       — Hono routes, cron, mailer",
-      "@olympus/web":  "apps/web/src/       — React 18 + Vite + TypeScript"
+      "@olympus/core":  "packages/core/src/ — Agent.ts, Orchestrator.ts, types.ts, nodeRouter.ts",
+      "@olympus/db":    "packages/db/src/   — db.ts, schema.ts (11 Drizzle tables)",
+      "@olympus/tools": "packages/tools/src/ — tavily.ts (com connectivityMode guard), dados-publicos.ts, embed.ts",
+      "@olympus/api":   "apps/api/src/       — Hono routes, cron, mailer",
+      "@olympus/web":   "apps/web/src/       — React 18 + Vite + TypeScript"
     },
     "buildOrder": "core → tools → db → api",
-    "criticalConstraint": "packages/tools CANNOT import @olympus/db (compiles before db). Tools that need DB access go in apps/api/src/tools/"
+    "criticalConstraint": "packages/tools NÃO pode importar @olympus/db (compila antes de db). Ferramentas que precisam do DB ficam em apps/api/src/tools/"
   },
 
   "stack": {
     "runtime":    "Node.js 20",
     "framework":  "Hono 4.x (backend) + React 18 (frontend)",
     "aiSdk":      "ai@6.0.168 (Vercel AI SDK) + @ai-sdk/anthropic@3.0.71",
-    "llm":        "claude-opus-4-7 (env: ANTHROPIC_MODEL)",
+    "llm":        "Configurável via platform_settings (default: claude-opus-4-7). Tiers: economy/premium.",
     "database":   "PostgreSQL pg15 + pgvector + Drizzle ORM 0.45.2",
     "embeddings": "Voyage AI voyage-3-lite, 512 dims",
-    "webSearch":  "Tavily Search API",
+    "webSearch":  "Tavily Search API (bloqueado em AIR_GAPPED; aviso em SOBERANO)",
     "auth":       "JWT HS256 + bcryptjs + speakeasy (2FA TOTP)",
     "proxy":      "Nginx (SPA + /api/ proxy, proxy_read_timeout 300s)",
     "containers": "Docker Compose — 3 services: olympus_db, olympus_api, olympus_web"
@@ -33,51 +35,121 @@
   "criticalRules": [
     {
       "id": "NO_ZOD_IN_AGENT",
-      "rule": "NEVER use Zod in Agent.ts for tool schemas",
-      "reason": "Dual-package hazard in monorepo — instanceof ZodObject fails silently across package boundaries",
-      "correct": "Use plain JS objects in TOOL_JSON_SCHEMAS dict, wrapped with jsonSchema() from Vercel AI SDK",
+      "rule": "NUNCA usar Zod em ferramentas analíticas ou nós do grafo",
+      "reason": "Versões ≥ 3.25.68 causam TS2589 com @langchain/core. instanceof ZodObject falha entre pacotes no monorepo.",
+      "correct": "Usar JSON Schema puro (Record<string, any>) em TOOL_JSON_SCHEMAS. jsonSchema() do Vercel AI SDK.",
       "example": "parameters: jsonSchema(TOOL_JSON_SCHEMAS['web_search'] as any)"
     },
     {
       "id": "INPUT_SCHEMA_FIX",
-      "rule": "After creating tool(), manually inject inputSchema",
-      "reason": "@ai-sdk/anthropic reads tool.inputSchema, not tool.parameters. Without this, execute() is never called",
+      "rule": "Após criar tool(), injetar inputSchema manualmente",
+      "reason": "@ai-sdk/anthropic lê tool.inputSchema, não tool.parameters. Sem isso, execute() nunca é chamado.",
       "correct": "(myTool as any).inputSchema = () => jsonSchema(rawSchema as any);"
     },
     {
       "id": "STOP_WHEN_NOT_MAX_STEPS",
-      "rule": "Use stopWhen: stepCountIs(N) — NEVER maxSteps",
-      "reason": "maxSteps was removed in ai@6.0.168. Default is stepCountIs(1) — only 1 step, no synthesis",
+      "rule": "Usar stopWhen: stepCountIs(N) — NUNCA maxSteps",
+      "reason": "maxSteps removido em ai@6.0.168. Default é stepCountIs(1) → só 1 step → sem síntese.",
       "correct": "import { stepCountIs } from 'ai'; stopWhen: stepCountIs(15)"
     },
     {
       "id": "PREPARE_STEP_TOOL_CHOICE",
-      "rule": "Use prepareStep to set toolChoice 'required' only on step 0",
-      "reason": "toolChoice 'required' on all steps blocks synthesis — HERMES loops until limit with empty response.text",
+      "rule": "Usar prepareStep para toolChoice 'required' apenas no step 0",
+      "reason": "toolChoice 'required' em todos os steps bloqueia síntese — HERMES entra em loop.",
       "correct": "prepareStep: async ({ stepNumber }) => ({ toolChoice: stepNumber === 0 ? 'required' : 'auto' })"
     },
     {
       "id": "CMD_DIST_IN_PRODUCTION",
-      "rule": "Dockerfile CMD must point to dist/, never tsx",
+      "rule": "Dockerfile CMD deve apontar para dist/, nunca tsx",
       "correct": "CMD [\"node\", \"apps/api/dist/index.js\"]",
       "wrong":   "CMD [\"npx\", \"tsx\", \"apps/api/src/index.ts\"]"
     },
     {
-      "id": "HERMES_PROMPT_NO_EXCEPTIONS",
-      "rule": "NEVER add blocks that exempt HERMES from using tools",
-      "reason": "LLM follows most recent instruction when conflict exists — exception overrides the absolute rule"
+      "id": "LOAD_METHODOLOGY_THROWS",
+      "rule": "loadMethodology() lança exceção se metodologia não existir — SEM fallback de seed em runtime",
+      "reason": "getOrSeedMethodology() foi removido (Sprint Pré-LangGraph R1). Dual source of truth eliminado.",
+      "correct": "Execute 'npm run seed' antes de qualquer análise. loadMethodology() falha explicitamente se ausente."
+    },
+    {
+      "id": "SERVER_AUTHORITATIVE_MEMORY",
+      "rule": "Memória de conversa carregada do banco, NUNCA de body.messages",
+      "reason": "Sprint Pré-LangGraph R2. Precondição para checkpointing do LangGraph.",
+      "correct": "db.query.messages.findMany() → buildMemoryWindow(dbMessages). body.messages ignorado para memória."
+    },
+    {
+      "id": "LLM_TIER_NOT_MODEL_ID",
+      "rule": "agents.model_override armazena TIER ('economy'|'premium'), não ID de modelo",
+      "reason": "IDs de modelo mudam com atualizações da Anthropic. Mapeamento tier→ID fica em platform_settings.llm_tiers.",
+      "correct": "seed.ts: modelOverride: 'economy' ou 'premium'. Agent.ts resolve via context.llmTiers."
+    },
+    {
+      "id": "HITL_GATE",
+      "rule": "PYTHIA só opera sobre eventos com status='approved'. Nunca sobre 'proposed'.",
+      "reason": "anchorContext em chat.ts injeta apenas eventos approved. LangGraph Fase 2: interruptBefore: ['node_modeling'].",
+      "correct": "Agentes criam eventos via tool_register_event (status='proposed'). Analista aprova via EventsPanel."
+    },
+    {
+      "id": "CONNECTIVITY_MODE_GUARD",
+      "rule": "Tavily bloqueado em AIR_GAPPED, aviso em SOBERANO — verificado em EXECUÇÃO, não apenas no prompt",
+      "reason": "Sprint Pré-LangGraph R4. Controle de soberania aplicado no nível do execute() da ferramenta.",
+      "correct": "packages/tools/src/tavily.ts: verifica context.connectivityMode antes de qualquer fetch."
     },
     {
       "id": "ENV_ONE_VAR_PER_LINE",
-      "rule": "Each .env variable must be on its own line",
-      "reason": "Literal \\n concatenates variables — API keys become malformed, causing HTTP 403"
-    },
-    {
-      "id": "HISTORY_TRUNCATION",
-      "rule": "Always truncate message history: messages.slice(0, -1).slice(-12)",
-      "reason": "Unlimited history causes context bloat — responses degrade from 5k chars to 500 chars over conversation"
+      "rule": "Cada variável .env em linha própria",
+      "reason": "\\n literal concatena variáveis — API keys ficam malformadas, causando HTTP 403"
     }
   ],
+
+  "architecture": {
+    "sprintPreLangGraph": {
+      "status": "CONCLUÍDO",
+      "commit": "7fc34ca",
+      "items": {
+        "R1": "getOrSeedMethodology() removido de chat.ts (460 linhas). loadMethodology() é agora a única fonte.",
+        "R2": "Memória server-authoritative: carregada do banco via db.query.messages, não de body.messages.",
+        "R3": "HITL API (/api/v1/events) + EventsPanel.tsx + useEvents.ts. Aprovação de eventos antes de PYTHIA.",
+        "R4": "connectivityMode guard em tavily.ts: AIR_GAPPED bloqueia, SOBERANO avisa.",
+        "R5": "getNodeRouter(phases) em packages/core/src/nodeRouter.ts: resolve nodeSlug→agentName, nextSlug().",
+        "R6": "buildMemoryWindow(): estimateTokens() serializa content não-string antes de contar tokens.",
+        "P1": "export.ts: buildIR() + renderHtml() + renderDocx() já implementados em sessão anterior.",
+        "P5": "export.ts: _phaseCache Map com TTL 5 min já implementado em sessão anterior."
+      }
+    },
+    "tierSystem": {
+      "status": "CONCLUÍDO",
+      "commit": "111ec4e",
+      "description": "Agentes declaram tier de capacidade ('economy'/'premium'), não IDs de modelo. Mapeamento tier→modelId em platform_settings.llm_tiers. Configurável via UI sem redeployar ou resseedear.",
+      "tiers": {
+        "economy": "SCOPUS, KRATOS — tarefas mais mecânicas. Default: claude-sonnet-4-6",
+        "premium":  "KLIO, PYTHIA, MNEMOSYNE, THEMIS, ATHENA — raciocínio profundo. Default: claude-opus-4-7"
+      },
+      "resolutionChain": "seed.ts → agents.model_override ('economy'/'premium') → context.llmTiers (platform_settings) → Agent.ts resolve → model ID efetivo",
+      "fallback": "Se tier não mapeado em llmTiers, Agent.ts usa o valor como ID direto (compatibilidade)"
+    },
+    "langGraphPhase2": {
+      "status": "PENDENTE — próximo sprint",
+      "prerequisites": "Todos os pré-requisitos do Sprint Pré-LangGraph concluídos.",
+      "plan": {
+        "1": "npm install @langchain/langgraph @langchain/core @langchain/anthropic",
+        "2": "StateAnnotation com campos do AgentContext (messages, memory, anchorContext, methodology, phases, connectivityMode, nodeRouter, hitlApproved, llmTiers)",
+        "3": "PostgresCheckpointer (usa conexão drizzle/postgres existente)",
+        "4": "Nós do grafo mapeados via nodeSlug de methodology_phases",
+        "5": "interruptBefore: ['node_modeling'] — gate HITL R3 pronto",
+        "6": "Substituir Orchestrator.dispatch() por graph.invoke() / graph.stream()"
+      },
+      "nodeMapping": {
+        "node_framing":         "SCOPUS — KAC, escopo, filtro Hendrikson",
+        "node_scanning_macro":  "KLIO — PESTEL, megatendências, FPFs",
+        "node_scanning_forces": "KLIO — atores, capacidades, eixos de inflexão",
+        "node_retrospective":   "KLIO — trajetória histórica, Cones de Janus, RAG",
+        "node_modeling":        "PYTHIA — MICMAC M^k, probabilidades, ACH (interruptBefore aqui)",
+        "node_matrix_design":   "PYTHIA — Matriz 2×2, morfologia, cenário alvo",
+        "node_narrative":       "MNEMOSYNE — narrativas com travas probabilísticas",
+        "node_integration":     "THEMIS — hedges/bets, backcasting, alertas"
+      }
+    }
+  },
 
   "database": {
     "connection": {
@@ -87,130 +159,109 @@
     "tables": {
       "users": {
         "pk": "id (uuid)",
-        "unique": ["email"],
-        "columns": ["name", "email", "passwordHash", "role", "twoFactorSecret", "isTwoFactorEnabled", "createdAt"],
-        "roles": ["admin", "analista", "cliente"]
+        "columns": ["name", "email", "passwordHash", "role ('admin'|'analista'|'cliente')", "twoFactorSecret", "isTwoFactorEnabled", "createdAt"]
       },
       "projects": {
-        "pk": "id (text, format: 'sess_12345')",
-        "columns": ["name", "client", "analyst", "horizon", "classification", "methodology", "techniquesConfig (jsonb)", "panelToken", "status", "kratosCron", "createdBy", "updatedBy", "deletedAt (soft delete)"],
-        "notes": "deletedAt enables soft deletes. panelToken stores JWT for client panel URL."
+        "pk": "id (text, formato: 'sess_12345')",
+        "columns": ["name", "client", "analyst", "horizon", "classification", "methodology", "techniquesConfig (jsonb)", "panelToken", "status", "kratosCron", "connectivityMode ('ONLINE'|'SOBERANO'|'AIR_GAPPED')", "createdBy", "deletedAt (soft delete)"]
       },
       "messages": {
         "pk": "id (uuid)",
         "fk": "projectId → projects.id",
-        "columns": ["role ('user'|'assistant')", "content", "filesJson (jsonb)", "agentName", "metadata (jsonb)", "createdAt"]
+        "columns": ["role ('user'|'assistant')", "content (text|jsonb)", "filesJson (jsonb)", "agentName", "metadata (jsonb)", "createdAt"]
       },
       "agents": {
         "pk": "id (uuid)",
-        "unique": ["name"],
-        "columns": ["name", "role", "type ('orchestrator'|'expert')", "systemPrompt", "toolsConfig (jsonb array)", "techniquesConfig (jsonb)", "createdAt"],
-        "notes": "Managed via DB — prompts updated on each request via getOrSeedMethodology()"
+        "columns": ["name", "role", "type ('orchestrator'|'expert')", "systemPrompt", "toolsConfig (jsonb)", "model_override (TEXT nullable — tier label 'economy'|'premium')", "createdAt"],
+        "notes": "model_override armazena TIER, não ID de modelo. Resolução tier→ID via platform_settings.llm_tiers."
       },
       "methodologies": {
         "pk": "id (uuid)",
-        "unique": ["name"],
-        "columns": ["name", "description", "category", "isDefault", "agentsConfig (jsonb array)", "createdAt"],
-        "values": ["MSEF", "GRUMBACH", "GODET", "MACROPLAN", "MPO", "ASPLAN", "FUTURES"]
+        "columns": ["name", "description", "category", "isDefault", "agentsConfig (jsonb)", "createdAt"]
+      },
+      "methodology_phases": {
+        "pk": "id (uuid)",
+        "fk": "methodologyId → methodologies.id",
+        "columns": ["phaseNum", "label", "agentRole", "description", "node_slug (TEXT nullable — mapeia para nó LangGraph)", "createdAt"],
+        "notes": "node_slug é usado por getNodeRouter() para montar conditional_edges do LangGraph Fase 2."
+      },
+      "agent_method_prompts": {
+        "pk": "id (uuid)",
+        "fk": "agentId → agents.id, methodologyId → methodologies.id",
+        "columns": ["extraInstructions (text)", "createdAt"],
+        "notes": "Injetado em runtime: finalSystemPrompt += context.agentMethodPrompts[agentName]"
+      },
+      "project_events": {
+        "pk": "id (uuid)",
+        "fk": "projectId → projects.id",
+        "columns": ["name", "description", "type ('trend'|'uncertainty'|'inflection_factor'|'fpf')", "status ('proposed'|'approved'|'rejected')", "sourceEvaluation (jsonb: {reliability, credibility})", "createdAt", "updatedAt"],
+        "notes": "HITL gate. Agentes criam via tool_register_event (status='proposed'). Analista aprova via EventsPanel. anchorContext injeta apenas 'approved'."
       },
       "embeddings": {
         "pk": "id (uuid)",
         "fk": "projectId → projects.id",
         "columns": ["chunkText", "metadata (jsonb)", "embedding vector(512)", "createdAt"],
-        "notes": "pgvector extension required. Voyage AI voyage-3-lite, 512 dims."
+        "notes": "pgvector extension obrigatória. Voyage AI voyage-3-lite, 512 dims."
       },
-      "indicators": {
-        "pk": "id (uuid)",
-        "fk": "projectId → projects.id",
-        "columns": ["name", "source", "parametersJson (jsonb)", "lastValue", "lastCheckedAt", "status ('verde'|'amarelo'|'vermelho')", "createdAt"]
+      "platform_settings": {
+        "pk": "key (text)",
+        "columns": ["value (jsonb)", "updated_at"],
+        "keys": {
+          "llm":              "{ provider: 'anthropic'|'ollama', model: '<id>' } — modelo global",
+          "anthropic_models": "[{ id, label }] — lista de modelos disponíveis na UI",
+          "llm_tiers":        "{ economy: '<model-id>', premium: '<model-id>' } — mapeamento de tiers",
+          "kronos_cooldown_ms": "número — intervalo mínimo entre runs do KRATOS (default: 15000)"
+        }
       },
-      "tools": {
-        "pk": "id (uuid)",
-        "unique": ["name"],
-        "columns": ["name", "description", "schemaJson (jsonb)"]
-      },
-      "techniques": {
-        "pk": "id (uuid)",
-        "unique": ["name"],
-        "columns": ["name", "description", "instructions", "toolsConfig (jsonb)"]
-      }
+      "signals":   { "notes": "Sinais fracos detectados por KRATOS. pk: id (uuid), fk: projectId." },
+      "reviews":   { "notes": "Revisões de análise por ATHENA. pk: id (uuid), fk: projectId." },
+      "indicators":{ "notes": "Indicadores monitorados por KRATOS. pk: id (uuid), fk: projectId." }
     },
-    "importPattern": "import { db, projects, messages, agents, methodologies, indicators, embeddings, users, tools } from '@olympus/db'; import { eq, asc, desc, and, isNull } from 'drizzle-orm';"
+    "importPattern": "import { db, projects, messages, agents as agentsTable, methodologyPhases, agentMethodPrompts, projectEvents } from '@olympus/db'; import { eq, asc, and, inArray } from 'drizzle-orm';"
   },
 
   "agents": {
-    "MSEF": {
-      "orchestrator": "HERMES",
-      "agents": ["HERMES", "SCOPUS", "KLIO", "PYTHIA", "MNEMOSYNE", "THEMIS", "KRATOS"],
-      "stages": {
-        "1": "SCOPUS — Escopo (Ficha: Tema, Horizonte, QEC, Atores, Fronteiras, Premissas, Mudanças, Fontes)",
-        "2": "KLIO — Drivers/PESTEL + Matriz Impacto×Incerteza",
-        "3-4": "PYTHIA — Incertezas → 2 eixos críticos → Matriz 2×2 → Q1-Q4 (prob %)",
-        "5": "MNEMOSYNE — Narrativas (7 componentes, min 400 words, no 'irá'/'certamente')",
-        "6": "THEMIS — Implicações × dimensão + tabela alertas precoces 🟡/🔴",
-        "7": "KRATOS — Relatório de Acompanhamento + semáforo"
+    "current": {
+      "orchestrator": "HERMES (OLYMPUS no seed)",
+      "experts": ["SCOPUS", "KLIO", "PYTHIA", "MNEMOSYNE", "THEMIS", "KRATOS", "ATHENA"],
+      "tiers": {
+        "economy": ["SCOPUS", "KRATOS"],
+        "premium":  ["KLIO", "PYTHIA", "MNEMOSYNE", "THEMIS", "ATHENA"]
       }
     },
-    "GRUMBACH": {
-      "orchestrator": "HERMES_GRUMBACH",
-      "agents": ["HERMES_GRUMBACH", "SCOPUS", "KLIO", "PYTHIA", "THEMIS"],
-      "phases": {
-        "1": "SCOPUS — Análise de Conjuntura",
-        "2": "KLIO — Variáveis Estratégicas",
-        "3": "PYTHIA — Cenários (Tendencial/Pessimista/Otimista)",
-        "4": "THEMIS — Estratégias de Resposta"
-      }
-    },
-    "GODET": {
-      "orchestrator": "HERMES_GODET",
-      "agents": ["HERMES_GODET", "SCOPUS", "KLIO", "PYTHIA", "THEMIS"],
-      "phases": {
-        "1": "SCOPUS — MICMAC (Analyse Structurelle)",
-        "2": "KLIO — MACTOR (Jeux d'Acteurs)",
-        "3-4": "PYTHIA — Morfologia + Probabilidades SMIC",
-        "5": "THEMIS — Opções Estratégicas"
-      }
-    },
-    "toolsPerAgent": {
-      "HERMES":           ["consultar_agente"],
-      "HERMES_GRUMBACH":  ["consultar_agente"],
-      "HERMES_GODET":     ["consultar_agente"],
-      "SCOPUS":           ["web_search", "buscar_documentos_internos"],
-      "KLIO":             ["web_search", "buscar_dados_publicos", "buscar_documentos_internos"],
-      "PYTHIA":           ["web_search"],
-      "MNEMOSYNE":        ["web_search"],
-      "THEMIS":           ["web_search"],
-      "KRATOS":           ["web_search", "buscar_dados_publicos"]
+    "MSEF_stages": {
+      "1": "SCOPUS — Escopo (Ficha KAC: Tema, Horizonte, QEC, Atores, Fronteiras, Premissas)",
+      "2": "KLIO — Drivers/PESTEL + Matriz Impacto×Incerteza",
+      "3-4": "PYTHIA — Incertezas → 2 eixos críticos → Matriz 2×2 → Q1-Q4 (prob %)",
+      "5": "MNEMOSYNE — Narrativas (min 400 words, no 'irá'/'certamente')",
+      "6": "THEMIS — Implicações × dimensão + alertas precoces 🟡/🔴",
+      "7": "KRATOS — Relatório de Acompanhamento + semáforo"
     }
   },
 
   "tools": {
     "consultar_agente": {
-      "schema": { "type": "object", "properties": { "agent_name": { "type": "string" }, "query": { "type": "string" } }, "required": ["agent_name", "query"] },
-      "notes": "agent_name has NO enum — accepts any string to support HERMES_GRUMBACH, HERMES_GODET"
+      "schema": { "type": "object", "properties": { "agent_name": {"type": "string"}, "query": {"type": "string"} }, "required": ["agent_name", "query"] },
+      "notes": "agent_name sem enum — aceita qualquer string para suportar orquestradores dinâmicos"
     },
     "web_search": {
-      "schema": { "type": "object", "properties": { "query": { "type": "string" } }, "required": ["query"] },
-      "implementation": "packages/tools/src/tavily.ts"
+      "schema": { "type": "object", "properties": { "query": {"type": "string"} }, "required": ["query"] },
+      "implementation": "packages/tools/src/tavily.ts",
+      "guard": "Bloqueado em AIR_GAPPED; log de aviso em SOBERANO. Verificado em execute() antes de fetch."
     },
     "buscar_dados_publicos": {
-      "schema": {
-        "type": "object",
-        "properties": {
-          "indicadores": { "type": "array", "items": { "type": "string" }, "maxItems": 5 },
-          "pais": { "type": "string", "description": "ISO3 country code, default BRA" },
-          "termo_dou": { "type": "string", "description": "DOU search term (triggers INLABS fetch)" }
-        },
-        "required": ["indicadores"]
-      },
+      "schema": { "type": "object", "properties": { "indicadores": {"type": "array", "items": {"type": "string"}, "maxItems": 5}, "pais": {"type": "string"}, "termo_dou": {"type": "string"} }, "required": ["indicadores"] },
       "implementation": "packages/tools/src/dados-publicos.ts",
-      "totalIndicators": 51,
-      "sources": ["BCB/SGS", "IBGE", "IPEA", "Comex Stat", "DOU/INLABS", "World Bank", "IMF/WEO", "WHO GHO", "UN Population", "IBGE Países", "ITU DataHub"]
+      "sources": ["BCB/SGS", "IBGE", "IPEA", "Comex Stat", "DOU/INLABS", "World Bank", "IMF/WEO", "WHO GHO", "UN Population", "ITU DataHub"]
     },
     "buscar_documentos_internos": {
-      "schema": { "type": "object", "properties": { "query": { "type": "string" } }, "required": ["query"] },
+      "schema": { "type": "object", "properties": { "query": {"type": "string"} }, "required": ["query"] },
       "implementation": "apps/api/src/tools/rag.ts",
-      "notes": "Lives in apps/api (not packages/tools) because it imports @olympus/db"
+      "notes": "Em apps/api (não packages/tools) porque importa @olympus/db"
+    },
+    "registrar_evento": {
+      "implementation": "apps/api/src/tools/analytical-engines.ts",
+      "notes": "tool_register_event — cria project_events com status='proposed'. Analista aprova via EventsPanel."
     }
   },
 
@@ -221,45 +272,78 @@
       "type": "JWT HS256",
       "header": "Authorization: Bearer <token>",
       "expiry": "24h",
-      "public": ["/api/v1/auth/login", "/api/v1/auth/register", "/api/v1/auth/setup-status", "/api/docs"]
+      "public": ["/api/v1/auth/login", "/api/v1/auth/register", "/api/v1/auth/setup-status", "/ping", "/health", "/api/docs"]
     },
     "routes": {
-      "auth":        ["POST /auth/login", "POST /auth/register", "GET /auth/setup-status", "POST /auth/setup-2fa"],
-      "sessions":    ["GET /sessions", "POST /sessions", "GET /sessions/:id", "PATCH /sessions/:id", "DELETE /sessions/:id", "DELETE /sessions/:id/messages/:msgId"],
-      "chat":        ["POST /chat", "POST /chat/stream (SSE)"],
-      "extract":     ["POST /extract (multipart — PDF/DOCX/XLSX/IMG → text + embed)"],
-      "embeddings":  ["POST /embeddings/search", "GET /embeddings/:projectId/count", "DELETE /embeddings/:projectId"],
-      "export":      ["POST /export (PDF|DOCX|JSON)"],
-      "engine":      ["GET /engine/methodologies", "GET /engine/agents", "POST /engine/install"],
-      "indicators":  ["GET /indicators/project/:id", "POST /indicators", "PATCH /indicators/:id"],
-      "painel":      ["GET /painel/project/:id (auth via ?token= or Bearer — renders full HTML dashboard)"],
-      "backup":      ["GET /backup/list (admin)", "POST /backup/generate (admin)", "GET /backup/download/:filename (admin)"],
-      "users":       ["GET /users (admin)", "PATCH /users/:id (admin)"],
-      "docs":        ["GET /docs (Swagger UI)", "GET /docs/openapi.json"]
+      "auth":       ["POST /auth/login", "POST /auth/register", "GET /auth/setup-status", "POST /auth/setup-2fa"],
+      "sessions":   ["GET /sessions", "POST /sessions", "GET /sessions/:id", "PATCH /sessions/:id", "DELETE /sessions/:id", "GET /sessions/:id/messages", "DELETE /sessions/:id/messages/:msgId"],
+      "chat":       ["POST /chat", "POST /chat/stream (SSE)"],
+      "events":     ["GET /events?projectId=X[&status=proposed]", "POST /events", "PATCH /events/:id/status", "PATCH /events/batch/status", "PATCH /events/:id", "DELETE /events/:id"],
+      "settings":   ["GET /settings", "PATCH /settings/llm (admin)", "PATCH /settings/llm-tiers (admin)", "PATCH /settings/anthropic-models (admin)", "GET /settings/ollama-models", "GET /settings/kronos-cooldown", "PATCH /settings/kronos-cooldown (admin)"],
+      "extract":    ["POST /extract (multipart — PDF/DOCX/XLSX/IMG → text + embed)"],
+      "export":     ["POST /export (HTML|DOCX|JSON) — buildIR() + renderHtml()/renderDocx()"],
+      "engine":     ["GET /engine/methodologies", "GET /engine/agents", "POST /engine/install"],
+      "indicators": ["GET /indicators/project/:id", "POST /indicators", "PATCH /indicators/:id"],
+      "signals":    ["GET /signals", "POST /signals", "PATCH /signals/:id"],
+      "reviews":    ["GET /reviews", "POST /reviews"],
+      "kratos":     ["POST /kratos/run"],
+      "playbook":   ["POST /playbook/gerar"],
+      "backup":     ["GET /backup/list (admin)", "POST /backup/generate (admin)", "GET /backup/download/:filename (admin)"],
+      "users":      ["GET /users (admin)", "PATCH /users/:id (admin)"],
+      "teams":      ["GET /teams", "POST /teams", "PATCH /teams/:id"],
+      "audit":      ["GET /audit"],
+      "docs":       ["GET /docs (Swagger UI)", "GET /docs/openapi.json"]
     }
+  },
+
+  "frontend": {
+    "hooks": {
+      "useLlmConfig":    "llmConfig, anthropicModels, ollamaModels, ollamaAvailable, llmTiers, handleLlmChange, handleTierChange",
+      "useEvents":       "events, proposedEvents, approvedEvents, loading, carregarEventos, aprovarEvento, rejeitarEvento, aprovarTodos",
+      "useSessionManager": "sessions, loading, carregarSessoes, novaSessao, deletarSessao, toggleSessoes",
+      "useProjectState": "projeto, sessionId, setSessionId",
+      "useChat":         "loading, streamingText, sendMessage, gerarRelatorioKratos",
+      "useExport":       "gerarRelatorio(tipo)"
+    },
+    "components": {
+      "EventsPanel":     "Painel âmbar HITL — mostra proposed events, aprovar/rejeitar individual ou em lote",
+      "CommandBar":      "Barra superior — seletor LLM + seletor de tiers (admin+Anthropic only)",
+      "LlmSelector":     "Dropdown: Anthropic models + Ollama + seção Tiers de Agentes (admin only)"
+    }
+  },
+
+  "keyFiles": {
+    "packages/core/src/Agent.ts":       "Motor de execução. Resolver tier→modelId via context.llmTiers. inputSchema hack. stepCountIs(15).",
+    "packages/core/src/Orchestrator.ts":"Dispatch de agentes. A substituir por graph.invoke() na Fase 2.",
+    "packages/core/src/types.ts":       "AgentContext: llmConfig, llmTiers, phases, agentMethodPrompts, connectivityMode, anchorContext.",
+    "packages/core/src/nodeRouter.ts":  "getNodeRouter(phases): resolve nodeSlug→agentName, nextSlug(). Pronto para conditional_edges.",
+    "apps/api/src/routes/chat.ts":      "runAnalysis(): loadMethodology() (lança se ausente), server-authoritative memory, anchorContext HITL, llmTiers.",
+    "apps/api/src/routes/events.ts":    "HITL API: 6 endpoints para CRUD + aprovação de project_events.",
+    "apps/api/src/routes/settings.ts":  "getLLMConfig(), getLLMTiers() helpers. PATCH /llm-tiers (admin).",
+    "apps/api/src/scripts/seed.ts":     "Fonte única de verdade para agentes/metodologias. model_override usa tier labels.",
+    "packages/tools/src/tavily.ts":     "web_search com connectivityMode guard em execute().",
+    "apps/web/src/components/layout/EventsPanel.tsx": "UI de revisão HITL. Renderiza apenas quando proposedEvents.length > 0.",
+    "apps/web/src/hooks/useLlmConfig.ts": "Estado llmTiers + handleTierChange → PATCH /settings/llm-tiers."
   },
 
   "docker": {
     "services": {
       "olympus_db": {
         "image": "pgvector/pgvector:pg15",
-        "port": "5432 (internal)",
-        "memory": "512m",
+        "port": "5432 (interno)",
         "volume": "pgdata:/var/lib/postgresql/data",
         "credentials": "postgres/postgres/olympus"
       },
       "olympus_api": {
-        "image": "node:20-slim (Debian — NOT Alpine)",
+        "image": "node:20-slim (Debian — NÃO Alpine)",
         "port": "3333",
         "memory": "1024m",
-        "nodeFlag": "--max-old-space-size=1024",
         "cmd": "node apps/api/dist/index.js",
-        "volume": "olympus_backups:/app/backups"
+        "note": "NUNCA usar tsx em produção"
       },
       "olympus_web": {
         "image": "node:20-alpine (build) → nginx:alpine (serve)",
-        "port": "80",
-        "memory": "128m"
+        "port": "80"
       }
     },
     "volumes": ["pgdata", "olympus_backups"],
@@ -268,117 +352,114 @@
 
   "patterns": {
     "addNewRoute": [
-      "1. Create handler in apps/api/src/routes/myroute.ts",
-      "2. Register in apps/api/src/index.ts: app.route('/api/v1/myroute', myrouteRoute)",
-      "3. Add JWT guard if needed (already global for /api/v1/*)",
+      "1. Criar handler em apps/api/src/routes/myroute.ts",
+      "2. Registrar em apps/api/src/index.ts: app.route('/api/v1/myroute', myrouteRoute)",
+      "3. Adicionar ao PROTECTED_PREFIXES se precisar de JWT",
       "4. Rebuild: docker compose build --no-cache api && docker compose up -d api"
     ],
     "addNewTool": [
-      "1. If tool needs DB: create in apps/api/src/tools/mytool.ts",
-      "1. If tool is standalone: create in packages/tools/src/mytool.ts",
-      "2. Add schema to TOOL_JSON_SCHEMAS in packages/core/src/Agent.ts",
-      "3. Add tool name to agent toolsConfig in seed.ts",
-      "4. Implement execute() in chat.ts tool handler",
-      "5. Rebuild with --no-cache (core changes require full rebuild)"
+      "1. Se precisa DB: criar em apps/api/src/tools/mytool.ts",
+      "1. Se standalone: criar em packages/tools/src/mytool.ts",
+      "2. Adicionar schema a TOOL_JSON_SCHEMAS em packages/core/src/Agent.ts",
+      "3. Adicionar nome ao toolsConfig do agente em seed.ts",
+      "4. Implementar execute() no handler de ferramentas em chat.ts",
+      "5. Rebuild com --no-cache (mudanças em core requerem rebuild completo)"
     ],
     "addNewAgent": [
-      "1. Add agent definition in apps/api/src/scripts/seed.ts (defaultAgents array)",
-      "2. Add or update methodology agentsConfig in defaultMethodologies",
-      "3. Run: npx tsx apps/api/src/scripts/seed.ts",
-      "4. No rebuild needed — agents/methodologies are DB-driven"
+      "1. Adicionar definição em apps/api/src/scripts/seed.ts (defaultAgents)",
+      "2. Definir modelOverride como 'economy' ou 'premium'",
+      "3. Adicionar ao agentsConfig da metodologia em defaultMethodologies",
+      "4. npx tsx apps/api/src/scripts/seed.ts",
+      "5. Sem rebuild — agentes são DB-driven"
     ],
-    "addNewIndicator": [
-      "1. Agent KRATOS detects indicators from analysis text",
-      "2. Or: POST /api/v1/indicators with { projectId, name, source, parametersJson }",
-      "3. KRONOS cron job calls KRATOS on schedule (kratosCron field in projects)"
+    "addNewTier": [
+      "1. Adicionar tier ao VALID_TIERS em apps/api/src/routes/settings.ts",
+      "2. Adicionar seed inicial em apps/api/src/index.ts (llm_tiers value)",
+      "3. Adicionar label em CommandBar.tsx TIER_LABELS",
+      "4. Redeployar e usar UI de Settings para mapear o novo tier"
     ],
-    "dbQuery": "Always use Drizzle ORM. Import { db, table } from '@olympus/db'. Use eq(), and(), isNull() from 'drizzle-orm'.",
-    "roleCheck": "Check ctx.get('jwtPayload').role — 'admin' > 'analista' > 'cliente' (read-only)"
+    "hitlFlow": [
+      "1. Agente chama tool_register_event → cria project_events com status='proposed'",
+      "2. EventsPanel mostra evento no painel âmbar",
+      "3. Analista aprova → PATCH /events/:id/status { status: 'approved' }",
+      "4. anchorContext em chat.ts injeta apenas eventos approved no systemPrompt",
+      "5. LangGraph Fase 2: interruptBefore: ['node_modeling'] aguardará esse gate"
+    ],
+    "dbQuery": "Sempre usar Drizzle ORM. import { db, tabela } from '@olympus/db'; eq(), and(), inArray() de 'drizzle-orm'.",
+    "roleCheck": "ctx.get('jwtPayload').role — 'admin' > 'analista' > 'cliente' (read-only)"
   },
 
   "environment": {
     "required": {
       "ANTHROPIC_API_KEY": "Claude API key",
-      "TAVILY_API_KEY": "Tavily web search (free: 1k req/month)",
-      "DATABASE_URL": "postgres://postgres:postgres@olympus_db:5432/olympus (inside Docker)",
+      "TAVILY_API_KEY": "Tavily web search (free: 1k req/month). Bloqueado se AIR_GAPPED.",
+      "DATABASE_URL": "postgres://postgres:postgres@olympus_db:5432/olympus (dentro do Docker)",
       "JWT_SECRET": "HS256 signing secret"
     },
     "optional": {
-      "ANTHROPIC_MODEL": "default: claude-opus-4-7",
-      "LLM_PROVIDER": "default: anthropic (supports: ollama)",
-      "VOYAGE_API_KEY": "Voyage AI for RAG embeddings",
-      "SMTP_HOST/PORT/USER/PASS": "Nodemailer for KRATOS email alerts",
-      "INLABS_EMAIL/PASSWORD": "DOU Seção 1 access (inlabs.in.gov.br)",
+      "ANTHROPIC_MODEL": "default: claude-opus-4-7 (sobrescrito por platform_settings.llm)",
+      "LLM_PROVIDER": "default: anthropic (suporta: ollama)",
+      "VOYAGE_API_KEY": "Voyage AI para embeddings RAG",
+      "SMTP_HOST/PORT/USER/PASS": "Nodemailer para alertas de email do KRATOS",
+      "INLABS_EMAIL/PASSWORD": "DOU Seção 1 (inlabs.in.gov.br)",
       "ITU_EMAIL/PASSWORD": "ITU DataHub (datahub.itu.int)",
-      "ALLOWED_ORIGIN": "CORS origin (default: http://localhost:80)"
+      "ALLOWED_ORIGIN": "CORS origin (default: http://localhost:80)",
+      "OLLAMA_BASE_URL": "default: http://ollama:11434/v1",
+      "OLLAMA_MODEL": "default: llama3.1:8b"
     }
   },
 
   "knownIssues": [
     {
-      "id": "CONTEXT_BLOAT",
-      "description": "Message history slice(-12) is arbitrary. Analyses with 20+ turns may degrade.",
+      "id": "MEMORY_TOKEN_BUDGET",
+      "description": "buildMemoryWindow usa orçamento de 32k tokens com estimativa de len/4. Imagens de turnos anteriores são descartadas (armazenadas como texto no banco). Adequado para uso atual.",
       "location": "apps/api/src/routes/chat.ts",
-      "fix": "Implement token-count sliding window (tiktoken) instead of message count"
+      "status": "RESOLVIDO em Sprint Pré-LangGraph R2+R6. Substituiu slice(-12) por janela por tokens."
     },
     {
       "id": "TAVILY_FREE_LIMIT",
-      "description": "Free plan: 1000 req/month. With 2 clients in daily monitoring, limit is insufficient.",
-      "fix": "Upgrade to Tavily Starter (~USD 29/month) after first contract"
+      "description": "Free plan: 1000 req/month. Com monitoramento diário de 2+ clientes, limite pode ser insuficiente.",
+      "fix": "Upgrade para Tavily Starter (~USD 29/month) após primeiro contrato"
     },
     {
       "id": "RAILWAY_RACE_CONDITION",
-      "description": "DB→API race condition is handled with retry (10x 3s) in index.ts. Railway cold start behavior untested.",
-      "fix": "Configure Railway health check. Test startup logs."
+      "description": "Race condition DB→API tratada com retry (10x 3s) em index.ts. Comportamento no Railway cold start não testado.",
+      "fix": "Configurar health check no Railway. Verificar logs de startup."
+    },
+    {
+      "id": "LANGGRAPH_NOT_INSTALLED",
+      "description": "@langchain/langgraph não instalado. getNodeRouter() e HITL gate estão prontos mas o grafo ainda não existe.",
+      "fix": "Sprint Fase 2: npm install @langchain/langgraph @langchain/core @langchain/anthropic"
     }
   ],
 
   "backlog": {
-    "blockers": [
-      { "id": "B1", "title": "Deploy Railway (C2)", "priority": "CRITICAL", "description": "athena.stratsight.com.br. KRATOS monitoring requires 24/7 server." },
-      { "id": "B2", "title": "PoC Presencial (A4 adaptado)", "priority": "CRITICAL", "description": "docker save → USB or standalone Node.js mode. < 5 min install." }
+    "imediato": [
+      { "id": "LG1", "title": "Sprint Fase 2 — LangGraph StateGraph", "priority": "ALTO", "description": "StateAnnotation + PostgresCheckpointer + nós mapeados via nodeSlug + interruptBefore: ['node_modeling']" }
     ],
-    "medium": [
-      { "id": "M1", "title": "FRED API + Legislativo", "description": "Federal Reserve data + Câmara/Senado. Most requested by defense/gov analysts." },
-      { "id": "M2", "title": "Ollama Local (A5)", "description": "LLM_PROVIDER=ollama + Llama 3.3 70B. Provider Factory ready — just configure." },
-      { "id": "M3", "title": "Playbook Automatizado (C3)", "description": "POST /playbook/gerar → DOCX. Motor Dinâmico already manages prompts/methodologies." },
-      { "id": "M4", "title": "Dashboard Gráficos KRATOS", "description": "Chart.js inline — line chart 30 days per indicator. indicators table already exists." },
-      { "id": "M5", "title": "VPN + dados proprietários (B2)", "description": "Depends on Railway deploy being active first." },
-      { "id": "M6", "title": "Sliding window por tokens", "description": "Replace .slice(-12) with tiktoken-based window in chat.ts." }
+    "medio": [
+      { "id": "M1", "title": "FRED API + Legislativo", "description": "Federal Reserve + Câmara/Senado. Mais pedido por analistas gov/defesa." },
+      { "id": "M2", "title": "Ollama Local (A5)", "description": "LLM_PROVIDER=ollama + Llama 3.3 70B. Provider Factory pronto — só configurar." },
+      { "id": "M3", "title": "Dashboard Gráficos KRATOS", "description": "Chart.js inline — line chart 30 dias por indicador. Tabela indicators existe." },
+      { "id": "M4", "title": "Deploy Railway", "priority": "CRÍTICO", "description": "athena.stratsight.com.br. KRATOS monitoring exige servidor 24/7." },
+      { "id": "M5", "title": "PoC Presencial (A4 adaptado)", "description": "docker save → USB ou modo Node.js standalone. < 5 min de instalação." }
     ],
-    "future": [
-      { "id": "F1", "title": "Fase D — LLM Soberano", "description": "Fine-tuning with MSEF data. Air-gapped for defense. PI asset for Big Tech exit." },
-      { "id": "F2", "title": "Sabiá-3 / LLM Soberano BR", "description": "Provider Factory already supports any provider via LLM_PROVIDER env." }
+    "futuro": [
+      { "id": "F1", "title": "Fase D — LLM Soberano", "description": "Fine-tuning com dados MSEF. Air-gapped para defesa." },
+      { "id": "F2", "title": "Sabiá-3 / LLM Soberano BR", "description": "Provider Factory suporta qualquer provedor via LLM_PROVIDER env." }
     ]
   },
 
-  "costs": {
-    "preContract": {
-      "total": "R$ 758/month",
-      "breakdown": {
-        "Claude API": "~R$ 100",
-        "Tavily": "R$ 0 (free)",
-        "Voyage AI": "R$ 0 (free)",
-        "Railway": "R$ 30 (to contract)",
-        "Google Workspace": "R$ 35",
-        "Accountant": "R$ 500",
-        "Other": "R$ 93"
-      }
-    },
-    "postContract": {
-      "total": "~R$ 1.308/month",
-      "limit": "R$ 1.500/month",
-      "margin": "R$ 192/month safety margin"
-    }
-  },
-
   "commands": {
-    "fullRebuild": "docker compose build --no-cache && docker compose up -d",
-    "apiOnly": "docker compose build --no-cache api && docker compose up -d api",
-    "seed": "$env:DATABASE_URL='postgres://postgres:postgres@localhost:5432/olympus'; npx tsx apps/api/src/scripts/seed.ts",
+    "fullRebuild":    "docker compose build --no-cache && docker compose up -d",
+    "apiOnly":        "docker compose build --no-cache api && docker compose up -d api",
+    "seed":           "$env:DATABASE_URL='postgres://postgres:postgres@localhost:5432/olympus'; npx tsx apps/api/src/scripts/seed.ts",
+    "buildCore":      "npm run build --workspace=packages/core",
     "buildDbPackage": "npm run build --workspace=packages/db",
-    "logs": "docker compose logs -f api",
-    "drizzlePush": "cd packages/db && npx drizzle-kit push",
-    "pgvectorExtension": "docker exec olympus_db psql -U postgres -d olympus -c \"CREATE EXTENSION IF NOT EXISTS vector;\""
+    "typeCheckWeb":   "cd apps/web && npx tsc --noEmit",
+    "typeCheckApi":   "cd apps/api && npx tsc --noEmit",
+    "logs":           "docker compose logs -f api",
+    "drizzlePush":    "cd packages/db && npx drizzle-kit push",
+    "pgvectorExt":    "docker exec olympus_db psql -U postgres -d olympus -c \"CREATE EXTENSION IF NOT EXISTS vector;\""
   }
 }
