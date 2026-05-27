@@ -1,4 +1,4 @@
-export type Agent = 'HERMES' | 'SCOPUS' | 'KLIO' | 'PYTHIA' | 'MNEMOSYNE' | 'THEMIS' | 'KRATOS' | 'ATHENA';
+export type Agent = 'HERMES' | 'OLYMPUS' | 'HERMES_SIPLEX' | 'SCOPUS' | 'KLIO' | 'PYTHIA' | 'MNEMOSYNE' | 'THEMIS' | 'KRATOS' | 'ATHENA';
 export type Scale = 'full' | 'compact' | 'micro';
 
 export interface AgentMarkProps {

@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useCallback } from 'react';
 import type { Message, Projeto, AttachedFile } from '../types';
 
 type DonePayload = { text: string; agentName: string; thinking: string; messageType: string };
@@ -30,13 +30,53 @@ export function useChat({
   const [thinkingBlocks, setThinkingBlocks] = useState<Record<number, string>>({});
   const [thinkingOpen, setThinkingOpen] = useState<Record<number, boolean>>({});
 
+  // ── HITL gate — ativado quando /stream/graph emite hitl_gate (PYTHIA pausa) ──
+  const [hitlGate, setHitlGate] = useState<{
+    message:   string;
+    agent:     string;
+    projectId: string;
+  } | null>(null);
+
   const reqHeaders = { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` };
   const authHeader = { 'Authorization': `Bearer ${token}` };
 
+  // RAF token batching — acumula tokens entre frames e aplica num único setState a ~60fps.
+  // Evita centenas de re-renders por segundo durante streaming (1 render/frame vs 1 render/token).
+  const tokenBufferRef = useRef('');
+  const rafIdRef = useRef<number | null>(null);
+
+  const flushTokenBuffer = useCallback(() => {
+    rafIdRef.current = null;
+    if (tokenBufferRef.current) {
+      const chunk = tokenBufferRef.current;
+      tokenBufferRef.current = '';
+      setStreamingText(prev => prev + chunk);
+    }
+  }, []);
+
+  const appendToken = useCallback((text: string) => {
+    tokenBufferRef.current += text;
+    if (rafIdRef.current === null) {
+      rafIdRef.current = requestAnimationFrame(flushTokenBuffer);
+    }
+  }, [flushTokenBuffer]);
+
+  // Detecta se o vizMode usa o motor LangGraph
+  const isGraphMode = vizMode === 'grafo';
+  // Endpoint SSE: /stream/graph para motor LangGraph, /stream para motor clássico
+  const streamEndpoint = isGraphMode ? '/api/v1/chat/stream/graph' : '/api/v1/chat/stream';
+
   const callChatStream = async (payload: object, onDone: (data: DonePayload) => void): Promise<void> => {
+    // Cancela qualquer RAF pendente da stream anterior
+    if (rafIdRef.current !== null) {
+      cancelAnimationFrame(rafIdRef.current);
+      rafIdRef.current = null;
+    }
+    tokenBufferRef.current = '';
     setStreamingText('');
     setStepLog([]);
-    const res = await fetch('/api/v1/chat/stream', {
+    setHitlGate(null); // limpa gate anterior
+    const res = await fetch(streamEndpoint, {
       method: 'POST',
       headers: reqHeaders,
       body: JSON.stringify(payload),
@@ -69,12 +109,22 @@ export function useChat({
           } else if (event.type === 'step') {
             setStepLog(prev => [...prev.slice(-6), event.text]);
           } else if (event.type === 'token') {
-            setStreamingText(prev => prev + event.text);
+            appendToken(event.text);
           } else if (event.type === 'done') {
             setProgressAgent('');
             setStreamingText('');
             setStepLog([]);
             onDone({ text: event.text, agentName: event.agentName, thinking: event.thinking || '', messageType: event.messageType || 'parcial' });
+          } else if (event.type === 'hitl_gate') {
+            // Motor LangGraph pausou antes de PYTHIA — aguardando aprovação humana
+            setHitlGate({
+              message:   event.message   || 'PYTHIA aguarda aprovação de eventos.',
+              agent:     event.agent     || 'PYTHIA',
+              projectId: event.projectId || '',
+            });
+            setProgressAgent('');
+            // Não chama onDone — stream encerra sem mensagem final (o grafo continua depois do resume)
+            return;
           } else if (event.type === 'error') {
             throw new Error(event.message || 'Erro no servidor');
           }
@@ -238,11 +288,46 @@ export function useChat({
 
   const toggleThinking = (idx: number) => setThinkingOpen(prev => ({ ...prev, [idx]: !prev[idx] }));
 
+  /**
+   * Retoma o grafo LangGraph após aprovação HITL.
+   * Chama /stream/graph com isResuming=true — o backend injeta Command({resume}).
+   * Usado pelo botão "▶ Continuar → PYTHIA" no EventsPanel.
+   */
+  const resumeGraph = async () => {
+    if (!hitlGate || loading) return;
+    setHitlGate(null);
+    setLoading(true);
+    try {
+      await callChatStream(
+        {
+          projectId:   sessionId,
+          projectName: projeto.nome,
+          metodologia: projeto.metodologia,
+          vizMode:     'grafo',
+          isResuming:  true,
+          messages:    [],  // não envia histórico — o checkpointer do grafo tem o estado
+        },
+        ({ text, thinking, messageType }) => {
+          appendAssistantMessage(text, thinking, messageType);
+          onIndicatorsRefresh(sessionId);
+          onSignalsRefresh(sessionId);
+        }
+      );
+    } catch (error: any) {
+      console.error('Erro ao retomar grafo:', error);
+      setMessages(prev => [...prev, { role: 'assistant', content: `⚠️ Erro ao retomar análise: ${error.message}` }]);
+    } finally {
+      setLoading(false);
+      setStreamingText('');
+    }
+  };
+
   return {
     messages, setMessages,
     loading, progressAgent, streamingText, stepLog,
     thinkingBlocks, thinkingOpen,
+    hitlGate,
     sendMessage, deletarMensagem, gerarRelatorioKratos, iniciarSessao,
-    toggleThinking,
+    toggleThinking, resumeGraph,
   };
 }

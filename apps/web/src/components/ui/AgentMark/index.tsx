@@ -16,14 +16,16 @@ import {
 type GlyphFn = (props: { c: GlyphColors }) => React.ReactElement;
 
 const GLYPHS: Record<Agent, Record<Scale, GlyphFn>> = {
-  HERMES:    { full: HermesFull,    compact: HermesCompact,    micro: HermesMicro    },
-  SCOPUS:    { full: ScopusFull,    compact: ScopusCompact,    micro: ScopusMicro    },
-  KLIO:      { full: KlioFull,      compact: KlioCompact,      micro: KlioMicro      },
-  PYTHIA:    { full: PythiaFull,    compact: PythiaCompact,    micro: PythiaMicro    },
-  MNEMOSYNE: { full: MnemosymeFull, compact: MnemosymeCompact, micro: MnemosymeMicro },
-  THEMIS:    { full: ThemisFull,    compact: ThemisCompact,    micro: ThemisMicro    },
-  KRATOS:    { full: KratosFull,    compact: KratosCompact,    micro: KratosMicro    },
-  ATHENA:    { full: HermesFull,    compact: HermesCompact,    micro: HermesMicro    },
+  HERMES:       { full: HermesFull,    compact: HermesCompact,    micro: HermesMicro    },
+  OLYMPUS:      { full: HermesFull,    compact: HermesCompact,    micro: HermesMicro    },
+  HERMES_SIPLEX:{ full: HermesFull,    compact: HermesCompact,    micro: HermesMicro    },
+  SCOPUS:       { full: ScopusFull,    compact: ScopusCompact,    micro: ScopusMicro    },
+  KLIO:         { full: KlioFull,      compact: KlioCompact,      micro: KlioMicro      },
+  PYTHIA:       { full: PythiaFull,    compact: PythiaCompact,    micro: PythiaMicro    },
+  MNEMOSYNE:    { full: MnemosymeFull, compact: MnemosymeCompact, micro: MnemosymeMicro },
+  THEMIS:       { full: ThemisFull,    compact: ThemisCompact,    micro: ThemisMicro    },
+  KRATOS:       { full: KratosFull,    compact: KratosCompact,    micro: KratosMicro    },
+  ATHENA:       { full: HermesFull,    compact: HermesCompact,    micro: HermesMicro    },
 };
 
 const VB: Record<Scale, string> = {
@@ -144,7 +146,7 @@ export function AthenaLockup({
               ATHENA
             </div>
             <div style={{ fontFamily: "'DM Mono','Cascadia Code',monospace", fontSize: px * 0.10, color: '#6B8C7A', letterSpacing: '1.4px', marginTop: 2 }}>
-              v1.0 · MOTOR ATIVO
+              v2.0 · MOTOR ATIVO
             </div>
           </div>
         )}
@@ -162,7 +164,7 @@ export function AthenaLockup({
           </div>
           {size !== 'sm' && (
             <div style={{ fontFamily: "'DM Mono','Cascadia Code',monospace", fontSize: Math.max(7, px * 0.15), color: '#D9BF73', letterSpacing: '1.2px', marginTop: 2 }}>
-              v1.0 · MOTOR
+              v2.0 · MOTOR
             </div>
           )}
         </div>

@@ -128,15 +128,20 @@
       "fallback": "Se tier não mapeado em llmTiers, Agent.ts usa o valor como ID direto (compatibilidade)"
     },
     "langGraphPhase2": {
-      "status": "PENDENTE — próximo sprint",
-      "prerequisites": "Todos os pré-requisitos do Sprint Pré-LangGraph concluídos.",
-      "plan": {
-        "1": "npm install @langchain/langgraph @langchain/core @langchain/anthropic",
-        "2": "StateAnnotation com campos do AgentContext (messages, memory, anchorContext, methodology, phases, connectivityMode, nodeRouter, hitlApproved, llmTiers)",
-        "3": "PostgresCheckpointer (usa conexão drizzle/postgres existente)",
-        "4": "Nós do grafo mapeados via nodeSlug de methodology_phases",
-        "5": "interruptBefore: ['node_modeling'] — gate HITL R3 pronto",
-        "6": "Substituir Orchestrator.dispatch() por graph.invoke() / graph.stream()"
+      "status": "CONCLUÍDO — Sprint 26/05/2026",
+      "packages": "@langchain/langgraph@1.3.2 + @langchain/core@1.1.48 (sem @langchain/anthropic — Vercel AI SDK é usado para LLM calls)",
+      "delivered": {
+        "1": "packages/core/src/state.ts — OlympusStateAnnotation com todos os campos do AgentContext + currentNodeSlug",
+        "2": "packages/core/src/nodeRouter.ts — firstSlug() adicionado à interface NodeRouter",
+        "3": "apps/api/src/graph/helpers.ts — loadMemoryWindow, buildAnchorCtx, loadApprovedEvents, buildToolsForAgent, runAgentForPhase, resolveNextSlug",
+        "4": "apps/api/src/graph/nodes.ts — scopusNode, klioNode, pythiaNode (HITL gate), mnemosyeNode, integrationNode, synthesisNode",
+        "5": "apps/api/src/graph/router.ts — routeFromState() + NODE_SLUG_TO_GRAPH_NODE mapa",
+        "6": "apps/api/src/graph/builder.ts — getOlympusGraph() singleton + MemorySaver checkpointer + graphConfig()",
+        "7": "POST /api/v1/chat/stream/graph — novo endpoint SSE com Command({resume}) para HITL"
+      },
+      "deviations": {
+        "checkpointer": "MemorySaver (singleton de processo) em vez de PostgresSaver — adequado para single-server. Fase 3 migra para PostgresSaver.",
+        "interruptBefore": "interruptBefore compile-time substituído por interrupt() condicional dentro de pythiaNode — mais flexível (só interrompe se não há eventos approved)"
       },
       "nodeMapping": {
         "node_framing":         "SCOPUS — KAC, escopo, filtro Hendrikson",
@@ -277,7 +282,7 @@
     "routes": {
       "auth":       ["POST /auth/login", "POST /auth/register", "GET /auth/setup-status", "POST /auth/setup-2fa"],
       "sessions":   ["GET /sessions", "POST /sessions", "GET /sessions/:id", "PATCH /sessions/:id", "DELETE /sessions/:id", "GET /sessions/:id/messages", "DELETE /sessions/:id/messages/:msgId"],
-      "chat":       ["POST /chat", "POST /chat/stream (SSE)"],
+      "chat":       ["POST /chat", "POST /chat/stream (SSE — Orchestrator v1)", "POST /chat/stream/graph (SSE — LangGraph v2, suporta HITL Command({resume}))"],
       "events":     ["GET /events?projectId=X[&status=proposed]", "POST /events", "PATCH /events/:id/status", "PATCH /events/batch/status", "PATCH /events/:id", "DELETE /events/:id"],
       "settings":   ["GET /settings", "PATCH /settings/llm (admin)", "PATCH /settings/llm-tiers (admin)", "PATCH /settings/anthropic-models (admin)", "GET /settings/ollama-models", "GET /settings/kronos-cooldown", "PATCH /settings/kronos-cooldown (admin)"],
       "extract":    ["POST /extract (multipart — PDF/DOCX/XLSX/IMG → text + embed)"],
@@ -313,17 +318,22 @@
   },
 
   "keyFiles": {
-    "packages/core/src/Agent.ts":       "Motor de execução. Resolver tier→modelId via context.llmTiers. inputSchema hack. stepCountIs(15).",
-    "packages/core/src/Orchestrator.ts":"Dispatch de agentes. A substituir por graph.invoke() na Fase 2.",
-    "packages/core/src/types.ts":       "AgentContext: llmConfig, llmTiers, phases, agentMethodPrompts, connectivityMode, anchorContext.",
-    "packages/core/src/nodeRouter.ts":  "getNodeRouter(phases): resolve nodeSlug→agentName, nextSlug(). Pronto para conditional_edges.",
-    "apps/api/src/routes/chat.ts":      "runAnalysis(): loadMethodology() (lança se ausente), server-authoritative memory, anchorContext HITL, llmTiers.",
-    "apps/api/src/routes/events.ts":    "HITL API: 6 endpoints para CRUD + aprovação de project_events.",
-    "apps/api/src/routes/settings.ts":  "getLLMConfig(), getLLMTiers() helpers. PATCH /llm-tiers (admin).",
-    "apps/api/src/scripts/seed.ts":     "Fonte única de verdade para agentes/metodologias. model_override usa tier labels.",
-    "packages/tools/src/tavily.ts":     "web_search com connectivityMode guard em execute().",
+    "packages/core/src/Agent.ts":          "Motor de execução. Resolver tier→modelId via context.llmTiers. inputSchema hack. stepCountIs(15).",
+    "packages/core/src/Orchestrator.ts":   "Dispatch de agentes. Mantido para /chat e /chat/stream (v1). Graph substitui em /chat/stream/graph (v2).",
+    "packages/core/src/types.ts":          "AgentContext: llmConfig, llmTiers, phases, agentMethodPrompts, connectivityMode, anchorContext.",
+    "packages/core/src/nodeRouter.ts":     "getNodeRouter(phases): resolve nodeSlug→agentName, nextSlug(), firstSlug(). Usado como conditional_edges no LangGraph.",
+    "packages/core/src/state.ts":          "OlympusStateAnnotation — estado do StateGraph. currentNodeSlug=null (não iniciado) ou slug da última fase concluída.",
+    "apps/api/src/graph/helpers.ts":       "Helpers compartilhados dos nós: loadMemoryWindow, buildAnchorCtx, loadApprovedEvents, buildToolsForAgent, runAgentForPhase.",
+    "apps/api/src/graph/nodes.ts":         "Nós LangGraph: scopusNode, klioNode, pythiaNode (interrupt() condicional), mnemosyeNode, integrationNode, synthesisNode.",
+    "apps/api/src/graph/router.ts":        "routeFromState(): lê currentNodeSlug → nextSlug → NODE_SLUG_TO_GRAPH_NODE → nome do nó LangGraph.",
+    "apps/api/src/graph/builder.ts":       "getOlympusGraph() singleton + MemorySaver checkpointer + graphConfig(projectId, {onStep, onToken}).",
+    "apps/api/src/routes/chat.ts":         "runAnalysis() para /chat e /stream (v1). POST /stream/graph (v2) usa graph.stream() + Command({resume}) para HITL.",
+    "apps/api/src/routes/events.ts":       "HITL API: 6 endpoints para CRUD + aprovação de project_events.",
+    "apps/api/src/routes/settings.ts":     "getLLMConfig(), getLLMTiers() helpers. PATCH /llm-tiers (admin).",
+    "apps/api/src/scripts/seed.ts":        "Fonte única de verdade para agentes/metodologias. model_override usa tier labels.",
+    "packages/tools/src/tavily.ts":        "web_search com connectivityMode guard em execute().",
     "apps/web/src/components/layout/EventsPanel.tsx": "UI de revisão HITL. Renderiza apenas quando proposedEvents.length > 0.",
-    "apps/web/src/hooks/useLlmConfig.ts": "Estado llmTiers + handleTierChange → PATCH /settings/llm-tiers."
+    "apps/web/src/hooks/useLlmConfig.ts":  "Estado llmTiers + handleTierChange → PATCH /settings/llm-tiers."
   },
 
   "docker": {
@@ -427,15 +437,24 @@
       "fix": "Configurar health check no Railway. Verificar logs de startup."
     },
     {
-      "id": "LANGGRAPH_NOT_INSTALLED",
-      "description": "@langchain/langgraph não instalado. getNodeRouter() e HITL gate estão prontos mas o grafo ainda não existe.",
-      "fix": "Sprint Fase 2: npm install @langchain/langgraph @langchain/core @langchain/anthropic"
+      "id": "LANGGRAPH_INSTALLED",
+      "description": "@langchain/langgraph@1.3.2 + @langchain/core@1.1.48 instalados. StateGraph completo em apps/api/src/graph/. Endpoint /chat/stream/graph ativo.",
+      "status": "RESOLVIDO em Sprint Fase 2 (26/05/2026)"
+    },
+    {
+      "id": "POSTGRES_SAVER_PENDENTE",
+      "description": "MemorySaver em uso como checkpointer (singleton de processo). Estado do grafo não persiste entre restarts do servidor.",
+      "fix": "Fase 3: instalar @langchain/langgraph-checkpoint-postgres + adicionar pg como dep. PostgresSaver usa pool separado da conexão Drizzle."
     }
   ],
 
   "backlog": {
+    "concluido": [
+      { "id": "LG1", "title": "Sprint Fase 2 — LangGraph StateGraph", "status": "DONE 26/05/2026", "description": "OlympusStateAnnotation + MemorySaver + nós por node_slug + interrupt() condicional em pythiaNode + /stream/graph endpoint" }
+    ],
     "imediato": [
-      { "id": "LG1", "title": "Sprint Fase 2 — LangGraph StateGraph", "priority": "ALTO", "description": "StateAnnotation + PostgresCheckpointer + nós mapeados via nodeSlug + interruptBefore: ['node_modeling']" }
+      { "id": "LG2", "title": "Sprint Fase 3 — PostgresSaver + Frontend Graph", "priority": "ALTO", "description": "Substituir MemorySaver por PostgresSaver (@langchain/langgraph-checkpoint-postgres). Botão 'Análise Completa (Graph)' no frontend. EventsPanel integrado ao fluxo /stream/graph." },
+      { "id": "LG3", "title": "ATHENA universal", "priority": "MÉDIO", "description": "synthesisNode chama ATHENA após relatório final para todas as metodologias (hoje só MSEF)." }
     ],
     "medio": [
       { "id": "M1", "title": "FRED API + Legislativo", "description": "Federal Reserve + Câmara/Senado. Mais pedido por analistas gov/defesa." },

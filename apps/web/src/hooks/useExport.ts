@@ -77,7 +77,7 @@ export function useExport(token: string | null, projeto: Projeto, messages: Mess
             (typeof b.content === 'string' ? b.content.length : 0) > (typeof a.content === 'string' ? a.content.length : 0) ? b : a
           );
       }
-      if (!targetMsg) return alert('Relatório Final Padrão não encontrado.\n\nCertifique-se de que o HERMES concluiu todas as etapas e gerou o relatório consolidado.');
+      if (!targetMsg) return alert('Relatório Final Padrão não encontrado.\n\nCertifique-se de que o orquestrador concluiu todas as etapas e gerou o relatório consolidado.');
       await exportSinglePdf(typeof targetMsg.content === 'string' ? targetMsg.content : '');
 
     } else {

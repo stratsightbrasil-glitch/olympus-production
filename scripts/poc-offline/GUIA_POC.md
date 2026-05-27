@@ -1,6 +1,6 @@
 # OLYMPUS v4 — Guia de PoC Presencial
 
-**StratSight Brasil · Confidencial**
+**StratSight Brasil · Acesso Restrito**
 
 ---
 
@@ -110,4 +110,4 @@ docker compose up -d
 
 ---
 
-*OLYMPUS v4.0 · StratSight Brasil · Confidencial*
+*OLYMPUS v4.0 · StratSight Brasil · Acesso Restrito*

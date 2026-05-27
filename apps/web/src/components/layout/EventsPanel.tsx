@@ -87,6 +87,12 @@ function EventCard({ event, onApprove, onReject, busy }: EventCardProps) {
   );
 }
 
+interface HitlGate {
+  message:   string;
+  agent:     string;
+  projectId: string;
+}
+
 interface EventsPanelProps {
   proposedEvents: ProjectEvent[];
   loading: boolean;
@@ -94,13 +100,18 @@ interface EventsPanelProps {
   onReject:     (id: string) => Promise<boolean>;
   onAprovarTodos: (ids: string[]) => Promise<boolean>;
   onRefresh: () => void;
+  /** Definido quando o motor LangGraph pausou aguardando revisão HITL */
+  hitlGate?:  HitlGate | null;
+  /** Callback para retomar o grafo após aprovação */
+  onResume?:  () => void;
 }
 
-export function EventsPanel({ proposedEvents, loading, onApprove, onReject, onAprovarTodos, onRefresh }: EventsPanelProps) {
+export function EventsPanel({ proposedEvents, loading, onApprove, onReject, onAprovarTodos, onRefresh, hitlGate, onResume }: EventsPanelProps) {
   const [busy, setBusy] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
 
-  if (proposedEvents.length === 0 && !loading) return null;
+  // Painel visível quando: há eventos propostos OU o motor está pausado no gate HITL
+  if (proposedEvents.length === 0 && !loading && !hitlGate) return null;
 
   const handleApprove = async (id: string) => {
     setBusy(true);
@@ -123,9 +134,11 @@ export function EventsPanel({ proposedEvents, loading, onApprove, onReject, onAp
   return (
     <div className="border-l border-amber-300 bg-amber-50/60 w-72 shrink-0 flex flex-col overflow-hidden">
       {/* Header */}
-      <div className="flex items-center justify-between px-3 py-2 border-b border-amber-200 bg-amber-100">
+      <div className={`flex items-center justify-between px-3 py-2 border-b ${hitlGate ? 'border-purple-300 bg-purple-100' : 'border-amber-200 bg-amber-100'}`}>
         <div className="flex items-center gap-2">
-          <span className="text-amber-700 font-bold text-xs">⏸ AGUARDANDO REVISÃO</span>
+          <span className={`font-bold text-xs ${hitlGate ? 'text-purple-700' : 'text-amber-700'}`}>
+            {hitlGate ? `⏸ MOTOR PAUSADO — ${hitlGate.agent}` : '⏸ AGUARDANDO REVISÃO'}
+          </span>
           {proposedEvents.length > 0 && (
             <span className="bg-amber-600 text-white text-xs rounded-full px-1.5 py-0.5 font-bold leading-none">
               {proposedEvents.length}
@@ -179,13 +192,40 @@ export function EventsPanel({ proposedEvents, loading, onApprove, onReject, onAp
             )}
           </div>
 
-          {/* Footer hint */}
-          <div className="px-3 py-2 border-t border-amber-200 bg-amber-100/60">
-            <p className="text-[10px] text-amber-700 leading-tight">
-              Eventos aprovados alimentam a Âncora de Contexto dos agentes.
-              PYTHIA só processa incertezas e FPFs com status <em>approved</em>.
-            </p>
-          </div>
+          {/* Botão de retomada HITL — visível quando o motor pausou E não há mais eventos pendentes */}
+          {hitlGate && proposedEvents.length === 0 && onResume && (
+            <div className="px-3 py-3 border-t border-purple-200 bg-purple-50">
+              <p className="text-[11px] text-purple-700 mb-2 leading-snug">
+                ✅ Todos os eventos foram revisados. Clique para continuar a análise com PYTHIA.
+              </p>
+              <button
+                onClick={onResume}
+                disabled={busy}
+                className="w-full text-sm font-bold py-2 px-3 rounded-lg bg-purple-700 text-white hover:bg-purple-800 disabled:opacity-50 transition-colors"
+              >
+                ▶ Continuar → {hitlGate.agent}
+              </button>
+            </div>
+          )}
+
+          {/* Banner de instrução quando gate ativo mas ainda há eventos para revisar */}
+          {hitlGate && proposedEvents.length > 0 && (
+            <div className="px-3 py-2 border-t border-purple-200 bg-purple-50/60">
+              <p className="text-[10px] text-purple-700 leading-tight">
+                O motor está pausado. Aprove ou rejeite todos os eventos acima para liberar a continuação.
+              </p>
+            </div>
+          )}
+
+          {/* Footer hint (modo normal, sem gate) */}
+          {!hitlGate && (
+            <div className="px-3 py-2 border-t border-amber-200 bg-amber-100/60">
+              <p className="text-[10px] text-amber-700 leading-tight">
+                Eventos aprovados alimentam a Âncora de Contexto dos agentes.
+                PYTHIA só processa incertezas e FPFs com status <em>approved</em>.
+              </p>
+            </div>
+          )}
         </>
       )}
     </div>

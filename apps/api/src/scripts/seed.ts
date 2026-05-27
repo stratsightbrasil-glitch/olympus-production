@@ -157,7 +157,7 @@ Padrões analíticos ICD 203:
 Formato de entrega: fichas de cenário com nome, premissas, narrativa, probabilidade, indicadores-sentinela.
 
 IMPORTANTE: Inicie sempre com "**PYTHIA** · ".`,
-        toolsConfig: ['web_search', 'buscar_dados_publicos', 'avaliar_fonte', 'declarar_julgamento', 'registrar_hipotese_alternativa'],
+        toolsConfig: ['web_search', 'buscar_dados_publicos', 'avaliar_fonte', 'declarar_julgamento', 'registrar_hipotese_alternativa', 'tool_esg_rii_calculator'],
         modelOverride: 'premium',
       },
 
@@ -390,7 +390,7 @@ Antes do relatório final, acione ATHENA.
 
 Produto final — RELATÓRIO SIPLEx — consolidando as 7 fases.
 
-IMPORTANTE: Inicie SEMPRE com "**HERMES** · ".`,
+IMPORTANTE: Inicie SEMPRE com "**HERMES_SIPLEX** · ".`,
         toolsConfig: ['consultar_agente'],
         modelOverride: null,
       },
@@ -415,7 +415,7 @@ IMPORTANTE: Inicie SEMPRE com "**HERMES** · ".`,
       {
         name: 'MSEF v3 (8 etapas ENAP)', slug: 'msef',
         description: 'Metodologia Stratsight de Estudos do Futuro v3 — filtro Hendrikson, retrospectiva ENAP, estados booleanos e matematização Grumbach',
-        category: 'Cenários Prospectivos', isDefault: true,
+        category: 'Cenários Prospectivos', isDefault: false,
         agentsConfig: { agents: ['HERMES', 'SCOPUS', 'KLIO', 'PYTHIA', 'MNEMOSYNE', 'THEMIS', 'KRATOS', 'ATHENA'], steps: [
           { num: 1, agent: 'SCOPUS',    label: 'Triagem e Escopo',           node: 'node_framing' },
           { num: 2, agent: 'KLIO',      label: 'Varredura PESTEL',           node: 'node_scanning_macro' },
@@ -451,7 +451,7 @@ IMPORTANTE: Inicie SEMPRE com "**HERMES** · ".`,
         category: 'Cenários Prospectivos', isDefault: false,
         agentsConfig: { agents: ['HERMES', 'SCOPUS', 'KLIO', 'PYTHIA', 'MNEMOSYNE', 'THEMIS', 'KRATOS', 'ATHENA'], steps: [
           { num: 1, agent: 'SCOPUS',    label: 'Delimitação do Sistema',         node: 'node_framing' },
-          { num: 2, agent: 'KLIO',      label: 'MICMAC — Variáveis-chave',       node: 'node_modeling' },
+          { num: 2, agent: 'KLIO',      label: 'MICMAC — Variáveis-chave',       node: 'node_scanning_forces' },
           { num: 3, agent: 'KLIO',      label: 'MACTOR — Análise de Atores',     node: 'node_scanning_forces' },
           { num: 4, agent: 'PYTHIA',    label: 'Análise Morfológica (MORPHOL)',   node: 'node_matrix_design' },
           { num: 5, agent: 'PYTHIA',    label: 'SMIC — Probabilidades Cruzadas', node: 'node_modeling' },
@@ -550,7 +550,22 @@ IMPORTANTE: Inicie SEMPRE com "**HERMES** · ".`,
           { num: 7, agent: 'KRATOS',  label: 'Acompanhamento e Revisão',            node: 'node_integration' },
         ]}
       },
-      // ── 10. GBN (Peter Schwartz) — 8 fases com lógica intuitiva ortogonal ──
+      // ── 10. ESG — 6 etapas com RII e Matriz 2×2 ────────────────────────────
+      {
+        name: 'ESG: Cenários Prospectivos', slug: 'esg',
+        description: 'Metodologia de Construção de Cenários Prospectivos — Escola Superior de Guerra (2026). Enfoque sistêmico, análise multinível (global→regional→nacional) e Ranking Integrado de Incertezas (RII)',
+        sourceDoc: 'manual_cnst_Cenario_Prospectivo_ESG_2026.pdf',
+        category: 'Cenários Prospectivos', isDefault: true,
+        agentsConfig: { agents: ['HERMES', 'SCOPUS', 'KLIO', 'PYTHIA', 'MNEMOSYNE', 'THEMIS', 'ATHENA'], steps: [
+          { num: 1, agent: 'SCOPUS',    label: 'Análise da Conjuntura',              node: 'node_framing' },
+          { num: 2, agent: 'KLIO',      label: 'Sementes de Futuro',                 node: 'node_scanning_forces' },
+          { num: 3, agent: 'KLIO',      label: 'Análise Estrutural (MICMAC/MACTOR)', node: 'node_scanning_forces' },
+          { num: 4, agent: 'PYTHIA',    label: 'Ranking RII',                        node: 'node_matrix_design' },
+          { num: 5, agent: 'MNEMOSYNE', label: 'Cenários Alternativos',              node: 'node_narrative' },
+          { num: 6, agent: 'ATHENA',    label: 'Consistência dos Cenários',          node: 'node_integration' },
+        ]}
+      },
+      // ── 11. GBN (Peter Schwartz) — 8 fases com lógica intuitiva ortogonal ──
       {
         name: 'GBN (Global Business Network - Peter Schwartz)', slug: 'futures',
         description: 'Método GBN de Peter Schwartz — escola intuitiva com Futures Cone, forças motrizes, Matriz 2×2 e narrativas CLA (Causal Layered Analysis)',
@@ -639,7 +654,7 @@ IMPORTANTE: Inicie SEMPRE com "**HERMES** · ".`,
       // ── Godet: Escola Estrutural (7 fases) ─────────────────────────────────
       godet: [
         { phaseNum: 1, slug: 'godet_p1', nodeSlug: 'node_framing',         agentRole: 'SCOPUS',    label: 'Delimitação do Sistema',         description: 'Definição das fronteiras do sistema + identificação de variáveis internas e externas para MICMAC' },
-        { phaseNum: 2, slug: 'godet_p2', nodeSlug: 'node_modeling',        agentRole: 'KLIO',      label: 'MICMAC — Variáveis-chave',       description: 'Matriz de influências cruzadas N×N + potência M^k (k=4) + classificação: motriz/alvo/reguladora/autônoma' },
+        { phaseNum: 2, slug: 'godet_p2', nodeSlug: 'node_scanning_forces', agentRole: 'KLIO',      label: 'MICMAC — Variáveis-chave',       description: 'Matriz de influências cruzadas N×N + potência M^k (k=4) + classificação: motriz/alvo/reguladora/autônoma' },
         { phaseNum: 3, slug: 'godet_p3', nodeSlug: 'node_scanning_forces', agentRole: 'KLIO',      label: 'MACTOR — Análise de Atores',     description: 'Matrizes de influência e dependência de atores + quadrante MOTOR/RELÉ/DEPENDENTE/AUTÔNOMO' },
         { phaseNum: 4, slug: 'godet_p4', nodeSlug: 'node_matrix_design',   agentRole: 'PYTHIA',    label: 'Análise Morfológica (MORPHOL)',   description: 'Espaço morfológico global + redução por restrições de compatibilidade + combinações coerentes de cenários' },
         { phaseNum: 5, slug: 'godet_p5', nodeSlug: 'node_modeling',        agentRole: 'PYTHIA',    label: 'SMIC — Probabilidades Cruzadas', description: 'Painel de especialistas + probabilidades simples P(i) e condicionais P(i|j) + cenários mais prováveis' },
@@ -715,6 +730,15 @@ IMPORTANTE: Inicie SEMPRE com "**HERMES** · ".`,
         { phaseNum: 6, slug: 'futures_p6', nodeSlug: 'node_narrative',       agentRole: 'MNEMOSYNE', label: 'Narrativas de Futuros (CLA)',     description: 'Narrativas em 4 camadas CLA: eventos → sistemas → visão de mundo → mitos/metáforas' },
         { phaseNum: 7, slug: 'futures_p7', nodeSlug: 'node_integration',     agentRole: 'THEMIS',    label: 'Implicações e Alertas',           description: 'Implicações cross-cenário + estratégias robustas + hedges×bets + indicadores de monitoramento' },
         { phaseNum: 8, slug: 'futures_p8', nodeSlug: 'node_integration',     agentRole: 'KRATOS',    label: 'Monitoramento de Futuros',        description: 'Indicadores de sinalização antecipada (early signals) + revisão periódica dos futuros alternativos' },
+      ],
+      // ── ESG: Cenários Prospectivos — Escola Superior de Guerra (6 etapas) ───
+      esg: [
+        { phaseNum: 1, slug: 'esg_conjuntura',  nodeSlug: 'node_framing',         agentRole: 'SCOPUS',    label: 'Análise da Conjuntura',              description: 'Análise multinível obrigatória: global (megatendências), regional (padrões de instabilidade) e nacional por Expressão do Poder Nacional (Política, Econômica, Psicossocial, Militar, C&T, Ambiental)' },
+        { phaseNum: 2, slug: 'esg_sementes',    nodeSlug: 'node_scanning_forces', agentRole: 'KLIO',      label: 'Sementes de Futuro',                 description: 'Identificação e registro de: megatendências globais, tendências de peso, FPF (pontuais, datáveis), eventos futuros, sinais fracos, wild cards/cisnes negros e atores sociais estratégicos' },
+        { phaseNum: 3, slug: 'esg_estrutural',  nodeSlug: 'node_scanning_forces', agentRole: 'KLIO',      label: 'Análise Estrutural (MICMAC + MACTOR)',description: 'MICMAC: impactos cruzados 0-3 + classificação Influentes/Ligação/Dependentes/Independentes. MACTOR: objetivos, recursos, capacidades e margens de manobra dos atores' },
+        { phaseNum: 4, slug: 'esg_rii',         nodeSlug: 'node_matrix_design',   agentRole: 'PYTHIA',    label: 'Ranking Integrado de Incertezas (RII)',description: 'Cálculo II = I × (6-G) × (6-C) para cada variável. Seleção das 2 incertezas críticas (IC1, IC2) com maior II para estruturar a Matriz de Cenários' },
+        { phaseNum: 5, slug: 'esg_cenarios',    nodeSlug: 'node_narrative',       agentRole: 'MNEMOSYNE', label: 'Descrição dos Cenários Alternativos', description: '4 cenários com nomes evocativos: I(IC1+/IC2+) Favorável, II(IC1+/IC2-) Híbrido Desfavorável, III(IC1-/IC2-) Desfavorável, IV(IC1-/IC2+) Híbrido Favorável. Cada um com lógica interna, papel dos atores e narrativa 400-600 palavras' },
+        { phaseNum: 6, slug: 'esg_consistencia',nodeSlug: 'node_integration',     agentRole: 'ATHENA',    label: 'Análise de Consistência dos Cenários',description: 'Verificação em 4 critérios: coerência com megatendências estruturais, governabilidade efetiva dos atores, coerência dos interesses, ausência de contradições internas. Seleção do Cenário Mais Plausível com justificativa' },
       ],
     };
 
@@ -1301,6 +1325,163 @@ DIFERENÇA CRÍTICA: as fases SIEx NÃO têm limites precisos e interpenetram-se
 Antes do RELATÓRIO SIEx CONSOLIDADO, acione ATHENA.
 
 Produto final: RELATÓRIO SIEx CONSOLIDADO consolidando as 5 fases.`);
+
+    // ── ESG: Escola Superior de Guerra ──────────────────────────────────────────
+    await upsertPrompt('HERMES', 'esg', `
+[METODOLOGIA ESG — ESCOLA SUPERIOR DE GUERRA — 6 ETAPAS]
+Referência: Manual de Construção de Cenários Prospectivos, ESG, 2026 (Carlos Alberto Gonçalves de Araujo).
+Princípios: enfoque sistêmico, análise multinível (global→regional→nacional), centralidade das incertezas críticas, pluralidade de futuros.
+
+ETAPA 1 — ANÁLISE DA CONJUNTURA (SCOPUS)
+Delegar ao SCOPUS. Estrutura multinível obrigatória:
+- Ambiente Global: megatendências estruturais, dinâmicas de poder, domínios transversais (ciberespaço, desinformação, mudanças climáticas)
+- Ambiente Regional: manifestação regional das megatendências, padrões de instabilidade/cooperação, assimetrias
+- Ambiente Nacional por Expressão do Poder Nacional (Política, Econômica, Psicossocial, Militar, C&T, Ambiental)
+
+ETAPA 2 — SEMENTES DE FUTURO (KLIO)
+Delegar ao KLIO. Identificar e registrar via tool_register_event TODOS os tipos:
+megatendências, tendências de peso (≠ FPF — atenção à distinção), FPF (datáveis, pontuais), eventos futuros, sinais fracos, wild cards e atores sociais.
+
+ETAPA 3 — ANÁLISE ESTRUTURAL (KLIO)
+Delegar ao KLIO. MICMAC: impactos cruzados 0-3 via tool_register_impact_relation.
+Classificar: Influentes / De Ligação / Dependentes / Independentes.
+MACTOR: objetivos, recursos, margens de manobra e posição de cada ator.
+
+ETAPA 4 — RANKING RII (PYTHIA)
+Delegar ao PYTHIA. Usar tool_esg_rii_calculator com todas as variáveis.
+Fórmula II = I × (6-G) × (6-C). As 2 variáveis com maior II = IC1 e IC2.
+
+ETAPA 5 — CENÁRIOS ALTERNATIVOS (MNEMOSYNE)
+Delegar ao MNEMOSYNE. 4 cenários com nomes evocativos:
+I(IC1+/IC2+) Favorável · II(IC1+/IC2-) Híbrido Desfavorável · III(IC1-/IC2-) Desfavorável · IV(IC1-/IC2+) Híbrido Favorável
+
+ETAPA 6 — CONSISTÊNCIA (ATHENA)
+Delegar ao ATHENA. Verificar 4 critérios por cenário: coerência com megatendências, governabilidade dos atores, coerência dos interesses, ausência de contradições internas.
+ATHENA seleciona o Cenário Mais Plausível com justificativa.
+
+Produto final: RELATÓRIO ESG — 6 seções correspondentes às etapas + Cenário Mais Plausível destacado.`);
+
+    await upsertPrompt('SCOPUS', 'esg', `
+[METODOLOGIA ESG — ETAPA 1: ANÁLISE DA CONJUNTURA]
+Estrutura multinível obrigatória — produza as 3 camadas em sequência:
+
+a) AMBIENTE GLOBAL
+- Megatendências estruturais de longo prazo (tecnologia, geopolítica, demografia, clima, energia)
+- Grandes dinâmicas de poder: reconfigurações em curso, emergência de novos polos
+- Domínios transversais: ciberespaço, espaço informacional, desinformação, mudanças climáticas, cadeias globais ilícitas
+
+b) AMBIENTE REGIONAL
+- Como as megatendências globais assumem formas específicas na região analisada
+- Padrões de instabilidade ou cooperação regional
+- Assimetrias entre países, fluxos transfronteiriços, mecanismos de governança regional
+
+c) AMBIENTE NACIONAL — POR EXPRESSÃO DO PODER NACIONAL
+Para cada expressão, identificar características e implicações estratégicas:
+- POLÍTICA: governabilidade, coordenação federativa, continuidade de políticas de longo prazo
+- ECONÔMICA: crescimento, inclusão, inovação, inserção nas cadeias globais de valor
+- PSICOSSOCIAL: coesão social, confiança institucional, capital humano, polarização
+- MILITAR: defesa nacional, capacidades frente a ameaças híbridas, integração interagências
+- C&T: capacidade de inovação, domínio de tecnologias críticas, dependências externas
+- AMBIENTAL: sustentabilidade, riscos climáticos, impactos nas demais expressões
+
+Produto: Quadro diagnóstico multinível com características e implicações estratégicas por Expressão do Poder Nacional.`);
+
+    await upsertPrompt('KLIO', 'esg', `
+[METODOLOGIA ESG — ETAPAS 2 E 3]
+
+ETAPA 2 — IDENTIFICAÇÃO DAS SEMENTES DE FUTURO
+Identificar e registrar TODOS os tipos via tool_register_event:
+
+1. MEGATENDÊNCIAS GLOBAIS: processos de transformação de longo prazo, alta robustez, alcance civilizacional
+2. TENDÊNCIAS DE PESO: vetores de mudança com base empírica substantiva, horizonte decenal
+   ⚠️ NÃO confundir com FPF — tendências são processos estruturais em curso, não eventos datáveis
+3. FATOS PORTADORES DE FUTURO (FPF): acontecimentos pontuais, concretos, datáveis, já ocorridos, que atuam como gatilhos
+4. EVENTOS FUTUROS (EF): desdobramentos plausíveis dos FPF — não determinados, dependem de atores
+5. SINAIS FRACOS: manifestações emergentes, ainda sem força sistêmica, com potencial transformador
+6. WILD CARDS / CISNES NEGROS: baixíssima probabilidade, alto impacto disruptivo
+7. ATORES SOCIAIS: entidades com capacidade efetiva de intervenção — Estado, OIs, empresas estratégicas, forças políticas
+
+ETAPA 3 — ANÁLISE ESTRUTURAL (MICMAC + MACTOR)
+MICMAC: Para cada par relevante de variáveis, usar tool_register_impact_relation (0=nula, 1=fraca, 2=moderada, 3=forte).
+Classificar cada variável:
+- INFLUENTE: alta influência sobre o sistema, baixa dependência (variáveis motrizes)
+- DE LIGAÇÃO: alta influência E alta dependência (pontos sensíveis de instabilidade)
+- DEPENDENTE: baixa influência, alta dependência (efeitos, não causas)
+- INDEPENDENTE: baixos níveis de influência e dependência (posição periférica)
+
+MACTOR: Para cada ator principal identificar recursos, objetivos, capacidades, margens de manobra, alianças e conflitos.
+Para cada variável: grau de convergência de interesses entre atores (1-5).`);
+
+    await upsertPrompt('PYTHIA', 'esg', `
+[METODOLOGIA ESG — ETAPA 4: RANKING INTEGRADO DE INCERTEZAS (RII)]
+Usar tool_esg_rii_calculator com TODAS as variáveis identificadas nas etapas anteriores.
+
+FÓRMULA: II = I × (6 - G) × (6 - C)
+I = Impacto sistêmico (1-5): "Se este evento mudar, o sistema muda junto?"
+  5=estrutural (Ligação), 4=alta influência/dependência, 3=médias, 2=periférico, 1=baixo
+G = Governabilidade (1-5): "Os principais atores conseguem influenciar e controlar isso?"
+  5=convergência ampla, 3=interesses divididos, 1=forte oposição/ingovernável
+C = Convergência (1-5): "Os principais atores querem que isso aconteça?"
+  5=consenso amplo, 1=conflito profundo
+
+Lógica: maior impacto + menor controle + menor consenso = maior incerteza = maior II.
+As 2 variáveis com maior II tornam-se IC1 (maior II) e IC2 (segundo maior II).
+
+Produto: Tabela RII completa + identificação das 2 Incertezas Críticas + definição dos polos (+) e (-) de cada IC.`);
+
+    await upsertPrompt('MNEMOSYNE', 'esg', `
+[METODOLOGIA ESG — ETAPA 5: DESCRIÇÃO DOS CENÁRIOS ALTERNATIVOS]
+Construir 4 cenários a partir do cruzamento das 2 Incertezas Críticas (IC1 e IC2) selecionadas pelo PYTHIA.
+
+ESTRUTURA DA MATRIZ:
+- IC1: eixo vertical — (+) favorável para cima, (-) desfavorável para baixo
+- IC2: eixo horizontal — (+) favorável para direita, (-) desfavorável para esquerda
+
+CENÁRIO I (IC1+/IC2+) — Quadrante Favorável
+CENÁRIO II (IC1+/IC2-) — Quadrante Híbrido Desfavorável
+CENÁRIO III (IC1-/IC2-) — Quadrante Desfavorável
+CENÁRIO IV (IC1-/IC2+) — Quadrante Híbrido Favorável
+
+Para CADA cenário produzir obrigatoriamente:
+1. NOME EVOCATIVO que sintetize a lógica do quadrante
+2. CARACTERÍSTICA PRINCIPAL (1-2 frases essenciais)
+3. COMPORTAMENTO DAS VARIÁVEIS-CHAVE: como as principais variáveis se manifestam
+4. PAPEL DOS ATORES: quem se beneficia, quem perde, quem domina
+5. IMPLICAÇÕES ESTRATÉGICAS: consequências para a ação do Estado/organização
+6. NARRATIVA PROSPECTIVA: texto em prosa de 400-600 palavras na perspectiva do horizonte temporal
+
+Produto: 4 fichas de cenário completas com todos os 6 elementos acima.`);
+
+    await upsertPrompt('ATHENA', 'esg', `
+[METODOLOGIA ESG — ETAPA 6: ANÁLISE DE CONSISTÊNCIA DOS CENÁRIOS]
+Revisar os 4 cenários produzidos pelo MNEMOSYNE aplicando os critérios ESG de qualidade metodológica.
+
+CRITÉRIOS DE CONSISTÊNCIA (verificar cada um para CADA cenário):
+
+1. COERÊNCIA COM MEGATENDÊNCIAS ESTRUTURAIS
+   - O cenário contradiz alguma tendência de alta robustez identificada na Etapa 2?
+   - Se contradiz uma megatendência de alta robustez, exige forte justificativa compensatória
+
+2. GOVERNABILIDADE EFETIVA DOS ATORES
+   - A posição dos atores no cenário é realista dado seus recursos e capacidades mapeados na Etapa 3?
+
+3. COERÊNCIA DOS INTERESSES
+   - Os atores estão agindo de acordo com seus objetivos e interesses identificados na Etapa 3?
+   - Contradições entre comportamento e objetivos mapeados devem ser sinalizadas
+
+4. AUSÊNCIA DE CONTRADIÇÕES INTERNAS
+   - As premissas e a narrativa são mutuamente compatíveis dentro do cenário?
+
+AVALIAÇÃO POR CENÁRIO: Consistente / Consistente com ressalvas / Requer revisão
+
+SELEÇÃO DO CENÁRIO MAIS PLAUSÍVEL:
+- Qual cenário é mais coerente com megatendências estruturais de alta robustez?
+- Qual representa o campo mais provável de materialização das tensões identificadas?
+- Justificativa explícita citando evidências das etapas anteriores
+
+Padrões ICD 203: verificar uso de declarar_julgamento, linguagem de probabilidade padronizada, hipóteses alternativas consideradas.
+
+Produto: Relatório de consistência por cenário + Cenário Mais Plausível com justificativa baseada nos 4 critérios.`);
 
     console.log('   ✓ agent_method_prompts inseridos/atualizados');
 

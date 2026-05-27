@@ -186,9 +186,13 @@ function buildIR(
   };
 }
 
+// Promisified setImmediate — cede o event loop entre seções pesadas para não
+// bloquear outras requisições durante a renderização de relatórios longos.
+const yieldToEventLoop = () => new Promise<void>(r => setImmediate(r));
+
 // ── renderHtml (formerly buildHtml) ─────────────────────────────────────────
 
-function renderHtml(ir: DocumentIR): string {
+async function renderHtml(ir: DocumentIR): Promise<string> {
   const { projeto, tipo, sections, filename, generatedAt } = ir;
   const { nome, cliente, analista, horizonte, classificacao } = projeto;
   const mdToHtml = (text: string) => parseMarkdownToHtml(text);
@@ -211,10 +215,12 @@ function renderHtml(ir: DocumentIR): string {
   <div class="phase-content">${mdToHtml(clean)}</div>
 </div>`;
       }
+      // Cede o event loop a cada seção para não bloquear a fila de I/O
+      await yieldToEventLoop();
     }
   }
 
-  const classif    = escHtml(classificacao || 'Confidencial');
+  const classif    = escHtml(classificacao || 'Acesso Restrito');
   const tipoLabel  = tipo === 'estendido' ? 'Relatório Estendido' : 'Relatório Padrão';
 
   const css = `
@@ -317,7 +323,7 @@ tr:nth-child(even) td { background: #f9fbfa; }
 
 <div class="cover">
   <div class="brand">StratSight Brasil</div>
-  <div class="brand-sub">Strategic Foresight · OLYMPUS v1.0</div>
+  <div class="brand-sub">Strategic Foresight · OLYMPUS v2.0</div>
   <div class="cover-bar"></div>
   <h1>${escHtml(nome || 'Relatório de Cenários')}</h1>
   <div class="doc-sub">${tipoLabel} · Sistema Multiagente de Cenários Prospectivos</div>
@@ -341,7 +347,7 @@ ${body}
 
 // ── renderDocx (formerly buildDocx) ─────────────────────────────────────────
 
-function renderDocx(ir: DocumentIR): Document {
+async function renderDocx(ir: DocumentIR): Promise<Document> {
   const { projeto, sections } = ir;
   const { nome, cliente, analista, horizonte, classificacao } = projeto;
   const children: any[] = [];
@@ -360,7 +366,7 @@ function renderDocx(ir: DocumentIR): Document {
     alignment: AlignmentType.CENTER, spacing: { after: 300 },
   }));
   children.push(new Paragraph({
-    children: [new TextRun({ text: 'Produzido por OLYMPUS v1.0 — Sistema Multiagente de Cenários Prospectivos', size: 20, color: '555555' })],
+    children: [new TextRun({ text: 'Produzido por OLYMPUS v2.0 — Sistema Multiagente de Cenários Prospectivos', size: 20, color: '555555' })],
     alignment: AlignmentType.CENTER, spacing: { after: 800 },
   }));
 
@@ -369,7 +375,7 @@ function renderDocx(ir: DocumentIR): Document {
     ['Analista Responsável', analista || 'StratSight Brasil'],
     ['Horizonte Temporal', horizonte || '—'],
     ['Metodologia', projeto.metodologia || 'MSEF'],
-    ['Classificação', classificacao || 'Confidencial'],
+    ['Classificação', classificacao || 'Acesso Restrito'],
     ['Versão do Documento', '1.0'],
   ];
   children.push(new Table({
@@ -426,17 +432,21 @@ function renderDocx(ir: DocumentIR): Document {
         children.push(new Paragraph({ children: parseInline(line.trim(), 18), spacing: { after: 80 } }));
       }
     }
+
+    // Cede o event loop entre seções (cada seção = 1 mensagem de agente,
+    // podendo ter centenas de linhas) para não bloquear outras requisições.
+    await yieldToEventLoop();
   }
 
   return new Document({
     sections: [{
       properties: {},
       headers: { default: new Header({ children: [new Paragraph({ children: [
-        new TextRun({ text: 'StratSight Brasil  ·  OLYMPUS v1.0  ·  ', bold: true, size: 16, color: '1B3A2D' }),
+        new TextRun({ text: 'StratSight Brasil  ·  OLYMPUS v2.0  ·  ', bold: true, size: 16, color: '1B3A2D' }),
         new TextRun({ text: nome || 'Relatório de Cenários', size: 16, color: '555555' }),
       ], border: { bottom: { style: BorderStyle.SINGLE, size: 4, color: '2E7D52' } } })] }) },
       footers: { default: new Footer({ children: [new Paragraph({ children: [
-        new TextRun({ text: 'StratSight Brasil  ·  OLYMPUS v1.0  ·  ' + (classificacao || 'Confidencial') + '  ·  Página ', size: 16, color: '888888' }),
+        new TextRun({ text: 'StratSight Brasil  ·  OLYMPUS v2.0  ·  ' + (classificacao || 'Acesso Restrito') + '  ·  Página ', size: 16, color: '888888' }),
         new TextRun({ children: [PageNumber.CURRENT], size: 16, color: '888888' }),
       ], alignment: AlignmentType.CENTER, border: { top: { style: BorderStyle.SINGLE, size: 4, color: 'DDDDDD' } } })] }) },
       children,
@@ -581,10 +591,10 @@ exportRoutes.post('/estimativa', async (c) => {
 exportRoutes.post('/docx', async (c) => {
   try {
     const { projeto, messages } = (await c.req.json()) as any;
-    const slug     = (projeto?.metodologia || 'msef').toLowerCase();
+    const slug     = (projeto?.metodologia || 'esg').toLowerCase();
     const phaseMap = await resolveAgentPhases(slug);
     const ir       = buildIR(projeto || {}, messages || [], 'docx', phaseMap);
-    const doc      = renderDocx(ir);
+    const doc      = await renderDocx(ir);
     const buffer   = await Packer.toBuffer(doc);
     const filename = `StratSight_${(projeto?.nome || 'Cenarios').replace(/\s+/g,'_')}_${new Date().toISOString().slice(0,10)}.docx`;
     return new Response(buffer as any, {
@@ -600,10 +610,10 @@ exportRoutes.post('/docx', async (c) => {
 exportRoutes.post('/pdf', async (c) => {
   try {
     const { projeto, messages, tipo } = (await c.req.json()) as any;
-    const slug     = (projeto?.metodologia || 'msef').toLowerCase();
+    const slug     = (projeto?.metodologia || 'esg').toLowerCase();
     const phaseMap = await resolveAgentPhases(slug);
     const ir       = buildIR(projeto || {}, messages || [], tipo || 'relatorio', phaseMap);
-    const html     = renderHtml(ir);
+    const html     = await renderHtml(ir);
     return new Response(html, { status: 200, headers: { 'Content-Type': 'text/html; charset=utf-8' } });
   } catch (e: any) { return c.json({ error: e.message }, 500); }
 });

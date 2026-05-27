@@ -327,7 +327,7 @@ async function buildPlaybookDocx(
               new TextRun({ children: [PageNumber.CURRENT], size: 16, color: '78909C', font: 'Arial' }),
               new TextRun({ text: ' / ', size: 16, color: '78909C', font: 'Arial' }),
               new TextRun({ children: [PageNumber.TOTAL_PAGES], size: 16, color: '78909C', font: 'Arial' }),
-              new TextRun({ text: `   |   Classificação: ${projeto?.classificacao || 'Confidencial'}   |   StratSight © ${new Date().getFullYear()}`, size: 16, color: '90A4AE', font: 'Arial' }),
+              new TextRun({ text: `   |   Classificação: ${projeto?.classificacao || 'Acesso Restrito'}   |   StratSight © ${new Date().getFullYear()}`, size: 16, color: '90A4AE', font: 'Arial' }),
             ],
           })],
         }),
@@ -363,7 +363,7 @@ playbookRoutes.post('/gerar', async (c) => {
         excerpt = lastMsg?.content?.slice(0, 3000) || '';
       }
       // Methodology phases
-      const slug = (projeto?.metodologia || 'msef').toLowerCase();
+      const slug = (projeto?.metodologia || 'esg').toLowerCase();
       const method = await db.query.methodologies.findFirst({ where: eq(methodologies.slug, slug) });
       if (method) {
         phases = await db.select().from(methodologyPhases)

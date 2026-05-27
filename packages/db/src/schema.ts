@@ -1,4 +1,4 @@
-import { pgTable, text, timestamp, uuid, jsonb, doublePrecision, boolean, customType, integer, primaryKey, uniqueIndex } from "drizzle-orm/pg-core";
+import { pgTable, text, timestamp, uuid, jsonb, doublePrecision, boolean, customType, integer, primaryKey, uniqueIndex, index } from "drizzle-orm/pg-core";
 import { relations } from "drizzle-orm";
 
 // pgvector custom column type (512 dims — Voyage voyage-3-lite)
@@ -69,7 +69,7 @@ export const projects = pgTable("projects", {
   client: text("client").default(""),
   analyst: text("analyst").default(""),
   horizon: text("horizon").default(""),
-  classification: text("classification").default("Confidencial").notNull(),
+  classification: text("classification").default("Acesso Restrito").notNull(),
   methodology: text("methodology").default("MSEF").notNull(),
   techniquesConfig: jsonb("techniques_config"), // Técnicas SAT aplicadas diretamente ao projeto (ex: Red Teaming)
   panelToken: text("panel_token").unique(),
@@ -85,7 +85,12 @@ export const projects = pgTable("projects", {
   deletedAt: timestamp("deleted_at"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
-});
+}, (t) => ({
+  // Cobre a query do KRATOS cron: WHERE status = 'Ativo' AND deletedAt IS NULL
+  projectsStatusDeletedIdx: index("projects_status_deleted_at_idx").on(t.status, t.deletedAt),
+  // Cobre a listagem de sessões por analista (não-admin): WHERE createdBy = X
+  projectsCreatedByIdx: index("projects_created_by_idx").on(t.createdBy),
+}));
 
 export const messages = pgTable("messages", {
   id: uuid("id").primaryKey().defaultRandom(),
@@ -97,7 +102,12 @@ export const messages = pgTable("messages", {
   messageType: text("message_type").default("parcial"), // 'relatorio_final'|'parcial'|'monitoramento'|'revisao'
   metadata: jsonb("metadata"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
-});
+}, (t) => ({
+  // Cobre todas as queries WHERE projectId = X (chat, memory, export, sessions)
+  messagesProjectIdx: index("messages_project_id_idx").on(t.projectId),
+  // Cobre queries ORDER BY createdAt — carregamento de histórico de mensagens
+  messagesProjectCreatedIdx: index("messages_project_id_created_at_idx").on(t.projectId, t.createdAt),
+}));
 
 export const embeddings = pgTable("embeddings", {
   id: uuid("id").primaryKey().defaultRandom(),
@@ -293,7 +303,10 @@ export const projectEvents = pgTable("project_events", {
   sourceEvaluation: jsonb("source_evaluation").default({ reliability: "C", credibility: "3" }),
   createdAt:        timestamp("created_at").defaultNow().notNull(),
   updatedAt:        timestamp("updated_at").defaultNow().notNull(),
-});
+}, (t) => ({
+  // Cobre a query de âncora de contexto: WHERE projectId = X AND status = 'approved'
+  eventsProjectStatusIdx: index("project_events_project_id_status_idx").on(t.projectId, t.status),
+}));
 
 // ── Cenários de Projeto ────────────────────────────────────────────────────────
 // matrixValue: { "uuid_do_evento": "OCORRE" | "NÃO OCORRE" } — estados booleanos.

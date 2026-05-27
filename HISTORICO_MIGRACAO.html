@@ -262,7 +262,7 @@
   <div class="header-badge">StratSight Brasil · Strategic Foresight</div>
   <h1>OLYMPUS v4.0 — Histórico Consolidado de Arquitetura e Desenvolvimento</h1>
   <div class="subtitle">IA Agêntica · Motor ATHENA · Motor KRATOS · Monorepo TypeScript</div>
-  <div class="meta">Última atualização: 23 de Maio de 2026 (Sprint 10 — FRED + Legislativo · Playbook · Audit · Rate Limiting · Hardening Ollama · PoC Seed) &nbsp;·&nbsp; Versão viva — atualizado a cada sprint</div>
+  <div class="meta">Última atualização: 26 de Maio de 2026 (Sprint Pré-LangGraph + Tier System) &nbsp;·&nbsp; Versão viva — atualizado a cada sprint</div>
 </header>
 
 <div class="layout">
@@ -488,9 +488,9 @@
 
     <h3 id="s4c">4.3 Motor Dinâmico de Metodologias</h3>
     <ul>
-      <li><strong>Auto-seed:</strong> <code>getOrSeedMethodology()</code> popula o banco com 7 agentes + MSEF na primeira requisição</li>
+      <li><strong>Auto-seed:</strong> <del><code>getOrSeedMethodology()</code> popula o banco com 7 agentes + MSEF na primeira requisição</del> — <span style="color:#2e7d52"><strong>Removido no Sprint Pré-LangGraph (R1).</strong> Memória é agora server-authoritative; execute <code>npm run seed</code> antes do primeiro uso.</span></li>
       <li><strong>Orquestração dinâmica:</strong> <code>chat.ts</code> consulta a metodologia escolhida e instancia apenas os agentes vinculados em tempo de execução</li>
-      <li><strong>Atualização de prompts:</strong> Cada requisição atualiza os <code>systemPrompts</code> no banco — o código é sempre a fonte da verdade</li>
+      <li><strong>Atualização de prompts:</strong> ~~Cada requisição atualiza os <code>systemPrompts</code> no banco — o código é sempre a fonte da verdade~~ <span style="color:#2e7d52">Substituído: prompts são persistidos pelo <code>seed.ts</code> declarativo e atualizados apenas via admin (<code>PUT /api/v1/chat/memory</code>).</span></li>
       <li><strong>Engine Manager:</strong> Interface admin para instalar novos "Motores" (JSON com agentes e metodologias) sem novo deploy</li>
       <li><strong>SSE:</strong> Rota <code>POST /api/v1/chat/stream</code> envia eventos de progresso — qual agente está trabalhando — antes da resposta final</li>
     </ul>
@@ -1084,6 +1084,84 @@ swap=2GB</pre>
       <code>apps/web/src/App.tsx</code>
     </div>
 
+    <h3 style="margin-top:28px">✅ Sprint Final — Fase 1: LangGraph Preps + Nomenclatura + LLM Routing (26 Mai 2026)</h3>
+    <p>Sprint em duas partes. Objetivo: preparar o motor para migração LangGraph JS (Fase 2) e fechar débitos de nomenclatura/UX.</p>
+    <h4>Parte A — Preparação LangGraph</h4>
+    <ul class="done-list">
+      <li><strong>Schema LangGraph:</strong> <code>projects.connectivity_mode</code> TEXT (ONLINE/SOBERANO/AIR_GAPPED); <code>methodology_phases.slug</code> UNIQUE; <code>methodology_phases.node_slug</code>; 4 novas tabelas: <code>project_events</code>, <code>project_scenarios</code>, <code>matrix_direct_impacts</code>, <code>technique_execution_outputs</code>. Aplicado via SQL direto.</li>
+      <li><strong>7 ferramentas analíticas (JSON Schema puro):</strong> <code>apps/api/src/tools/analytical-engines.ts</code> — <code>tool_unified_search_engine</code>, <code>tool_register_event</code>, <code>tool_mpc_source_evaluator</code>, <code>tool_register_impact_relation</code>, <code>tool_grumbach_expert_simulation</code>, <code>tool_mactor_analysis</code>, <code>tool_mpo_backcasting</code>. Sem Zod.</li>
+      <li><strong>AgentContext anti-bloat:</strong> <code>connectivityMode</code> e <code>anchorContext</code> adicionados ao <code>AgentContext</code>. <code>chat.ts</code> injeta eventos aprovados como âncora no <code>systemPrompt</code> antes da execução.</li>
+      <li><strong>Hardening Ollama embed:</strong> <code>embed.ts</code> — <code>chunkTextSafe()</code> (quebra parágrafo/sentença), <code>runWithLimit()</code> (MAX_CONCURRENT=2, pausa 150ms), <code>generateEmbeddingsOllama()</code>.</li>
+      <li><strong>Seed declarativo:</strong> 10 metodologias normalizadas (slugs canônicos), 73 fases com <code>slug</code> e <code>nodeSlug</code>. Upsert idempotente por <code>target: methodologies.slug</code>.</li>
+      <li><strong>Regras Claude Code:</strong> <code>.claude/rules/langgraph.md</code> — Zod proibido, isolamento de pacotes, HITL gate, ferramentas matemáticas, modos de soberania.</li>
+    </ul>
+    <h4>Parte B — Nomenclatura e UX</h4>
+    <ul class="done-list">
+      <li><strong>KRONOS → KRATOS:</strong> <code>KronosOrchestrator</code> → <code>KratosOrchestrator</code> em <code>cron.ts</code>; logs; e-mail footer. DB key <code>kronos_cooldown_ms</code> mantido.</li>
+      <li><strong>HERMES_REVISOR → ATHENA:</strong> 42 ocorrências em <code>seed.ts</code>, 9 em <code>chat.ts</code>. ATHENA adicionada ao tipo <code>Agent</code> e ao GLYPHS registry (reutiliza glyph do HERMES).</li>
+      <li><strong>LLM routing por agente</strong> (hardcoded — <em>supersedido pelo Tier System no sprint seguinte</em>): SCOPUS/KRATOS → Sonnet 4.6; KLIO/PYTHIA/MNEMOSYNE/THEMIS/ATHENA → Opus 4.7. Override só ativo com <code>provider=anthropic</code>.</li>
+      <li><strong>QEC box sem truncamento:</strong> <code>maxWidth: 260</code> removido → wrapper <code>flex: 1; minWidth: 0</code>. Questão Estratégica Central ocupa espaço disponível.</li>
+      <li><strong>Chip de agente com label completo:</strong> <code>"SCOPUS · Enquadramento Estratégico analisando"</code> (label derivado de <code>methodologySteps</code>).</li>
+      <li><strong>Sidebar admin:</strong> botão único <code>"Usuários · Backup · Engine"</code> → dois botões separados (<code>Usuários</code> e <code>Backup</code>).</li>
+    </ul>
+    <div class="callout" style="background:#e8f5e9;border-color:#4caf50;margin-top:12px">
+      <strong>Arquivos novos no Sprint Final:</strong>
+      <code>apps/api/src/tools/analytical-engines.ts</code> &nbsp;·&nbsp;
+      <code>.claude/rules/langgraph.md</code><br>
+      <strong>Modificados:</strong>
+      <code>packages/db/src/schema.ts</code> &nbsp;·&nbsp;
+      <code>packages/core/src/Agent.ts</code> &nbsp;·&nbsp;
+      <code>packages/core/src/types.ts</code> &nbsp;·&nbsp;
+      <code>packages/tools/src/embed.ts</code> &nbsp;·&nbsp;
+      <code>apps/api/src/routes/chat.ts</code> &nbsp;·&nbsp;
+      <code>apps/api/src/scripts/seed.ts</code> &nbsp;·&nbsp;
+      <code>apps/api/src/cron.ts</code> &nbsp;·&nbsp;
+      <code>apps/web/src/components/layout/CommandBar.tsx</code> &nbsp;·&nbsp;
+      <code>apps/web/src/components/layout/Sidebar.tsx</code> &nbsp;·&nbsp;
+      <code>apps/web/src/components/ui/AgentMark/types.ts</code> &nbsp;·&nbsp;
+      <code>apps/web/src/components/ui/AgentMark/index.tsx</code>
+    </div>
+
+    <h3 style="margin-top:28px">✅ Sprint Pré-LangGraph + Tier System (26 Mai 2026)</h3>
+    <p>Hardening e configurabilidade executados após o Sprint Final. Objetivo: corrigir riscos técnicos antes da migração LangGraph JS e substituir roteamento LLM hardcoded por sistema configurável em banco de dados.</p>
+    <h4>R1–R5 — Hardening Pré-LangGraph</h4>
+    <ul class="done-list">
+      <li><strong>R1 — Auto-seed eliminado:</strong> <code>getOrSeedMethodology()</code> removido de <code>chat.ts</code>. <code>loadMethodology()</code> lança exceção se metodologia ausente — sem fallback silencioso. Memória de agentes passa a ser <strong>server-authoritative</strong>: só atualizada via <code>PUT /api/v1/chat/memory/:agentName</code> (admin).</li>
+      <li><strong>R2 — HITL API + EventsPanel:</strong> <code>routes/events.ts</code> (novo): <code>GET /api/v1/events</code> + <code>PUT /api/v1/events/:id</code>. <code>EventsPanel.tsx</code> exibe eventos pendentes e permite aprovação/rejeição via UI. <code>anchorContext</code> injeta eventos <code>status='approved'</code> no <code>systemPrompt</code>.</li>
+      <li><strong>R3 — connectivityMode em Tavily:</strong> <code>packages/tools/src/tavily.ts</code> retorna lista vazia imediatamente quando <code>context.connectivityMode === 'AIR_GAPPED'</code>. Elimina timeout em ambientes sem internet.</li>
+      <li><strong>R4 — <code>getNodeRouter()</code>:</strong> <code>packages/core/src/nodeRouter.ts</code> (novo): factory function que mapeia <code>nodeSlug → agentName</code>, calcula <code>nextSlug()</code>. Base para <code>conditional_edges</code> do futuro grafo LangGraph.</li>
+      <li><strong>R5 — <code>buildMemoryWindow</code> multimodal:</strong> <code>estimateTokens()</code> serializa conteúdo <code>Array</code> antes de contar — não quebra com mensagens de imagem ou arrays de content block. Compatibilidade com Claude Vision.</li>
+    </ul>
+    <h4>P1 — Tier System de Modelos LLM</h4>
+    <ul class="done-list">
+      <li><strong><code>platform_settings.llm_tiers</code>:</strong> chave nova seeded no startup: <code>{ economy: 'claude-sonnet-4-6', premium: 'claude-opus-4-7' }</code>. Editável pelo admin sem redeploy ou mudança de código.</li>
+      <li><strong><code>agents.model_override</code> → tier label:</strong> valores migrados de IDs de modelo para labels semânticos. SCOPUS, KRATOS → <code>'economy'</code>; KLIO, PYTHIA, MNEMOSYNE, THEMIS, ATHENA → <code>'premium'</code>.</li>
+      <li><strong>Resolução em <code>Agent.ts</code>:</strong> <code>rawOverride → tiers[rawOverride] ?? rawOverride</code>. Fallback passthrough mantém retrocompatibilidade com IDs diretos antigos. Log: <code>[AGENTE] Tier [economy] → claude-sonnet-4-6</code>.</li>
+      <li><strong><code>AgentContext.llmTiers</code>:</strong> campo <code>llmTiers?: Record&lt;string, string&gt;</code> em <code>types.ts</code>. Carregado em paralelo com <code>llmConfig</code> via <code>getLLMTiers()</code> em <code>chat.ts</code>.</li>
+      <li><strong>API:</strong> <code>GET /settings</code> retorna <code>llmTiers</code>. <code>PATCH /settings/llm-tiers</code> (admin-only) valida tiers e persiste.</li>
+      <li><strong>Admin UI:</strong> seção "⚙ Tiers de Agentes" no dropdown LLM do <code>CommandBar</code> (admin + Anthropic only). Selects Economy / Premium com opções derivadas de <code>anthropicModels</code>.</li>
+    </ul>
+    <h4>Renomeação de Pasta</h4>
+    <ul class="done-list">
+      <li><strong><code>Olympus_v4</code> → <code>Olympus</code>:</strong> <code>D:\Pessoais\DEV\Olympus_v4</code> → <code>D:\Pessoais\DEV\Olympus</code>. Apenas 2 arquivos tinham caminho hardcoded: <code>.claude/settings.local.json</code> e <code>scripts/poc-offline/build-offline.ps1</code>. Memória do Claude Code copiada para novo diretório.</li>
+    </ul>
+    <div class="callout" style="background:#e8f5e9;border-color:#4caf50;margin-top:12px">
+      <strong>Arquivos novos no Sprint Pré-LangGraph:</strong>
+      <code>packages/core/src/nodeRouter.ts</code> &nbsp;·&nbsp;
+      <code>apps/api/src/routes/events.ts</code><br>
+      <strong>Modificados:</strong>
+      <code>packages/core/src/types.ts</code> &nbsp;·&nbsp;
+      <code>packages/core/src/Agent.ts</code> &nbsp;·&nbsp;
+      <code>packages/tools/src/tavily.ts</code> &nbsp;·&nbsp;
+      <code>apps/api/src/routes/chat.ts</code> &nbsp;·&nbsp;
+      <code>apps/api/src/routes/settings.ts</code> &nbsp;·&nbsp;
+      <code>apps/api/src/index.ts</code> &nbsp;·&nbsp;
+      <code>apps/api/src/scripts/seed.ts</code> &nbsp;·&nbsp;
+      <code>apps/web/src/hooks/useLlmConfig.ts</code> &nbsp;·&nbsp;
+      <code>apps/web/src/components/layout/CommandBar.tsx</code> &nbsp;·&nbsp;
+      <code>apps/web/src/App.tsx</code>
+    </div>
+
     <h3 style="margin-top:28px">⛔ BLOQUEADORES — Caminho Crítico para o Primeiro Contrato</h3>
     <div class="callout danger">
       <strong>Infraestrutura pronta. Próxima ação: executar o deploy e gerar o pacote USB.</strong>
@@ -1273,7 +1351,7 @@ swap=2GB</pre>
 </div>
 
 <footer>
-  OLYMPUS v4.0 &nbsp;·&nbsp; StratSight Brasil &nbsp;·&nbsp; Maio 2026 &nbsp;·&nbsp; Confidencial &nbsp;·&nbsp; Este documento é memória viva — atualizar a cada sprint
+  OLYMPUS v4.0 &nbsp;·&nbsp; StratSight Brasil &nbsp;·&nbsp; Maio 2026 &nbsp;·&nbsp; Acesso Restrito &nbsp;·&nbsp; Este documento é memória viva — atualizar a cada sprint
 </footer>
 
 </body>

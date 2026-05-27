@@ -171,7 +171,7 @@ export function Topbar({
             style={btnBase}
             onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,.07)'; e.currentTarget.style.color = '#fff'; }}
             onMouseLeave={e => { e.currentTarget.style.background = 'none'; e.currentTarget.style.color = '#A3C9AE'; }}
-            title="Exportar Relatório HERMES (PDF)"
+            title="Exportar Relatório Final (PDF)"
           >
             ↑ Exportar
           </button>

@@ -178,38 +178,38 @@ settingsRoutes.get('/ollama-models', async (c) => {
   return c.json(result);
 });
 
-// ── GET /api/v1/settings/kronos-cooldown ─────────────────────────────────────
-settingsRoutes.get('/kronos-cooldown', async (c) => {
+// ── GET /api/v1/settings/kratos-cooldown ─────────────────────────────────────
+settingsRoutes.get('/kratos-cooldown', async (c) => {
   try {
     const result = await db.execute(
-      sql`SELECT value FROM platform_settings WHERE key = 'kronos_cooldown_ms'`
+      sql`SELECT value FROM platform_settings WHERE key = 'kratos_cooldown_ms'`
     );
     const rows = (result as any).rows ?? result;
     const ms = rows.length > 0 ? Number(rows[0].value) : 15000;
-    return c.json({ kronos_cooldown_ms: ms });
+    return c.json({ kratos_cooldown_ms: ms });
   } catch {
-    return c.json({ kronos_cooldown_ms: 15000 });
+    return c.json({ kratos_cooldown_ms: 15000 });
   }
 });
 
-// ── PATCH /api/v1/settings/kronos-cooldown ────────────────────────────────────
-settingsRoutes.patch('/kronos-cooldown', async (c) => {
+// ── PATCH /api/v1/settings/kratos-cooldown ────────────────────────────────────
+settingsRoutes.patch('/kratos-cooldown', async (c) => {
   const payload = c.get('jwtPayload') as any;
   if (!payload || payload.role !== 'admin') {
     return c.json({ error: 'Apenas administradores podem alterar configurações.' }, 403);
   }
   const body = await c.req.json() as any;
-  const ms = Number(body.kronos_cooldown_ms);
+  const ms = Number(body.kratos_cooldown_ms);
   if (!Number.isFinite(ms) || ms < 1000 || ms > 300_000) {
-    return c.json({ error: 'kronos_cooldown_ms deve ser entre 1000 e 300000 ms.' }, 400);
+    return c.json({ error: 'kratos_cooldown_ms deve ser entre 1000 e 300000 ms.' }, 400);
   }
   const value = String(ms);
   await db.execute(sql`
     INSERT INTO platform_settings (key, value, updated_at)
-    VALUES ('kronos_cooldown_ms', ${value}::jsonb, NOW())
+    VALUES ('kratos_cooldown_ms', ${value}::jsonb, NOW())
     ON CONFLICT (key) DO UPDATE SET value = ${value}::jsonb, updated_at = NOW()
   `);
-  return c.json({ ok: true, kronos_cooldown_ms: ms });
+  return c.json({ ok: true, kratos_cooldown_ms: ms });
 });
 
 export default settingsRoutes;

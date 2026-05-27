@@ -1,9 +1,9 @@
 import cron from 'node-cron';
 import { db, projects, messages } from '@olympus/db';
-import { eq, and, isNull, asc } from 'drizzle-orm';
+import { eq, and, isNull, asc, desc } from 'drizzle-orm';
 import { sql } from 'drizzle-orm';
-import { sign } from 'hono/jwt';
 import { sendEmail } from './mailer';
+import { runAnalysis } from './routes/chat';
 
 export function buildKratosEmailHtml(projectName: string, conteudo: string): string {
   const geradoEm = new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' });
@@ -20,7 +20,7 @@ export function buildKratosEmailHtml(projectName: string, conteudo: string): str
 <html lang="pt-BR"><head><meta charset="UTF-8"></head>
 <body style="font-family:'Segoe UI',sans-serif;color:#333;max-width:760px;margin:0 auto;padding:24px">
   <div style="background:#1B3A2D;color:white;padding:16px 24px;border-radius:8px 8px 0 0">
-    <strong>⚡ OLYMPUS v1.0 · StratSight Brasil</strong>
+    <strong>⚡ OLYMPUS v2.0 · StratSight Brasil</strong>
     <span style="float:right;font-size:12px;color:#A5D6A7">Relatório KRATOS · ${geradoEm}</span>
   </div>
   <div style="border:1px solid #ddd;border-top:none;padding:24px;border-radius:0 0 8px 8px">
@@ -30,7 +30,7 @@ export function buildKratosEmailHtml(projectName: string, conteudo: string): str
       <p style="margin:6px 0">${html}</p>
     </div>
     <p style="margin-top:24px;font-size:11px;color:#aaa">
-      Gerado automaticamente pelo KRATOS · OLYMPUS v1.0 · StratSight Brasil<br>
+      Gerado automaticamente pelo KRATOS · OLYMPUS v2.0 · StratSight Brasil<br>
       Este relatório é confidencial e destinado exclusivamente ao destinatário indicado.
     </p>
   </div>
@@ -41,7 +41,6 @@ interface KratosTask {
   projectId: string;
   projectName: string;
   metodologia: string;
-  app: any;
 }
 
 class KratosOrchestrator {
@@ -75,44 +74,40 @@ class KratosOrchestrator {
   }
 
   private async runKratos(task: KratosTask) {
-    const { projectId, projectName, metodologia, app } = task;
+    const { projectId, projectName, metodologia } = task;
     console.log(`[KRATOS CRON] 🤖 Iniciando extração autônoma para: ${projectName}`);
     try {
-      const port = process.env.PORT || 3333;
-      const secret = process.env.JWT_SECRET || 'olympus_super_secret_key_2026';
-      const token = await sign({ id: 'system', name: 'Sistema Automático', role: 'admin', exp: Math.floor(Date.now() / 1000) + 60 * 5 }, secret);
-      const headers = { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` };
-
+      // ── Carrega histórico (sem self-mint de JWT, sem HTTP interno) ────────────
+      // Limita a 100 mensagens para evitar contexto gigantesco para o LLM.
       const msgs = await db.query.messages.findMany({
         where: eq(messages.projectId, projectId),
-        orderBy: [asc(messages.createdAt)]
+        orderBy: [asc(messages.createdAt)],
+        limit: 100,
       });
 
       const formattedMsgs = msgs.map(m => ({ role: m.role, content: m.content }));
-      formattedMsgs.push({ role: 'user', content: `COMANDO DO SISTEMA EM MODO AUTÔNOMO (CRON): Acione o agente KRATOS para o projeto de nome oficial "${projectName}". \nREGRAS ESTRITAS DE OPERAÇÃO MÁQUINA:\n1. Você está operando em background (sem interação humana). NUNCA converse, peça permissão ou ofereça opções (A, B, C).\n2. Se houver falha na ferramenta de busca, NÃO relate o erro técnico; proceda imediatamente com a análise baseada nos últimos dados conhecidos do histórico.\n3. Gere EXCLUSIVAMENTE o Relatório de Acompanhamento padronizado (Dashboard, Síntese de Mudanças, Sinais Fracos).\n4. IMPORTANTE: O usuário pode ter alterado o nome, fatores, eventos e indicadores ao longo da análise. Baseie-se SEMPRE nas decisões MAIS RECENTES do histórico e use o título atualizado ("${projectName}").\nInicie a geração do relatório agora.` });
+      const systemCommand = `COMANDO DO SISTEMA EM MODO AUTÔNOMO (CRON): Acione o agente KRATOS para o projeto de nome oficial "${projectName}". \nREGRAS ESTRITAS DE OPERAÇÃO MÁQUINA:\n1. Você está operando em background (sem interação humana). NUNCA converse, peça permissão ou ofereça opções (A, B, C).\n2. Se houver falha na ferramenta de busca, NÃO relate o erro técnico; proceda imediatamente com a análise baseada nos últimos dados conhecidos do histórico.\n3. Gere EXCLUSIVAMENTE o Relatório de Acompanhamento padronizado (Dashboard, Síntese de Mudanças, Sinais Fracos).\n4. IMPORTANTE: O usuário pode ter alterado o nome, fatores, eventos e indicadores ao longo da análise. Baseie-se SEMPRE nas decisões MAIS RECENTES do histórico e use o título atualizado ("${projectName}").\nInicie a geração do relatório agora.`;
+      formattedMsgs.push({ role: 'user', content: systemCommand });
 
       console.log(`[KRATOS CRON] 🧠 Solicitando análise à IA...`);
-      
-      const chatPayload = { method: 'POST', headers, body: JSON.stringify({ projectId, projectName, metodologia, vizMode: 'etapa', messages: formattedMsgs }) };
-      const chatRes = app 
-        ? await app.request('/api/v1/chat', chatPayload) 
-        : await fetch(`http://127.0.0.1:${port}/api/v1/chat`, chatPayload);
 
-      if (!chatRes.ok) {
-        const errText = await chatRes.text();
-        throw new Error(`Falha na API HTTP ${chatRes.status}: ${errText}`);
-      }
+      // ── Chamada direta — sem JWT self-mint, sem loopback HTTP ────────────────
+      // jwtPayload com id='system' é ignorado pelo verifyUserExists no middleware.
+      const systemPayload = { id: 'system', name: 'Sistema Automático', role: 'admin' };
+      const result = await runAnalysis(
+        { projectId, projectName, metodologia, vizMode: 'etapa', messages: formattedMsgs },
+        systemPayload,
+        {
+          onStatus: (t) => console.log(`[KRATOS CRON] Status: ${t}`),
+          onAgent:  (n) => console.log(`[KRATOS CRON] Agente: ${n}`),
+        },
+      );
 
       console.log(`[KRATOS CRON] ✅ Análise gerada! Preparando envio de E-mail...`);
 
-      // 1. Disparo de E-mail Nativo (Nodemailer)
-      const latestMsgs = await db.query.messages.findMany({
-        where: eq(messages.projectId, projectId),
-        orderBy: [asc(messages.createdAt)]
-      });
-      const lastMessage = latestMsgs[latestMsgs.length - 1]?.content || 'Análise concluída sem detalhes legíveis.';
+      // 1. Disparo de E-mail — usa responseText direto (sem re-query ao banco)
+      const lastMessage = result.responseText || 'Análise concluída sem detalhes legíveis.';
 
-      // Destinatários: alertEmails do projeto (vírgula-separado) ou fallback para ALERT_EMAIL do .env
       const projeto = await db.query.projects.findFirst({ where: eq(projects.id, projectId) });
       const emailsStr = projeto?.alertEmails?.trim() || process.env.ALERT_EMAIL || process.env.SMTP_USER || '';
       const destinatarios = emailsStr.split(',').map((e: string) => e.trim()).filter(Boolean);
@@ -128,18 +123,24 @@ class KratosOrchestrator {
         console.log(`[KRATOS CRON] 📧 Relatório enviado para: ${destinatarios.join(', ')}`);
       }
 
-      // 2. Disparo de Webhook Opcional (Mantido para extensibilidade futura, mas não quebra se o n8n estiver off)
-      try {
-        const hookPayload = { method: 'POST', headers };
-        const hookRes = app 
-          ? await app.request(`/api/v1/sessions/${projectId}/webhook`, hookPayload)
-          : await fetch(`http://127.0.0.1:${port}/api/v1/sessions/${projectId}/webhook`, hookPayload);
-        
-        if (hookRes.ok) {
-          console.log(`[KRATOS CRON] Webhook opcional disparado com sucesso.`);
+      // 2. Webhook n8n opcional — este SIM é um HTTP externo legítimo (não loopback)
+      const webhookUrl = process.env.N8N_WEBHOOK_URL;
+      if (webhookUrl) {
+        try {
+          const hookRes = await fetch(webhookUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              projetoId:            projectId,
+              projetoNome:          projectName,
+              ultimaAnaliseKratos:  lastMessage,
+              timestamp:            new Date().toISOString(),
+            }),
+          });
+          if (hookRes.ok) console.log(`[KRATOS CRON] Webhook n8n disparado com sucesso.`);
+        } catch {
+          // Ignora silenciosamente — n8n pode estar offline
         }
-      } catch (err) {
-        // Ignora silenciosamente erros de conexão recusada se o n8n não estiver rodando
       }
 
       console.log(`[KRATOS CRON] 🚀 Automação concluída com sucesso para ${projectName}!`);
@@ -152,7 +153,7 @@ class KratosOrchestrator {
 async function getKratosCooldown(): Promise<number> {
   try {
     const result = await db.execute(
-      sql`SELECT value FROM platform_settings WHERE key = 'kronos_cooldown_ms'`
+      sql`SELECT value FROM platform_settings WHERE key = 'kratos_cooldown_ms'`
     );
     const rows = (result as any).rows ?? result;
     if (rows.length > 0) {
@@ -167,7 +168,7 @@ async function getKratosCooldown(): Promise<number> {
 const kratos = new KratosOrchestrator();
 let activeJobs: Record<string, any> = {};
 
-export async function reloadCronJobs(app: any = null) {
+export async function reloadCronJobs() {
   Object.values(activeJobs).forEach(job => job.stop());
   activeJobs = {};
   try {
@@ -177,10 +178,40 @@ export async function reloadCronJobs(app: any = null) {
     ativos.forEach(p => {
       if (p.kratosCron && cron.validate(p.kratosCron)) {
         activeJobs[p.id] = cron.schedule(p.kratosCron, () => {
-          kratos.addTask({ projectId: p.id, projectName: p.name, metodologia: p.methodology, app });
+          kratos.addTask({ projectId: p.id, projectName: p.name, metodologia: p.methodology });
         });
         console.log(`⏰ Automação agendada para [${p.name}]: ${p.kratosCron}`);
       }
     });
   } catch (err) { console.error('Erro ao recarregar crons:', err); }
+}
+
+/**
+ * Atualiza (ou cria) o cron de um único projeto sem recarregar todos.
+ * Chamado quando o cronExpression de um projeto muda via API de configurações.
+ */
+export function updateCronJob(projectId: string, projectName: string, metodologia: string, cronExpr: string | null | undefined) {
+  // Para o job anterior se existir
+  if (activeJobs[projectId]) {
+    activeJobs[projectId].stop();
+    delete activeJobs[projectId];
+  }
+  if (cronExpr && cron.validate(cronExpr)) {
+    activeJobs[projectId] = cron.schedule(cronExpr, () => {
+      kratos.addTask({ projectId, projectName, metodologia });
+    });
+    console.log(`⏰ Cron atualizado para [${projectName}]: ${cronExpr}`);
+  }
+}
+
+/**
+ * Remove o cron de um projeto específico (deletado ou desativado).
+ * Chamado quando o projeto é arquivado/deletado via API — evita o full reload.
+ */
+export function removeCronJob(projectId: string) {
+  if (activeJobs[projectId]) {
+    activeJobs[projectId].stop();
+    delete activeJobs[projectId];
+    console.log(`⏰ Cron removido para projeto: ${projectId}`);
+  }
 }

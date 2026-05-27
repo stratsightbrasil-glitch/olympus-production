@@ -1,6 +1,6 @@
 # OLYMPUS v4.0 — Histórico Consolidado de Arquitetura e Desenvolvimento
 **StratSight Brasil · Strategic Foresight · IA Agêntica**
-**Última atualização:** 26 de Maio de 2026 (Sprint Final Fase 1 — Schema LangGraph · Ferramentas Analíticas · Seed Declarativo · Nomenclatura · LLM Routing por Agente · UX) · **Confidencial**
+**Última atualização:** 27 de Maio de 2026 (Sprint Fase 2 LangGraph + Sprint Low Priority Hardening) · **Acesso Restrito**
 
 > Este documento é a memória técnica do projeto. Registra a arquitetura, as justificativas de cada decisão, tudo o que foi feito e funcionou, tudo o que foi feito errado e precisou ser revertido, e o estado atual do backlog. Deve ser lido antes de qualquer intervenção no código.
 
@@ -634,10 +634,10 @@ docker compose logs -f api
 | Build duplo desnecessário | Rodar `build api` depois de `build --no-cache` | `--no-cache` já inclui tudo |
 | `ECONNREFUSED 172.x.x.x:5432` no startup da API | Race condition: API sobe antes do Postgres estar pronto | Corrigido no `index.ts` com retry automático (10x, 3s entre tentativas) |
 
-**Nota sobre seed vs auto-seed:**
-- O `getOrSeedMethodology()` no `chat.ts` faz um auto-seed mínimo na **primeira requisição** ao chat. Isso é suficiente para o sistema funcionar.
-- O `apps/api/src/scripts/seed.ts` contém prompts mais completos e ricos para os 7 agentes + 7 metodologias. Use-o após limpezas de produção para garantir o estado completo do banco antes de qualquer uso.
-- **O auto-seed SOBRESCREVE os prompts do banco a cada requisição** (para garantir que o código seja sempre a fonte da verdade). Se quiser prompts customizados persistentes, desative a linha `await db.update(agentsTable).set(...)` em `chat.ts`.
+**Nota sobre seed (atualizado Sprint Pré-LangGraph):**
+- ~~`getOrSeedMethodology()` em `chat.ts`~~ — **removido no Sprint Pré-LangGraph (R1)**. O auto-seed automático no primeiro chat foi eliminado. Memória de agentes é agora **server-authoritative**: só é sobrescrita via `PUT /api/v1/chat/memory/:agentName` (admin).
+- O `apps/api/src/scripts/seed.ts` contém prompts completos para os 7 agentes + 10 metodologias com 73 fases normalizadas. Use-o para o estado inicial do banco ou após limpezas de produção.
+- O `apps/api/src/index.ts` faz seed de `platform_settings` (incluindo `llm_tiers` do Tier System) no startup — idempotente via `onConflictDoNothing`.
 
 ### 11.2.1. Limpeza Simples (sem apagar volume do banco)
 
@@ -887,6 +887,8 @@ Sprint em duas partes executadas na mesma semana. Objetivo: preparar o motor par
 | **Chip de agente com label completo** (`CommandBar.tsx`) | Chip do topbar agora mostra `"SCOPUS · Enquadramento Estratégico analisando"` em vez de `"SCOPUS analisando"`. Label derivado de `methodologySteps.find(s => s.agent === activeAgent)`. |
 | **Sidebar admin** (`Sidebar.tsx`) | Botão único `"Usuários · Backup · Engine"` → dois botões separados: `Usuários` (→ `onShowUsers`) e `Backup` (→ `onShowBackup`). |
 
+> ⚠️ **LLM routing por agente** (linha acima) foi **supersedido pelo Tier System** implementado no Sprint Pré-LangGraph: o `AGENT_MODEL_OVERRIDES` hardcoded foi substituído por tier labels configuráveis em `platform_settings.llm_tiers` — ver seção seguinte.
+
 **Arquivos modificados no Sprint Final (26 Mai 2026):**
 - `packages/db/src/schema.ts` — `connectivity_mode`, `slug`/`node_slug` em `methodology_phases`, 4 novas tabelas
 - `packages/core/src/Agent.ts` — `TOOL_JSON_SCHEMAS` (7 novas entradas), `AGENT_MODEL_OVERRIDES`, `effectiveConfig`
@@ -901,6 +903,159 @@ Sprint em duas partes executadas na mesma semana. Objetivo: preparar o motor par
 - `apps/web/src/components/ui/AgentMark/types.ts` — `Agent` type inclui `'ATHENA'`
 - `apps/web/src/components/ui/AgentMark/index.tsx` — `GLYPHS.ATHENA` (reutiliza HERMES)
 - `.claude/rules/langgraph.md` — **arquivo novo** — regras arquiteturais permanentes
+
+---
+
+### ✅ Sprint Pré-LangGraph + Tier System (26 Mai 2026)
+
+Sprint de hardening e configurabilidade executado após o Sprint Final Fase 1. Objetivo: corrigir riscos técnicos antes da migração LangGraph JS e substituir roteamento LLM hardcoded por sistema configurável via banco de dados.
+
+#### R1–R5 — Hardening Pré-LangGraph
+
+| Ref | Mudança |
+|-----|---------|
+| **R1** — Auto-seed eliminado | `getOrSeedMethodology()` removido de `chat.ts`. A memória de agentes passa a ser **server-authoritative**: só é atualizada via `PUT /api/v1/chat/memory/:agentName` (admin). Elimina sobrescrita silenciosa de prompts customizados a cada requisição de chat. |
+| **R2** — HITL API + EventsPanel | `routes/events.ts` (novo): `GET /api/v1/events` (lista pending) + `PUT /api/v1/events/:id` (approve/reject). `EventsPanel.tsx` no `CommandBar` exibe eventos pendentes e permite aprovação/rejeição via UI. Âncora de contexto (`anchorContext`) injetada no `systemPrompt` dos agentes quando existem eventos aprovados. |
+| **R3** — connectivityMode em Tavily | `packages/tools/src/tavily.ts`: retorno imediato de lista vazia quando `context.connectivityMode === 'AIR_GAPPED'`. Elimina timeout e erro em ambientes sem internet. |
+| **R4** — `getNodeRouter()` | `packages/core/src/nodeRouter.ts` (novo): factory function que mapeia `node_slug → AgentClass`. Base para roteamento do futuro grafo LangGraph JS. |
+| **R5** — `buildMemoryWindow` multimodal | `Agent.ts`: `buildMemoryWindow()` trata mensagens com conteúdo `Array` (multimodal/vision) sem lançar exceção de tipo — compatibilidade com Claude Vision. |
+
+#### P1 — Tier System de Modelos LLM
+
+Substituição do `AGENT_MODEL_OVERRIDES` hardcoded por mapeamento configurável em banco de dados, sem nenhum ID de modelo no código.
+
+| Componente | Detalhe |
+|---|---|
+| **`platform_settings.llm_tiers`** | Chave nova seeded no startup de `index.ts`: `{ economy: 'claude-sonnet-4-6', premium: 'claude-opus-4-7' }`. Admin altera via UI sem redeploy ou mudança de código. |
+| **`agents.model_override` → tier label** | Valores migrados de IDs de modelo para labels semânticos: SCOPUS, KRATOS → `'economy'`; KLIO, PYTHIA, MNEMOSYNE, THEMIS, ATHENA → `'premium'`. |
+| **Resolução em `Agent.ts`** | `rawOverride → tiers[rawOverride] ?? rawOverride`. Fallback passthrough mantém retrocompatibilidade com IDs diretos antigos. Log: `[AGENTE] Tier [economy] → claude-sonnet-4-6`. |
+| **`AgentContext.llmTiers`** | Campo `llmTiers?: Record<string, string>` em `packages/core/src/types.ts`. Carregado paralelamente a `llmConfig` em `chat.ts` via `getLLMTiers()`. |
+| **API** | `GET /settings` retorna `llmTiers`. `PATCH /settings/llm-tiers` (admin-only) valida tiers `['economy','premium']` e persiste no banco. |
+| **Admin UI** | Seção "⚙ Tiers de Agentes" no dropdown LLM do `CommandBar` (visível só admin + Anthropic). Selects por tier com opções derivadas de `anthropicModels`. |
+
+#### Renomeação de Pasta de Desenvolvimento
+
+| Ação | Detalhe |
+|---|---|
+| `Olympus_v4` → `Olympus` | `D:\Pessoais\DEV\Olympus_v4` → `D:\Pessoais\DEV\Olympus`. Apenas 2 arquivos tinham caminho hardcoded: `.claude/settings.local.json` e `scripts/poc-offline/build-offline.ps1`. Memória do Claude Code copiada de `D--Pessoais-DEV-Olympus-v4\` para `D--Pessoais-DEV-Olympus\`. |
+
+**Arquivos modificados no Sprint Pré-LangGraph + Tier System:**
+- `packages/core/src/types.ts` — `llmTiers?: Record<string, string>` em `AgentContext`
+- `packages/core/src/Agent.ts` — tier resolution (`rawOverride → tiers[rawOverride] ?? rawOverride`), R5 multimodal fix em `buildMemoryWindow`
+- `packages/core/src/nodeRouter.ts` — **arquivo novo** — `getNodeRouter()` (R4)
+- `packages/tools/src/tavily.ts` — AIR_GAPPED guard (R3)
+- `apps/api/src/routes/chat.ts` — R1 auto-seed removido; `getLLMTiers()` paralelo a `getLLMConfig()`; `llmTiers` no `AgentContext`
+- `apps/api/src/routes/events.ts` — **arquivo novo** — R2 HITL API (`GET` + `PUT`)
+- `apps/api/src/routes/settings.ts` — `getLLMTiers()` helper exportado; `PATCH /settings/llm-tiers`
+- `apps/api/src/index.ts` — seed `llm_tiers` em `platform_settings` no startup
+- `apps/api/src/scripts/seed.ts` — `modelOverride` migrado de IDs de modelo → labels de tier
+- `apps/web/src/hooks/useLlmConfig.ts` — `llmTiers` state + `handleTierChange`
+- `apps/web/src/components/layout/CommandBar.tsx` — seção "Tiers de Agentes" no dropdown LLM; EventsPanel props
+- `apps/web/src/App.tsx` — `llmTiers`, `onTierChange` passados ao `CommandBar`
+
+**Itens concluídos no Sprint Pré-LangGraph + Tier System:**
+
+| Item | Status |
+|------|--------|
+| Auto-seed eliminado (memória server-authoritative) | ✅ |
+| HITL API + EventsPanel UI | ✅ |
+| connectivityMode guard em Tavily (AIR_GAPPED) | ✅ |
+| `getNodeRouter()` — base do grafo LangGraph | ✅ |
+| `buildMemoryWindow` multimodal fix | ✅ |
+| Tier System LLM (economy/premium configurável via banco) | ✅ |
+| Admin UI para tiers de modelos no CommandBar | ✅ |
+| Renomeação `Olympus_v4` → `Olympus` | ✅ |
+
+---
+
+### ✅ Sprint Fase 2 LangGraph JS (27 Mai 2026)
+
+Implementação do `StateGraph` LangGraph JS como motor de orquestração. Substitui o `Orchestrator.dispatch()` linear por grafo com roteamento condicional, checkpointing in-memory e HITL nativo via `interrupt()`.
+
+#### Dependências instaladas
+
+```bash
+npm install @langchain/langgraph @langchain/core @langchain/anthropic
+# apps/api/package.json: @olympus/tools: "*" (era resolvido por hoisting — agora declarado explicitamente)
+```
+
+#### Novo diretório `apps/api/src/graph/`
+
+| Arquivo | Responsabilidade |
+|---------|-----------------|
+| `builder.ts` | `buildGraph(projectId, phases, agents)` — `StateGraph<OlympusState>` com 6 nós, `BoundedMemorySaver` como checkpointer, `conditional_edges` via `routeFromState()` |
+| `nodes.ts` | 6 nós: `scopus_node`, `klio_node`, `pythia_node` (com `interrupt()` HITL), `mnemosyne_node`, `integration_node`, `synthesis_node`. Cada nó: carrega agente via `node_slug` → `generateText()` → persiste resultado em `messages` |
+| `helpers.ts` | `loadMessagesFromDb(projectId, limit=200)` — cap de 200 mensagens para controle de contexto no grafo |
+| `boundedMemorySaver.ts` | Checkpointer in-memory: LRU de 50 threads, TTL 2h por thread. Sem dependência de PostgreSQL — evita race condition de lock em reinícios do container |
+| `router.ts` | `routeFromState(state)` + `NODE_SLUG_TO_GRAPH_NODE`. Two-step lookup: `phaseSlug → nodeSlug → graphNode`. Resolve nodeSlug duplicados entre fases (ex: GRUMBACH fases 4 e 5 ambas com `node_modeling`) que causavam loop infinito em 6 das 10 metodologias |
+| `index.ts` | Reexporta `buildGraph()` e tipo `OlympusState` |
+
+#### Topologia do grafo
+
+```
+START
+  └─[conditional_edge: routeFromState]
+       ├── scopus_node      → (node_framing)
+       ├── klio_node        → (node_scanning_macro · node_scanning_forces · node_retrospective)
+       ├── pythia_node      → (node_modeling · node_matrix_design) — interrupt() para HITL
+       ├── mnemosyne_node   → (node_narrative)
+       ├── integration_node → (node_integration)
+       └── synthesis_node   → relatório final → END
+```
+
+Todos os nós especialistas retornam via `conditional_edge → routeFromState()` para determinar o próximo nó.
+
+#### Principais mudanças em arquivos existentes
+
+| Arquivo | Mudança |
+|---------|---------|
+| `routes/chat.ts` | `runAnalysis()` exportado para chamada direta pelo KRATOS (sem HTTP loopback); nova rota `POST /api/v1/chat/stream/graph` que usa `graph.stream()` em vez de `Orchestrator.run()` |
+| `cron.ts` | KRATOS usa `runAnalysis()` direto com `systemPayload = {id:'system', name:'Sistema Automático', role:'admin'}`. Elimina auto-mint de JWT e chamada HTTP interna que criava risco de loop |
+| `apps/api/package.json` | `"@olympus/tools": "*"` adicionado como dependência explícita (era resolvido por hoisting silencioso — causava erros TS2307 intermitentes) |
+
+#### Frontend (vizMode 'grafo' + HITL)
+
+| Componente | Mudança |
+|-----------|---------|
+| `App.tsx` — `vizMode` | Novo valor `'grafo'` no seletor de modos. Aciona `/stream/graph` em vez de `/chat/stream` |
+| `App.tsx` — `hitlGate` | State `boolean`. Setado `true` quando SSE emite `{type:'hitl_interrupt'}` (pythia_node fez `interrupt()`). Bloqueia envio de mensagens e exibe banner "⏸ Aguardando aprovação de eventos" |
+| `App.tsx` — `resumeGraph()` | Callback disparado após `PUT /api/v1/events/:id` (aprovação de evento). Retoma o grafo do checkpoint via requisição ao `/stream/graph` com `{resume: true}` |
+| `EventsPanel.tsx` | Painel âmbar lateral: lista eventos `status='proposed'`, botões Aprovar/Rejeitar, badge de contagem pendente no CommandBar |
+
+**TypeScript zero erros em todos os pacotes após rebuild `--no-cache`.**
+
+**Arquivos modificados no Sprint Fase 2 LangGraph JS:**
+- `apps/api/src/graph/` — **diretório novo** — `builder.ts`, `nodes.ts`, `helpers.ts`, `boundedMemorySaver.ts`, `router.ts`, `index.ts`
+- `apps/api/src/routes/chat.ts` — `runAnalysis()` exportado; rota `/stream/graph` adicionada
+- `apps/api/src/cron.ts` — chamada direta a `runAnalysis()` (sem JWT self-mint)
+- `apps/api/package.json` — `@olympus/tools: "*"`, `@langchain/langgraph`, `@langchain/core`
+- `apps/web/src/App.tsx` — `hitlGate`, `resumeGraph`, `vizMode='grafo'`, handler `type:'hitl_interrupt'`
+- `apps/web/src/components/layout/CommandBar.tsx` — botão modo grafo + `EventsPanel`
+
+---
+
+### ✅ Sprint Low Priority Hardening (27 Mai 2026)
+
+6 melhorias de segurança, performance e manutenibilidade — fechamento do backlog de baixa prioridade.
+
+| ID | Categoria | Arquivo | Implementação |
+|----|-----------|---------|--------------|
+| LP-1 | Segurança | `routes/auth.ts` | `makeRateLimiter()` factory genérica (bucket por IP + limpeza por TTL); `checkRegisterRateLimit` = 3 tentativas / 60 min; mensagem neutra `"Não foi possível concluir o cadastro."` quando e-mail já existe (não vaza existência); `setTimeout(70ms)` equaliza tempo de resposta com/sem bcrypt (timing attack mitigation) |
+| LP-2 | Segurança | `docker-compose.yml` | Credenciais do postgres via `${POSTGRES_USER:-postgres}` / `${POSTGRES_PASSWORD:-postgres}` / `${POSTGRES_DB:-olympus}`. `DATABASE_URL` da API montada a partir das partes individuais — nested `${DATABASE_URL}` não é suportado pelo Compose e causava `ECONNREFUSED 127.0.0.1:5432` por ler o `.env` local |
+| LP-3 | Segurança | `nginx-limits.conf` (novo) + `nginx.conf` + `Dockerfile.web` | Zonas `api_zone` (30r/m) e `auth_zone` (10r/m, burst=5) declaradas em `conf.d/00-limits.conf` (contexto `http`, precede o bloco `server`). Location separada `/api/v1/auth/(login\|register)` com `auth_zone` |
+| LP-4 | Performance | `apps/web/src/App.tsx` | `messageCount = chat.messages.length` (primitivo) como dep do `useMemo` de `currentStep` — elimina re-scan O(n) do stepper a cada token SSE de streaming |
+| LP-5 | Manutenibilidade | `apps/api/src/cron.ts` | `updateCronJob(id, name, met, expr?)` e `removeCronJob(id)` exportados — atualiza/remove o job de um único projeto sem recarregar todos os crons |
+| LP-6 | Performance | `apps/api/src/routes/export.ts` | `yieldToEventLoop = () => new Promise<void>(r => setImmediate(r))`; `renderHtml()` e `renderDocx()` tornados `async`; `await yieldToEventLoop()` ao final de cada seção — libera o event loop entre seções pesadas de rendering |
+
+**Arquivos modificados no Sprint Low Priority Hardening:**
+- `apps/api/src/routes/auth.ts` — `makeRateLimiter`, `checkRegisterRateLimit`, timing delay 70ms
+- `docker-compose.yml` — credenciais via `${VAR:-default}`, `DATABASE_URL` montada sem aninhamento
+- `nginx-limits.conf` — **arquivo novo** — `limit_req_zone` para `http` context via `conf.d`
+- `nginx.conf` — `limit_req zone=api_zone` em `/api/` + location `/api/v1/auth/` com `auth_zone`
+- `Dockerfile.web` — `COPY nginx-limits.conf /etc/nginx/conf.d/00-limits.conf` (antes do template)
+- `apps/web/src/App.tsx` — `messageCount` como dep primitiva no `useMemo` de `currentStep`
+- `apps/api/src/cron.ts` — `updateCronJob()` e `removeCronJob()` exportados
+- `apps/api/src/routes/export.ts` — `yieldToEventLoop`, `async renderHtml(ir)`, `async renderDocx(ir)`
 
 ---
 
@@ -973,15 +1128,17 @@ Sprint em duas partes executadas na mesma semana. Objetivo: preparar o motor par
 | **API pública + Swagger (C5)** | Rate limiting por plano (Redis) na API docs. Swagger UI já existe (`GET /api/docs`). Falta documentação de parceiros. | Mês 7–8 |
 | **Audit frontend** | Modal de visualização de audit_logs para admins — exportação CSV. Backend já implementado. | Mês 7 |
 
-### 🔲 Fase 2 — LangGraph JS (próximo sprint)
+### ✅ Fase 2 — LangGraph JS (concluído 27 Mai 2026)
 
-| Item | Descrição |
-|------|-----------|
-| **`packages/core/src/state.ts`** | `OlympusStateAnnotation` com campos derivados de `project_events`, `project_scenarios`, `connectivityMode` |
-| **Nós TypeScript puros** | Um arquivo por `node_slug`: `scopus_node.ts`, `klio_node.ts`, `pythia_node.ts`, etc. |
-| **`PostgresSaver`** | Checkpointing no banco — permite retomar análises interrompidas |
-| **`interruptBefore: ['pythia_node']`** | HITL nativo do LangGraph — Pythia só processa eventos `status='approved'` |
-| **Rota SSE LangGraph** | Substituir `streamText` por streaming de eventos do grafo via `streamEvents()` |
+Ver **Sprint Fase 2 LangGraph JS** neste documento para detalhes completos. Comparativo planejado vs. entregue:
+
+| Item Planejado | Status | Observação |
+|----------------|--------|-----------|
+| `packages/core/src/state.ts` — `OlympusStateAnnotation` | ✅ | State definido via `Annotation.Root()` em `graph/builder.ts` |
+| Nós TypeScript puros por `node_slug` | ✅ | `graph/nodes.ts`: scopus/klio/pythia/mnemosyne/integration/synthesis |
+| `PostgresSaver` | ⚠️ → `BoundedMemorySaver` | LRU in-memory 50 threads / TTL 2h; `PostgresSaver` planejado para escala multi-instância |
+| `interruptBefore: ['pythia_node']` | ✅ | `interrupt()` em `pythia_node` + `hitlGate` state no frontend |
+| Rota SSE LangGraph | ✅ | `POST /api/v1/chat/stream/graph` via `graph.stream()` |
 
 ### 🔮 Futuro (Fase D)
 
@@ -1045,4 +1202,4 @@ Custo pós-contrato estimado em R$ 1.308/mês — dentro da diretriz de R$ 1.500
 
 ---
 
-*OLYMPUS v4.0 · StratSight Brasil · Maio 2026 · Confidencial*
+*OLYMPUS v4.0 · StratSight Brasil · 27 Mai 2026 · Acesso Restrito*

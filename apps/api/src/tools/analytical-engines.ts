@@ -296,6 +296,83 @@ Usado em MPO (Estratégia Brasil 2050) e SIPLEx (PBC — Planejamento Baseado em
   },
 };
 
+// ── 8. ESG RII CALCULATOR ─────────────────────────────────────────────────────
+export const toolEsgRiiCalculator: OlympusTool = {
+  name: "tool_esg_rii_calculator",
+  description: `Calcula o Ranking Integrado de Incertezas (RII) da metodologia ESG/Escola Superior de Guerra.
+Fórmula: II = I × (6 - G) × (6 - C)
+  I = Impacto sistêmico (1-5): quanto o sistema muda se esta variável mudar
+  G = Governabilidade (1-5): grau de controle dos atores sobre a variável
+  C = Convergência (1-5): nível de consenso de interesses dos atores
+Lógica: maior impacto + menor controle + menor consenso = maior incerteza.
+Retorna variáveis ranqueadas por II decrescente e identifica as 2 Incertezas Críticas (IC1, IC2).
+Persiste resultado em technique_execution_outputs para consulta pelo MNEMOSYNE.`,
+  parameters: {
+    type: "object",
+    properties: {
+      projectId:  { type: "string", description: "UUID do projeto" },
+      variables:  {
+        type: "array",
+        description: "Lista de variáveis/eventos a ranquear",
+        items: {
+          type: "object",
+          properties: {
+            name:           { type: "string",  description: "Nome da variável ou evento" },
+            impact:         { type: "number",  description: "Impacto sistêmico I (1-5)" },
+            governability:  { type: "number",  description: "Governabilidade G pelos atores estratégicos (1-5)" },
+            convergence:    { type: "number",  description: "Convergência C de interesses dos atores (1-5)" },
+          },
+          required: ["name", "impact", "governability", "convergence"],
+        },
+      },
+    },
+    required: ["projectId", "variables"],
+  },
+  execute: async (args) => {
+    const { projectId, variables } = args as {
+      projectId: string;
+      variables: Array<{ name: string; impact: number; governability: number; convergence: number }>;
+    };
+
+    if (!variables || variables.length === 0) {
+      return JSON.stringify({ error: "Nenhuma variável fornecida para o RII." });
+    }
+
+    // Calcular II = I × (6 - G) × (6 - C) para cada variável
+    const ranked = variables
+      .map(v => ({
+        name:          v.name,
+        I:             v.impact,
+        G:             v.governability,
+        C:             v.convergence,
+        II:            v.impact * (6 - v.governability) * (6 - v.convergence),
+      }))
+      .sort((a, b) => b.II - a.II);
+
+    const topTwo = ranked.slice(0, 2).map(v => v.name);
+    const result = {
+      methodology: "ESG — Ranking Integrado de Incertezas (RII)",
+      formula:     "II = I × (6 - G) × (6 - C)",
+      ranked,
+      topTwo,
+      ic1: topTwo[0] ?? null,
+      ic2: topTwo[1] ?? null,
+      interpretation: `As 2 incertezas críticas estruturantes da Matriz de Cenários são: IC1="${topTwo[0]}" e IC2="${topTwo[1] ?? 'N/A'}".`,
+    };
+
+    // Persistir em technique_execution_outputs
+    try {
+      await db.insert(techniqueExecutionOutputs).values({
+        projectId,
+        techniqueType: "esg_rii",
+        outputData:    result,
+      });
+    } catch { /* upsert silencioso — não bloqueia o agente */ }
+
+    return JSON.stringify(result);
+  },
+};
+
 // ── EXPORTAÇÕES ────────────────────────────────────────────────────────────────
 export const analyticalEngineTools: OlympusTool[] = [
   toolUnifiedSearchEngine,
@@ -305,6 +382,7 @@ export const analyticalEngineTools: OlympusTool[] = [
   toolGrumbachExpertSimulation,
   toolMactorAnalysis,
   toolMpoBackcasting,
+  toolEsgRiiCalculator,
 ];
 
 export const analyticalEngineSchemas: Record<string, object> = Object.fromEntries(

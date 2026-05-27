@@ -6,7 +6,7 @@
 # sem precisar de internet ou acesso ao repositório.
 #
 # USO:
-#   cd D:\Pessoais\DEV\Olympus_v4
+#   cd D:\Pessoais\DEV\Olympus
 #   .\scripts\poc-offline\build-offline.ps1
 #
 # SAÍDA:

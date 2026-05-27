@@ -6,15 +6,20 @@ services:
     image: olympus/postgres:pg15
     container_name: olympus_db
     environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: olympus
-    ports:
-      - "5432:5432"
+      # Defina POSTGRES_USER / POSTGRES_PASSWORD / POSTGRES_DB no .env
+      # (ou via variáveis do ambiente do host) antes de subir em produção.
+      # Os valores abaixo são apenas defaults para desenvolvimento local.
+      POSTGRES_USER:     ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB:       ${POSTGRES_DB:-olympus}
+    # expose: torna a porta acessível apenas dentro da rede Docker (não ao host).
+    # Use `ports: "5432:5432"` APENAS em desenvolvimento local — nunca em produção.
+    expose:
+      - "5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d olympus"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-olympus}"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -45,7 +50,11 @@ services:
       - olympus_backups:/app/backups
     environment:
       - NODE_OPTIONS=--max-old-space-size=1024
-      - DATABASE_URL=postgresql://postgres:postgres@olympus_db:5432/olympus
+      # A URL é sempre montada com o hostname interno (olympus_db) para que funcione
+      # na rede Docker independentemente do DATABASE_URL do .env (que usa localhost).
+      # Defina POSTGRES_USER / POSTGRES_PASSWORD / POSTGRES_DB no .env ou no shell
+      # do host para usar credenciais customizadas em produção.
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@olympus_db:5432/${POSTGRES_DB:-olympus}
     deploy:
       resources:
         limits:

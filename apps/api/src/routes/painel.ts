@@ -112,7 +112,7 @@ painelRoutes.get('/', (c) => {
       <a href="mailto:contato@stratsight.com.br?subject=${encodeURIComponent('Solicitação de Análise — ' + (projeto.nome || 'Projeto'))}" class="btn">📧 Solicitar Análise Completa</a>
     </div>
   </div>
-  <footer>StratSight Brasil · OLYMPUS v4.0 · Strategic Foresight · Confidencial</footer>
+  <footer>StratSight Brasil · OLYMPUS v4.0 · Strategic Foresight · Acesso Restrito</footer>
 </body>
 </html>`);
 });
@@ -131,7 +131,7 @@ painelRoutes.get('/project/:projectId', async (c) => {
 
   let payload: any;
   try {
-    payload = await verify(rawToken, process.env.JWT_SECRET || 'olympus_super_secret_key_2026', 'HS256');
+    payload = await verify(rawToken, process.env.JWT_SECRET!, 'HS256');
   } catch {
     return c.html(`<!DOCTYPE html><html><body style="font-family:sans-serif;padding:40px;text-align:center">
       <h2>⛔ Token inválido ou expirado</h2><p>Solicite um novo link ao analista responsável.</p></body></html>`, 401);

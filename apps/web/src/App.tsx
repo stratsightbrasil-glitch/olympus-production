@@ -26,7 +26,7 @@ import { useExport } from './hooks/useExport';
 import { useEvents } from './hooks/useEvents';
 import type { ActiveModal } from './types';
 
-const ATHENA_SLUGS = new Set(['msef', 'godet', 'grumbach', 'macroplan', 'futures', 'siex', 'alta']);
+const ATHENA_SLUGS = new Set(['esg', 'msef', 'godet', 'grumbach', 'macroplan', 'futures', 'siex', 'alta']);
 
 function App() {
   const auth = useAuth();
@@ -110,6 +110,10 @@ function App() {
     [projectState.projeto.metodologia, methodologies],
   );
 
+  // Usa messages.length (número primitivo) como dep em vez do array inteiro.
+  // O scan só precisa re-executar quando uma mensagem é adicionada/removida,
+  // não em cada re-render que recria a referência do array (ex: durante streaming).
+  const messageCount = chat.messages.length;
   const currentStep = useMemo(() => {
     for (let i = currentMethodologySteps.length - 1; i >= 0; i--) {
       const agent = currentMethodologySteps[i].agent;
@@ -122,8 +126,9 @@ function App() {
       });
       if (found) return i + 1;
     }
-    return chat.messages.length > 0 ? 1 : 0;
-  }, [chat.messages, currentMethodologySteps]);
+    return messageCount > 0 ? 1 : 0;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [messageCount, currentMethodologySteps]);
 
   // ── Helpers ──────────────────────────────────────────────────────────────
   const getAgentInfo = (text: string) => {
@@ -324,7 +329,7 @@ function App() {
               {chat.messages.length === 0 && !chat.loading && (
                 <div className="flex-1 flex flex-col items-center justify-center py-16 text-center">
                   <div className="w-20 h-20 rounded-full bg-stratsight-dark/10 border-2 border-stratsight-medium/20 flex items-center justify-center text-4xl mb-6 shadow-inner">⚡</div>
-                  <h2 className="text-xl font-bold text-stratsight-dark mb-3 tracking-wide">OLYMPUS v1.0</h2>
+                  <h2 className="text-xl font-bold text-stratsight-dark mb-3 tracking-wide">OLYMPUS v2.0</h2>
                   <p className="text-stratsight-medium text-sm max-w-md leading-relaxed mb-8">
                     {user?.role === 'cliente'
                       ? <>Bem-vindo ao painel de acompanhamento.<br/>Selecione um projeto no <strong>Histórico</strong> para visualizar os cenários e indicadores.</>
@@ -384,6 +389,8 @@ function App() {
                 onReject={events.rejeitarEvento}
                 onAprovarTodos={events.aprovarTodos}
                 onRefresh={() => events.carregarEventos(projectState.sessionId)}
+                hitlGate={chat.hitlGate}
+                onResume={chat.resumeGraph}
               />
               <RightPanel
                 projeto={projectState.projeto}

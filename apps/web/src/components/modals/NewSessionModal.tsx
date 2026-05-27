@@ -23,9 +23,10 @@ const EMPTY_SCOPE: ScopeForm = { tema: '', horizonte: '', elaborador: '', client
 
 const VIZ_MODES = [
   { id: 'thinking', label: '🧠 Raciocínio Estendido', desc: 'Exibe o raciocínio interno antes da resposta' },
-  { id: 'passos',   label: '👣 Passo a Passo',       desc: 'Avança com uma pergunta/tarefa por vez' },
-  { id: 'etapa',    label: '📋 Etapa Completa',       desc: 'Gera a etapa inteira de uma vez (Padrão)' },
-  { id: 'passagem', label: '⚡ Processo Completo',    desc: 'Conduz o método de forma autônoma' },
+  { id: 'passos',   label: '👣 Passo a Passo',        desc: 'Avança com uma pergunta/tarefa por vez' },
+  { id: 'etapa',    label: '📋 Etapa Completa',        desc: 'Gera a etapa inteira de uma vez (Padrão)' },
+  { id: 'passagem', label: '⚡ Processo Completo',     desc: 'Conduz o método de forma autônoma' },
+  { id: 'grafo',    label: '🔬 Motor LangGraph',       desc: 'Grafo de estado com HITL nativo — PYTHIA aguarda aprovação de eventos antes de modelar' },
 ];
 
 export function NewSessionModal({ onClose, onStart, cenariosMethodologies, teams, token, defaultMetodologia, defaultVizMode }: Props) {

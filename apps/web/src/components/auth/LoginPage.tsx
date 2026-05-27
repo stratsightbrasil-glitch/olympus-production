@@ -116,8 +116,20 @@ export function LoginPage({ auth }: LoginPageProps) {
                   <input type="email" placeholder="E-mail corporativo" required value={authForm.email} onChange={e => setAuthForm({ ...authForm, email: e.target.value })} className="w-full border-2 border-gray-200 rounded-xl px-4 py-3 outline-none focus:border-stratsight-medium transition-colors" />
                   <div className="relative">
                     <input type={showPassword ? 'text' : 'password'} placeholder="Senha" required value={authForm.password} onChange={e => setAuthForm({ ...authForm, password: e.target.value })} className="w-full border-2 border-gray-200 rounded-xl px-4 py-3 outline-none focus:border-stratsight-medium transition-colors pr-10" />
-                    <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-3.5 text-gray-400 hover:text-stratsight-medium focus:outline-none">
-                      {showPassword ? '🙈' : '👁️'}
+                    <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-3 text-gray-400 hover:text-stratsight-medium focus:outline-none" aria-label={showPassword ? 'Ocultar senha' : 'Mostrar senha'}>
+                      {showPassword ? (
+                        /* Eye-off: senha visível → clique oculta */
+                        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94M9.9 4.24A9.12 9.12 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19"/>
+                          <line x1="1" y1="1" x2="23" y2="23"/>
+                        </svg>
+                      ) : (
+                        /* Eye: senha oculta → clique mostra */
+                        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+                          <circle cx="12" cy="12" r="3"/>
+                        </svg>
+                      )}
                     </button>
                   </div>
                   <button type="submit" className="w-full bg-stratsight-dark text-white font-bold py-3.5 rounded-xl hover:bg-stratsight-medium transition-colors shadow-lg shadow-green-900/20">
@@ -146,7 +158,7 @@ export function LoginPage({ auth }: LoginPageProps) {
       </div>
 
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 24px', borderTop: '1px solid rgba(255,255,255,.06)', fontFamily: "'DM Mono', 'Cascadia Code', monospace", fontSize: 10, color: '#3D6B50', letterSpacing: '0.5px' }}>
-        <span>v1.0</span>
+        <span>v2.0</span>
         <span>© {new Date().getFullYear()} OLYMPUS StratSight BR — Uso Restrito</span>
       </div>
     </div>

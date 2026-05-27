@@ -77,7 +77,7 @@ async function run() {
       client:           'CEEx — Centro de Estudos Estratégicos do Exército',
       analyst:          'Analista Demo',
       horizon:          '2030',
-      classification:   'Confidencial',
+      classification:   'Acesso Restrito',
       methodology:      'MSEF',
       status:           'Em produção',
       kratosCron:       '0 8 * * 1',

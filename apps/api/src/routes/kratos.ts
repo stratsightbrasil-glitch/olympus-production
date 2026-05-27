@@ -120,7 +120,7 @@ function buildSnapshotHtml(
     ${lastMsgHtml}
 
     <p style="margin-top:24px;font-size:10px;color:#bbb;text-align:center">
-      Gerado automaticamente · OLYMPUS v1.0 · StratSight Brasil · Este relatório é confidencial.
+      Gerado automaticamente · OLYMPUS v2.0 · StratSight Brasil · Este relatório é confidencial.
     </p>
   </div>
 </body></html>`;

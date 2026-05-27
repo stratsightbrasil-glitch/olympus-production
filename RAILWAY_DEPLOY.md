@@ -236,4 +236,4 @@ deploy automático de ambos os serviços. Railway detecta qual Dockerfile mudou.
 
 ---
 
-*OLYMPUS v4.0 · StratSight Brasil · Maio 2026 · Confidencial*
+*OLYMPUS v4.0 · StratSight Brasil · Maio 2026 · Acesso Restrito*

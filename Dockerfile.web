@@ -15,6 +15,9 @@ FROM nginx:alpine
 # Copia o build do Vite
 COPY --from=builder /app/apps/web/dist /usr/share/nginx/html
 
+# Copia zonas de rate-limit (contexto http, sem envsubst)
+COPY nginx-limits.conf /etc/nginx/conf.d/00-limits.conf
+
 # Copia nginx.conf como template (contém ${RAILWAY_API_URL})
 COPY nginx.conf /etc/nginx/templates/default.conf.template
 

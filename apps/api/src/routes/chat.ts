@@ -9,6 +9,8 @@ import { createAnalyticStandardsTools } from '../tools/analytic-standards';
 import { getTechniqueInstructions } from '../tools/technique-engine';
 import { getLLMConfig, getLLMTiers } from './settings';
 import { eq, inArray, and, asc } from 'drizzle-orm';
+import { Command } from '@langchain/langgraph';
+import { getOlympusGraph, graphConfig } from '../graph';
 
 const chatRoutes = new Hono();
 
@@ -46,7 +48,22 @@ function buildMemoryWindow(msgs: any[]): any[] {
 // Lança erro se não encontrada — sem auto-seed em runtime.
 // ============================================================================
 
+// Cache de metodologia com TTL de 5 min — dados imutáveis em runtime.
+// Evita 3 queries ao banco em cada requisição de análise.
+interface MethodologyCache { data: Awaited<ReturnType<typeof _loadMethodologyFromDb>>; expiresAt: number; }
+const methodologyCache = new Map<string, MethodologyCache>();
+const METHODOLOGY_CACHE_TTL_MS = 5 * 60 * 1000; // 5 min
+
 async function loadMethodology(slug: string) {
+  const now = Date.now();
+  const cached = methodologyCache.get(slug);
+  if (cached && now < cached.expiresAt) return cached.data;
+  const data = await _loadMethodologyFromDb(slug);
+  methodologyCache.set(slug, { data, expiresAt: now + METHODOLOGY_CACHE_TTL_MS });
+  return data;
+}
+
+async function _loadMethodologyFromDb(slug: string) {
   // Normaliza: permite buscar por nome ou slug
   const method = await db.query.methodologies.findFirst({
     where: (t, { or, eq: eqFn }) => or(
@@ -60,19 +77,19 @@ async function loadMethodology(slug: string) {
     );
   }
 
-  const phases = await db
-    .select()
-    .from(methodologyPhases)
-    .where(eq(methodologyPhases.methodologyId, method.id))
-    .orderBy(methodologyPhases.phaseNum);
-
-  const promptRows = await db
-    .select({
-      agentId:           agentMethodPrompts.agentId,
-      extraInstructions: agentMethodPrompts.extraInstructions,
-    })
-    .from(agentMethodPrompts)
-    .where(eq(agentMethodPrompts.methodologyId, method.id));
+  // phases e promptRows não dependem um do outro — busca em paralelo
+  const [phases, promptRows] = await Promise.all([
+    db.select()
+      .from(methodologyPhases)
+      .where(eq(methodologyPhases.methodologyId, method.id))
+      .orderBy(methodologyPhases.phaseNum),
+    db.select({
+        agentId:           agentMethodPrompts.agentId,
+        extraInstructions: agentMethodPrompts.extraInstructions,
+      })
+      .from(agentMethodPrompts)
+      .where(eq(agentMethodPrompts.methodologyId, method.id)),
+  ]);
 
   // Resolver agentId → agentName
   const promptMap: Record<string, string> = {};
@@ -140,10 +157,11 @@ function createConsultAgentTool(agentNames: string[]): Tool<any> {
 }
 
 // ============================================================================
-// NÚCLEO DA ANÁLISE — compartilhado entre rota síncrona e SSE
+// NÚCLEO DA ANÁLISE — compartilhado entre rota síncrona, SSE e cron KRATOS
+// Exportado para permitir chamada direta pelo cron (evita self-minting de JWT).
 // ============================================================================
 
-interface AnalysisCallbacks {
+export interface AnalysisCallbacks {
   onStatus: (text: string) => void;
   onAgent:  (name: string) => void;
   onToken?: (delta: string) => void;
@@ -151,7 +169,7 @@ interface AnalysisCallbacks {
   onStep?:  (msg: string) => void;
 }
 
-async function runAnalysis(body: any, jwtPayload: any, cb: AnalysisCallbacks, opts: { skipMessageSave?: boolean } = {}) {
+export async function runAnalysis(body: any, jwtPayload: any, cb: AnalysisCallbacks, opts: { skipMessageSave?: boolean } = {}) {
   const projectId     = body.projectId || body.id || `sess_${Date.now()}`;
   const rawInputMsg   = body.messages?.[body.messages.length - 1]?.content || '';
   const vizMode       = body.vizMode || 'etapa';
@@ -171,6 +189,7 @@ async function runAnalysis(body: any, jwtPayload: any, cb: AnalysisCallbacks, op
   let thinkingContent = '';
 
   // 1. Garante que o projeto existe no banco
+  // Paraleliza: lookup do projeto + início do carregamento de metodologia (não depende um do outro)
   const existingProject = await db.query.projects.findFirst({ where: eq(projects.id, projectId) });
   if (!existingProject) {
     await db.insert(projects).values({
@@ -189,35 +208,36 @@ async function runAnalysis(body: any, jwtPayload: any, cb: AnalysisCallbacks, op
     await db.insert(messages).values({ projectId, role: 'user', content: inputMsgStr });
   }
 
-  // 2b. Carrega histórico do banco (source of truth) — descarta body.messages para history.
-  //     Inclui a mensagem recém-salva como último item; buildMemoryWindow fará slice(0,-1).
-  //     Imagens de turnos anteriores são descartadas (salvas como texto no DB) — correto.
-  //     O turno atual pode ser multimodal (rawInputMsg) — passado separadamente como input.
-  const dbMessages = await db.query.messages.findMany({
-    where: eq(messages.projectId, projectId),
-    orderBy: [asc(messages.createdAt)],
-  });
+  // 2b–2d. Carrega histórico, eventos aprovados e metodologia em paralelo.
+  //   • dbMessages: inclui a mensagem recém-salva como último item (após insert acima)
+  //   • approvedEvents: âncora de contexto HITL — independente do histórico
+  //   • loadMethodology: não depende de nenhuma das queries anteriores
+  // Elimina também a query redundante de projectRow (connectivityMode já está em existingProject).
+  cb.onStatus('Carregando contexto...');
+  const [dbMessages, approvedEvents, methodologyData] = await Promise.all([
+    db.query.messages.findMany({
+      where: eq(messages.projectId, projectId),
+      orderBy: [asc(messages.createdAt)],
+      limit: 200, // cap defensivo — buildMemoryWindow já aplica budget de tokens
+    }),
+    db
+      .select({
+        id: projectEvents.id,
+        name: projectEvents.name,
+        description: projectEvents.description,
+        type: projectEvents.type,
+        sourceEvaluation: projectEvents.sourceEvaluation,
+      })
+      .from(projectEvents)
+      .where(and(eq(projectEvents.projectId, projectId), eq(projectEvents.status, "approved"))),
+    loadMethodology(metodologiaName),
+  ]);
   const dbMessagesForMemory = dbMessages.map(m => ({ role: m.role as 'user' | 'assistant', content: m.content }));
 
-  // ── Modo de conectividade e âncora de contexto (anti-bloat HITL) ─────────────
-  const projectRow = await db.query.projects.findFirst({
-    columns: { connectivityMode: true },
-    where: eq(projects.id, projectId),
-  });
+  // ── Modo de conectividade — vem de existingProject (sem query extra) ──────────
   const connectivityMode = (
-    projectRow?.connectivityMode ?? process.env.CONNECTIVITY_MODE ?? "ONLINE"
+    existingProject?.connectivityMode ?? process.env.CONNECTIVITY_MODE ?? "ONLINE"
   ) as "ONLINE" | "SOBERANO" | "AIR_GAPPED";
-
-  const approvedEvents = await db
-    .select({
-      id: projectEvents.id,
-      name: projectEvents.name,
-      description: projectEvents.description,
-      type: projectEvents.type,
-      sourceEvaluation: projectEvents.sourceEvaluation,
-    })
-    .from(projectEvents)
-    .where(and(eq(projectEvents.projectId, projectId), eq(projectEvents.status, "approved")));
 
   let anchorContext = "";
   if (approvedEvents.length > 0) {
@@ -245,9 +265,8 @@ async function runAnalysis(body: any, jwtPayload: any, cb: AnalysisCallbacks, op
   }
   // ─────────────────────────────────────────────────────────────────────────────
 
-  // 3. Carregar metodologia — única fonte de verdade (lança se não encontrada)
-  cb.onStatus('Carregando metodologia...');
-  const { method, phases, agentMethodPrompts: agentPromptMap } = await loadMethodology(metodologiaName);
+  // 3. Metodologia já carregada pelo Promise.all acima — apenas desestrutura
+  const { method, phases, agentMethodPrompts: agentPromptMap } = methodologyData;
   if (!method.agentsConfig) {
     throw new Error(`Metodologia '${metodologiaName}' sem agentes configurados. Verifique o seed.`);
   }
@@ -442,7 +461,14 @@ chatRoutes.post('/', async (c) => {
 // Formato dos eventos: data: {"type":"status"|"agent"|"done"|"error", ...}
 // ============================================================================
 
+// Cap de tamanho de request para SSE — evita DoS com body gigante (base64, imagens, etc.)
+const SSE_MAX_BODY_BYTES = 512 * 1024; // 512 KB
+
 chatRoutes.post('/stream', async (c) => {
+  const contentLength = Number(c.req.header('content-length') ?? 0);
+  if (contentLength > SSE_MAX_BODY_BYTES) {
+    return c.json({ error: `Payload excede o limite permitido (${SSE_MAX_BODY_BYTES / 1024} KB).` }, 413);
+  }
   const body = await c.req.json();
   const jwtPayload = (c.get('jwtPayload') as any) || { name: 'Sistema' };
 
@@ -533,6 +559,173 @@ chatRoutes.post('/stream', async (c) => {
     const msg = lastError?.message || 'Servidor sobrecarregado. Tente novamente em alguns instantes.';
     console.error('[SSE] Esgotadas todas as tentativas:', msg);
     await stream.writeSSE({ data: JSON.stringify({ type: 'error', message: msg }) });
+  });
+});
+
+// ============================================================================
+// ROTA GRAPH SSE — LangGraph v2.0
+//
+// Substitui progressivamente a rota /stream para novas análises.
+// Mantém /stream para compatibilidade retroativa.
+//
+// Fluxo:
+//   1ª chamada:  envia estado inicial → grafo executa fases → pausa em PYTHIA se sem eventos
+//   Retomada:    envia { isResuming: true } → grafo retoma do checkpoint via Command({resume})
+//
+// Eventos SSE:
+//   { type: 'status',    text: string }       — mensagens de progresso
+//   { type: 'step',      text: string }       — tool calls e passagens de nó
+//   { type: 'token',     text: string }       — tokens do orquestrador (síntese)
+//   { type: 'hitl_gate', ...interrupt_value } — grafo pausado antes de PYTHIA
+//   { type: 'done', text, agentName, messageType } — análise concluída
+//   { type: 'error',     message: string }    — erro irrecuperável
+//
+// thread_id = projectId — checkpointer MemorySaver mantém estado entre chamadas.
+// ============================================================================
+
+chatRoutes.post('/stream/graph', async (c) => {
+  const contentLength = Number(c.req.header('content-length') ?? 0);
+  if (contentLength > SSE_MAX_BODY_BYTES) {
+    return c.json({ error: `Payload excede o limite permitido (${SSE_MAX_BODY_BYTES / 1024} KB).` }, 413);
+  }
+  const body        = await c.req.json();
+  const jwtPayload  = (c.get('jwtPayload') as any) || { name: 'Sistema' };
+  const projectId   = body.projectId || body.id || `sess_${Date.now()}`;
+  const isResuming  = !!body.isResuming;
+  const metodologiaName = (body.metodologia as string) || 'MSEF';
+  const projectName = body.projectName || 'Novo Projeto';
+  const vizMode     = body.vizMode || 'etapa';
+  const userInput   = body.messages?.[body.messages.length - 1]?.content || '';
+  const userInputStr = typeof userInput === 'string'
+    ? userInput
+    : (Array.isArray(userInput) ? userInput.find((c: any) => c.type === 'text')?.text || '' : '');
+
+  return streamSSE(c, async (stream) => {
+    // Heartbeat anti-timeout (nginx / Railway)
+    let hbTimer: ReturnType<typeof setInterval> | null = setInterval(() => {
+      stream.writeSSE({ data: JSON.stringify({ type: 'ping' }) }).catch(() => {});
+    }, 20_000);
+    const stopHb = () => { if (hbTimer) { clearInterval(hbTimer); hbTimer = null; } };
+
+    const write = (obj: object) =>
+      stream.writeSSE({ data: JSON.stringify(obj) }).catch(() => {});
+
+    try {
+      await write({ type: 'status', text: 'Iniciando motor LangGraph...' });
+
+      // 1. Garante projeto no banco
+      const existingProject = await db.query.projects.findFirst({ where: eq(projects.id, projectId) });
+      if (!existingProject) {
+        await db.insert(projects).values({
+          id: projectId, name: projectName, methodology: metodologiaName,
+          createdBy: jwtPayload.name, updatedBy: jwtPayload.name,
+        });
+      }
+
+      // 2. Salva mensagem do usuário (apenas na primeira chamada — não na retomada)
+      if (userInputStr && !isResuming) {
+        await db.insert(messages).values({ projectId, role: 'user', content: userInputStr });
+      }
+
+      // 3. Carrega config LLM + fases da metodologia (necessário para o estado inicial)
+      const [llmConfig, llmTiers] = await Promise.all([getLLMConfig(), getLLMTiers()]);
+
+      // Carrega fases se for a primeira invocação (ou retomada sem estado)
+      const { method, phases, agentMethodPrompts: agentPromptMap } = await loadMethodology(metodologiaName);
+
+      // Carrega connectivityMode do projeto
+      const projectRow = await db.query.projects.findFirst({
+        columns: { connectivityMode: true },
+        where: eq(projects.id, projectId),
+      });
+      const connectivityMode = (
+        projectRow?.connectivityMode ?? process.env.CONNECTIVITY_MODE ?? 'ONLINE'
+      ) as 'ONLINE' | 'SOBERANO' | 'AIR_GAPPED';
+
+      // 4. Constrói input e config do grafo
+      const graph  = getOlympusGraph();
+      const config = graphConfig(projectId, {
+        onStep:  (msg) => write({ type: 'step', text: msg }),
+        onToken: (delta) => write({ type: 'token', text: delta }),
+      });
+
+      // Estado inicial (usado apenas na primeira invocação; retomada usa Command)
+      const initialState = {
+        projectId,
+        methodology:       metodologiaName,
+        connectivityMode,
+        llmConfig,
+        llmTiers,
+        phases,
+        agentMethodPrompts: agentPromptMap,
+        userInput:         userInputStr,
+        vizMode,
+      };
+
+      // Retomada após HITL: passa Command({resume}) com o input do usuário
+      // Primeira execução: passa o estado inicial completo
+      const graphInput = isResuming
+        ? new Command({ resume: userInputStr || 'continuar' })
+        : initialState;
+
+      await write({ type: 'status', text: 'Executando grafo de análise...' });
+
+      // 5. Stream do grafo — itera sobre updates de cada nó
+      let finalOutput  = '';
+      let finalAgent   = '';
+      let finalMsgType = 'parcial';
+      let wasInterrupted = false;
+
+      const graphStream = await graph.stream(graphInput as any, {
+        ...config,
+        streamMode: 'updates',
+      });
+
+      for await (const event of graphStream) {
+        // Detecta interrupção HITL
+        if ('__interrupt__' in event) {
+          const interruptValues = (event as any)['__interrupt__'];
+          const iv = Array.isArray(interruptValues) ? interruptValues[0]?.value : interruptValues;
+          wasInterrupted = true;
+          stopHb();
+          // IMPORTANT: spread AFTER type so that a 'type' key inside iv cannot
+          // overwrite 'hitl_gate'. The interrupt value comes from pythiaNode's
+          // interrupt({ type: 'hitl_required', ... }) — if spread first it would
+          // replace our 'hitl_gate' sentinel with 'hitl_required'.
+          await write({ ...iv, type: 'hitl_gate' });
+          return; // fecha o SSE — frontend mostra EventsPanel
+        }
+
+        // Processa updates dos nós
+        for (const [nodeName, stateUpdate] of Object.entries(event)) {
+          if (!stateUpdate || typeof stateUpdate !== 'object') continue;
+          const upd = stateUpdate as any;
+          if (upd.lastOutput)  finalOutput  = upd.lastOutput;
+          if (upd.agentName)   finalAgent   = upd.agentName;
+          if (upd.messageType) finalMsgType = upd.messageType;
+          if (upd.currentNodeSlug) {
+            await write({ type: 'status', text: `Fase '${upd.currentNodeSlug}' concluída.` });
+          }
+        }
+      }
+
+      stopHb();
+
+      if (!wasInterrupted) {
+        await write({
+          type:        'done',
+          text:        finalOutput,
+          agentName:   finalAgent,
+          messageType: finalMsgType,
+        });
+      }
+
+    } catch (err: any) {
+      stopHb();
+      const msg = err?.message || 'Erro interno no motor LangGraph.';
+      console.error('[Graph SSE] Erro:', msg);
+      await write({ type: 'error', message: msg });
+    }
   });
 });
 

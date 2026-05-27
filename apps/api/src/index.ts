@@ -21,6 +21,18 @@ import { eq, sql } from 'drizzle-orm';
 // Força o carregamento do .env localizado na raiz do monorepo
 config({ path: path.resolve(__dirname, '../../../.env') });
 
+// ── Startup guard ────────────────────────────────────────────────────────────
+// Rejeita subida do processo se variáveis obrigatórias de segurança estiverem
+// ausentes. Falhar em startup é muito melhor que operar com segredos hardcoded.
+const REQUIRED_ENV = ['JWT_SECRET', 'ALLOWED_ORIGIN'] as const;
+for (const key of REQUIRED_ENV) {
+  if (!process.env[key]) {
+    console.error(`[STARTUP] ❌ Variável de ambiente obrigatória ausente: ${key}`);
+    console.error(`[STARTUP]    Adicione ${key} ao arquivo .env antes de iniciar.`);
+    process.exit(1);
+  }
+}
+
 import chatRoutes from './routes/chat';
 import extractRoutes from './routes/extract';
 import sessionsRoutes from './routes/sessions';
@@ -57,7 +69,7 @@ app.use('*', cors({
   origin: process.env.ALLOWED_ORIGIN || 'http://localhost:8080',
 }));
 
-app.get('/ping', (c) => c.json({ status: 'ok', message: 'OLYMPUS API v1.0 rodando com Hono!' }));
+app.get('/ping', (c) => c.json({ status: 'ok', message: 'OLYMPUS API v2.0 rodando com Hono!' }));
 
 app.get('/health', async (c) => {
   const start = Date.now();
@@ -88,14 +100,35 @@ app.get('/health', async (c) => {
 app.route('/api/v1/auth', authRoutes);
 
 // Proteção JWT nas rotas privadas
-const authMiddleware = jwt({ secret: process.env.JWT_SECRET || 'olympus_super_secret_key_2026', alg: 'HS256' });
+const authMiddleware = jwt({ secret: process.env.JWT_SECRET!, alg: 'HS256' });
+
+// Cache de existência de usuário — evita 1 query ao banco por request autenticado.
+// TTL de 5 min: cobre a sessão típica sem deixar tokens de usuários deletados válidos por muito tempo.
+// Estrutura: userId → { exists: boolean, expiresAt: timestamp }
+const userExistenceCache = new Map<string, { exists: boolean; expiresAt: number }>();
+const USER_CACHE_TTL_MS = 5 * 60 * 1000; // 5 min
+setInterval(() => {
+  const now = Date.now();
+  for (const [k, v] of userExistenceCache) {
+    if (now > v.expiresAt) userExistenceCache.delete(k);
+  }
+}, USER_CACHE_TTL_MS);
 
 const verifyUserExists = async (c: any, next: any) => {
   const payload = c.get('jwtPayload');
-  // Ignora o id 'system' usado pelas automações do KRATOS/KRONOS em background
+  // Ignora o id 'system' usado pelas automações do KRATOS em background
   if (payload && payload.id && payload.id !== 'system') {
-    const user = await db.query.users.findFirst({ where: eq(users.id, payload.id) });
-    if (!user) return c.json({ error: 'Sessão inválida ou usuário não encontrado no banco.' }, 401);
+    const now = Date.now();
+    const cached = userExistenceCache.get(payload.id);
+    let exists: boolean;
+    if (cached && now < cached.expiresAt) {
+      exists = cached.exists;
+    } else {
+      const user = await db.query.users.findFirst({ where: eq(users.id, payload.id) });
+      exists = !!user;
+      userExistenceCache.set(payload.id, { exists, expiresAt: now + USER_CACHE_TTL_MS });
+    }
+    if (!exists) return c.json({ error: 'Sessão inválida ou usuário não encontrado no banco.' }, 401);
   }
   await next();
 };
@@ -117,6 +150,12 @@ const PROTECTED_PREFIXES = [
   '/api/v1/teams',
   '/api/v1/events',
   '/api/v1/test-email',
+  // Rotas previamente desprotegidas — corrigido em auditoria de segurança
+  '/api/v1/embeddings',
+  '/api/v1/playbook',
+  '/api/v1/audit',
+  '/api/v1/painel',
+  '/api/v1/auth/2fa',    // 2FA requer autenticação prévia — userId vem do token
 ];
 for (const prefix of PROTECTED_PREFIXES) {
   app.use(`${prefix}/*`, authMiddleware, verifyUserExists);
@@ -169,7 +208,7 @@ app.post('/api/v1/test-email', async (c) => {
 });
 
 const port = Number(process.env.PORT) || 3333;
-console.log(`🚀 Servidor OLYMPUS v1.0 iniciado na porta ${port}`);
+console.log(`🚀 Servidor OLYMPUS v2.0 iniciado na porta ${port}`);
 
 serve({ fetch: app.fetch, port, hostname: '0.0.0.0' });
 
@@ -202,8 +241,8 @@ serve({ fetch: app.fetch, port, hostname: '0.0.0.0' });
         .onConflictDoNothing();
       console.log('[Settings] ✅ platform_settings inicializada.');
 
-      await reloadCronJobs(app);
-      console.log('[KRONOS] ✅ Cron jobs carregados com sucesso.');
+      await reloadCronJobs();
+      console.log('[KRATOS] ✅ Cron jobs carregados com sucesso.');
 
       // Pre-warm Ollama — carrega o modelo na memória para a primeira requisição ser rápida.
       // Executado em background para não bloquear o startup da API.
@@ -230,9 +269,9 @@ serve({ fetch: app.fetch, port, hostname: '0.0.0.0' });
       break;
     } catch (e: any) {
       if (i === MAX_RETRIES) {
-        console.error('[KRONOS] ❌ Não foi possível carregar crons após todas as tentativas:', e.message);
+        console.error('[KRATOS] ❌ Não foi possível carregar crons após todas as tentativas:', e.message);
       } else {
-        console.log(`[KRONOS] DB ainda não pronto (tentativa ${i}/${MAX_RETRIES}), aguardando ${DELAY_MS / 1000}s...`);
+        console.log(`[KRATOS] DB ainda não pronto (tentativa ${i}/${MAX_RETRIES}), aguardando ${DELAY_MS / 1000}s...`);
         await new Promise(r => setTimeout(r, DELAY_MS));
       }
     }

@@ -7,6 +7,38 @@ import qrcode from 'qrcode';
 import speakeasy from 'speakeasy';
 import { logAudit } from '../utils/audit';
 
+// ── Rate limit genérico (login + register) ───────────────────────────────────
+// Protege contra força bruta e enumeração de usuários via registro em massa.
+// Usa IP real (x-forwarded-for para proxy/nginx).
+interface RateBucket { count: number; resetAt: number; }
+
+function makeRateLimiter(maxAttempts: number, windowMs: number) {
+  const buckets = new Map<string, RateBucket>();
+  setInterval(() => {
+    const now = Date.now();
+    for (const [k, v] of buckets) {
+      if (now > v.resetAt) buckets.delete(k);
+    }
+  }, Math.min(windowMs, 5 * 60 * 1000));
+
+  return function check(ip: string): boolean {
+    const now = Date.now();
+    const bucket = buckets.get(ip);
+    if (!bucket || now > bucket.resetAt) {
+      buckets.set(ip, { count: 1, resetAt: now + windowMs });
+      return true;
+    }
+    if (bucket.count >= maxAttempts) return false;
+    bucket.count++;
+    return true;
+  };
+}
+
+// Login: 5 tentativas / 15 min
+const checkLoginRateLimit    = makeRateLimiter(5, 15 * 60 * 1000);
+// Register: 3 tentativas / 60 min — dificulta enumeração de e-mails via cadastro
+const checkRegisterRateLimit = makeRateLimiter(3, 60 * 60 * 1000);
+
 // JWT_EXPIRY: '1h'|'4h'|'8h'|'24h'|'7d' — default '8h' (recomendado para produção)
 function jwtExpirySeconds(): number {
   const raw = process.env.JWT_EXPIRY || '8h';
@@ -27,6 +59,13 @@ authRoutes.get('/setup-status', async (c) => {
 });
 
 authRoutes.post('/login', async (c) => {
+  const ip = c.req.header('x-forwarded-for')?.split(',')[0].trim()
+    || c.req.header('x-real-ip')
+    || 'unknown';
+  if (!checkLoginRateLimit(ip)) {
+    return c.json({ error: 'Muitas tentativas de login. Tente novamente em 15 minutos.' }, 429);
+  }
+
   const { email, password, token: totpToken } = (await c.req.json()) as any;
   const user = await db.query.users.findFirst({ where: eq(users.email, email) });
   if (!user || !user.passwordHash) return c.json({ error: 'Credenciais inválidas' }, 401);
@@ -48,7 +87,7 @@ authRoutes.post('/login', async (c) => {
 
   const exp = Math.floor(Date.now() / 1000) + jwtExpirySeconds();
   const payload = { id: user.id, name: user.name, role: user.role, exp };
-  const token = await sign(payload, process.env.JWT_SECRET || 'olympus_super_secret_key_2026');
+  const token = await sign(payload, process.env.JWT_SECRET!);
   await logAudit({
     userId: user.id, userName: user.name, action: 'login', resourceType: 'user', resourceId: user.id,
     ipAddress: c.req.header('x-forwarded-for') || c.req.header('x-real-ip'),
@@ -57,10 +96,25 @@ authRoutes.post('/login', async (c) => {
 });
 
 authRoutes.post('/register', async (c) => {
+  // Rate limit — dificulta enumeração de e-mails via tentativas de cadastro em massa
+  const ip = c.req.header('x-forwarded-for')?.split(',')[0].trim()
+    || c.req.header('x-real-ip')
+    || 'unknown';
+  if (!checkRegisterRateLimit(ip)) {
+    return c.json({ error: 'Muitas tentativas. Tente novamente mais tarde.' }, 429);
+  }
+
   const { name, email, password, role } = (await c.req.json()) as any;
+
+  // Verifica duplicidade ANTES do hash para falhar rápido, mas retorna a
+  // mesma mensagem neutra de sucesso — impede distinguir "já existia" de "criado".
   const existing = await db.query.users.findFirst({ where: eq(users.email, email) });
-  if (existing) return c.json({ error: 'Email já cadastrado' }, 400);
-  
+  if (existing) {
+    // Simula latência do bcrypt para não vazar por timing (≈ 60–80 ms)
+    await new Promise(r => setTimeout(r, 70));
+    return c.json({ error: 'Não foi possível concluir o cadastro.' }, 400);
+  }
+
   const anyUser = await db.query.users.findFirst();
   const finalRole = anyUser ? (role || 'analista') : 'admin';
 
@@ -69,22 +123,30 @@ authRoutes.post('/register', async (c) => {
   return c.json({ user: { id: newUser.id, name: newUser.name, role: newUser.role } });
 });
 
+// ── 2FA — requer autenticação JWT (adicionado em PROTECTED_PREFIXES no index.ts) ──
+// userId derivado do token JWT — nunca da payload do request (previne IDOR/escalada).
 authRoutes.post('/2fa/generate', async (c) => {
-  const { userId } = (await c.req.json()) as any;
-  
+  const jwtPayload = c.get('jwtPayload') as any;
+  const userId = jwtPayload?.id;
+  if (!userId) return c.json({ error: 'Não autenticado' }, 401);
+
   const user = await db.query.users.findFirst({ where: eq(users.id, userId) });
   if (!user) return c.json({ error: 'Usuário não encontrado' }, 404);
 
   const secretInfo = speakeasy.generateSecret({ name: `OLYMPUS StratSight (${user.email})` });
   const secret = secretInfo.base32;
   const qrCodeUrl = await qrcode.toDataURL(secretInfo.otpauth_url!);
-  
+
   await db.update(users).set({ twoFactorSecret: secret }).where(eq(users.id, userId));
   return c.json({ secret, qrCodeUrl });
 });
 
 authRoutes.post('/2fa/enable', async (c) => {
-  const { userId, token } = (await c.req.json()) as any;
+  const jwtPayload = c.get('jwtPayload') as any;
+  const userId = jwtPayload?.id;
+  if (!userId) return c.json({ error: 'Não autenticado' }, 401);
+
+  const { token } = (await c.req.json()) as any;
   const user = await db.query.users.findFirst({ where: eq(users.id, userId) });
   if (!user || !user.twoFactorSecret) return c.json({ error: 'Usuário não encontrado' }, 404);
 
@@ -93,7 +155,7 @@ authRoutes.post('/2fa/enable', async (c) => {
     encoding: 'base32',
     token: token
   });
-  
+
   if (!isValid) return c.json({ error: 'Código 2FA inválido' }, 400);
 
   await db.update(users).set({ isTwoFactorEnabled: true }).where(eq(users.id, userId));

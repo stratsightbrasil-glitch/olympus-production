@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo, memo, useRef } from 'react';
 import { ThinkingBlock } from './ThinkingBlock';
 import { fmt } from '../../lib/fmt';
 import { AgentMark } from '../ui/AgentMark';
@@ -12,7 +12,7 @@ import { PestelScatter } from '../canvas/artifacts/PestelScatter';
 const DOMAIN_RENDERERS_ENABLED = (import.meta as any).env?.VITE_ENABLE_DOMAIN_RENDERERS !== 'false';
 
 // Agentes reconhecidos pelo sistema de identidade
-const KNOWN_AGENTS: Agent[] = ['HERMES','SCOPUS','KLIO','PYTHIA','MNEMOSYNE','THEMIS','KRATOS'];
+const KNOWN_AGENTS: Agent[] = ['HERMES','OLYMPUS','HERMES_SIPLEX','SCOPUS','KLIO','PYTHIA','MNEMOSYNE','THEMIS','KRATOS'];
 function isKnownAgent(name: string): name is Agent {
   return KNOWN_AGENTS.includes(name as Agent);
 }
@@ -36,7 +36,7 @@ interface MessageBubbleProps {
   onExportPdf?: () => void;
 }
 
-export function MessageBubble({
+export const MessageBubble = memo(function MessageBubble({
   role,
   content,
   agentName,
@@ -56,17 +56,29 @@ export function MessageBubble({
   const [showActions, setShowActions] = useState(false);
   const isUser = role === 'user';
   const agentVar = `var(--agent-${agentName.toLowerCase()})`;
-  const now = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+  // useRef: captura o timestamp na montagem do componente — não recalcula em re-renders
+  const nowRef = useRef(new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }));
+  const now = nowRef.current;
+
+  // fmt() é caro (markdown → HTML, ~2–5ms por mensagem longa).
+  // Memoizado por conteúdo: re-processa apenas quando o texto muda (streaming ou edição).
+  const formattedHtml = useMemo(() => fmt(content), [content]);
 
   // Domain renderer — Matriz 2×2 (PYTHIA)
-  const matriz2x2Data = !isUser && DOMAIN_RENDERERS_ENABLED && agentName === 'PYTHIA'
-    ? parseMatriz2x2(content)
-    : null;
+  const matriz2x2Data = useMemo(() =>
+    !isUser && DOMAIN_RENDERERS_ENABLED && agentName === 'PYTHIA' && !isStreaming
+      ? parseMatriz2x2(content)
+      : null,
+    [content, isUser, agentName, isStreaming]
+  );
 
   // Domain renderer — PESTEL Scatter (KLIO)
-  const pestelData = !isUser && DOMAIN_RENDERERS_ENABLED && agentName === 'KLIO'
-    ? parsePestel(content)
-    : null;
+  const pestelData = useMemo(() =>
+    !isUser && DOMAIN_RENDERERS_ENABLED && agentName === 'KLIO' && !isStreaming
+      ? parsePestel(content)
+      : null,
+    [content, isUser, agentName, isStreaming]
+  );
 
   if (isUser) {
     return (
@@ -81,7 +93,7 @@ export function MessageBubble({
           color: 'var(--text-inv)',
           lineHeight: 1.6,
         }}>
-          <div dangerouslySetInnerHTML={{ __html: fmt(content) }} />
+          <div dangerouslySetInnerHTML={{ __html: formattedHtml }} />
         </div>
       </div>
     );
@@ -155,7 +167,7 @@ export function MessageBubble({
           }}>
             <div
               className="msg-markdown"
-              dangerouslySetInnerHTML={{ __html: fmt(content) }}
+              dangerouslySetInnerHTML={{ __html: formattedHtml }}
             />
             {isStreaming && (
               <span style={{
@@ -165,12 +177,12 @@ export function MessageBubble({
                 verticalAlign: 'middle',
               }} />
             )}
-            {/* Domain renderer — Matriz 2×2 */}
-            {!isStreaming && matriz2x2Data && (
+            {/* Domain renderer — Matriz 2×2 (condição isStreaming já embutida no useMemo) */}
+            {matriz2x2Data && (
               <Matriz2x2 data={matriz2x2Data} rawMarkdown={content} />
             )}
             {/* Domain renderer — PESTEL Scatter */}
-            {!isStreaming && pestelData && (
+            {pestelData && (
               <PestelScatter data={pestelData} rawMarkdown={content} />
             )}
           </div>
@@ -217,4 +229,4 @@ export function MessageBubble({
       </div>
     </div>
   );
-}
+});
