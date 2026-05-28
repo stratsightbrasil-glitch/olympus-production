@@ -345,20 +345,17 @@ export async function runAnalysis(body: any, jwtPayload: any, cb: AnalysisCallba
     // TEST_MODE: orquestradores (HERMES, OLYMPUS) seguem a sequência da metodologia
     // sem repetir agentes nem chamar ATHENA para revisões — evita loops SCOPUS→ATHENA.
     if (process.env.TEST_MODE === 'true' && ag.type === 'orchestrator') {
-      agentPrompt = `[MODO TESTE ATIVO — SEQUÊNCIA ESTRITA]\n` +
-        `Você está em modo de teste automatizado com limite reduzido de passos.\n` +
-        `REGRAS OBRIGATÓRIAS:\n` +
-        `1. Siga a sequência da metodologia EXATAMENTE na ordem definida, sem desvios.\n` +
-        `2. Chame cada especialista APENAS UMA VEZ. NUNCA repita um especialista já chamado.\n` +
-        `3. Após receber a resposta de um especialista, avance IMEDIATAMENTE para o próximo da sequência.\n` +
-        `4. NÃO chame ATHENA para revisões intermediárias — ATHENA só é chamada se estiver na sequência obrigatória.\n` +
-        `5. Após chamar TODOS os especialistas obrigatórios, produza o RELATÓRIO FINAL COMPLETO E DETALHADO.\n` +
-        `   O relatório deve ter MÍNIMO 1500 palavras. Inclua obrigatoriamente:\n` +
-        `   • RELATÓRIO FINAL [METODOLOGIA] (título explícito)\n` +
-        `   • Resumo Executivo\n` +
-        `   • Análise e Cenários\n` +
-        `   • Recomendações Estratégicas\n` +
-        `   Escreva o relatório DIRETAMENTE sem acionar mais ferramentas ou especialistas.\n\n` + agentPrompt;
+      agentPrompt = `[MODO TESTE ATIVO — SEQUÊNCIA METODOLÓGICA]\n` +
+        `Você está em modo de teste automatizado. Siga as instruções abaixo RIGOROSAMENTE:\n` +
+        `1. Execute TODAS as fases da metodologia na ordem definida no contexto. NÃO pule fases.\n` +
+        `2. Se uma fase exige o mesmo especialista que já foi chamado antes, chame-o NOVAMENTE — cada fase é independente.\n` +
+        `3. NÃO chame ATHENA para revisões intermediárias. Prossiga diretamente para a próxima fase.\n` +
+        `4. Após concluir TODAS as fases (incluindo as fases com especialistas repetidos), produza o RELATÓRIO FINAL.\n` +
+        `5. O RELATÓRIO FINAL deve:\n` +
+        `   - Começar com "**HERMES** · RELATÓRIO FINAL — [NOME DA METODOLOGIA]"\n` +
+        `   - Ter MÍNIMO 1500 palavras\n` +
+        `   - Incluir: Resumo Executivo, Análise e Cenários, Recomendações Estratégicas\n` +
+        `   - Ser escrito DIRETAMENTE sem acionar ferramentas adicionais\n\n` + agentPrompt;
     }
 
     const agentTechs: string[] = [];

@@ -587,7 +587,7 @@ async function suiteMetodologias() {
     name: "MSEF",
     methodology: "MSEF v3 (8 etapas ENAP)",
     questao: "Quais os cenários para a segurança alimentar no Brasil até 2035, considerando mudanças climáticas e transformação digital?",
-    expectedAgentSequence: ["SCOPUS", "KLIO", "PYTHIA", "MNEMOSYNE", "THEMIS", "KRATOS", "HERMES"],
+    expectedAgentSequence: ["SCOPUS", "KLIO", "PYTHIA", "MNEMOSYNE", "THEMIS", "HERMES"],  // MSEF fases: SCOPUS,KLIO×3,PYTHIA×2,MNEMOSYNE,THEMIS (sem KRATOS)
     finalReportPattern: /RELAT[ÓO]RIO\s+(FINAL|DE\s+CEN[AÁ]RIOS|ESTRAT[ÉE]GICO)/i,
     minMessageCount: 2,  // single-call architecture: 1 user + 1 HERMES final
   });
