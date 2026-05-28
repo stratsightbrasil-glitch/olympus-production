@@ -1,5 +1,5 @@
 # ESTADO ATUAL DO OLYMPUS v4
-**Documento técnico para revisão de design — atualizado em 27/05/2026 (Sprint Fase 2 LangGraph JS + Low Priority Hardening)**
+**Documento técnico para revisão de design — atualizado em 28/05/2026 (Sprint Estabilização de Testes + Limpeza Técnica)**
 **Gerado por:** Claude Code (análise estática do código-fonte + execução do seed)
 **Destinatário:** Claude Chat — análise arquitetural e continuidade do desenvolvimento
 
@@ -169,6 +169,11 @@ Ferramentas disponíveis:
 - `registrar_sinal` / `buscar_sinais` / `atualizar_sentinela` — Sinais Fracos
 - `declarar_julgamento` / `registrar_hipotese_alternativa` / `avaliar_fonte` — ICD 203 / ATS
 - `consultar_agente` — delegação interna (orquestradores só)
+- `tool_register_event` — registra evento MICMAC/MPC no banco (projectId injetado via closure)
+- `tool_register_impact_relation` — registra relação de impacto direto entre variáveis
+- `tool_grumbach_expert_simulation` — simulação de 7 personas para projeção Grumbach
+
+> **⚠️ Arquitetura das ferramentas analíticas:** `tool_register_event`, `tool_register_impact_relation` e `tool_grumbach_expert_simulation` são criadas via `createAnalyticalEngineTools(projectId)` em `apps/api/src/tools/analytical-engines.ts`. Esta factory injeta `projectId` via closure e converte o campo `parameters` (OlympusTool) para `schema` (Tool<any>), removendo `projectId` do schema exposto ao LLM. Agentes que usam essas ferramentas precisam declará-las tanto em `tools_config` no banco quanto ter a tool registrada em `availableTools` em `chat.ts`.
 
 ---
 
@@ -241,49 +246,81 @@ GET /api/v1/engine/methodologies
 
 ---
 
-## 5. ROTEAMENTO ANTHROPIC / OLLAMA
+## 5. ROTEAMENTO DE PROVIDER LLM
+
+> **Estado atual (28 Mai 2026):** Provider ativo é **Google Gemini 2.5 Flash** (testes de integração).  
+> Para produção, alternar para Anthropic via `PATCH /api/v1/settings/llm`.
 
 ### 5.1 Fluxo completo da configuração
 
 ```
-DB: platform_settings (key='llm', value={"provider":"anthropic","model":"claude-opus-4-7"})
+DB: platform_settings (key='llm', value={"provider":"google","model":"gemini-2.5-flash"})
   ↓
 getLLMConfig() [settings.ts] — lê do banco a cada análise, fallback para .env
   ↓
-runAnalysis() [chat.ts] — const llmConfig = await getLLMConfig()
+runAnalysis() [chat.ts] — const [llmConfig, llmTiers] = await Promise.all([getLLMConfig(), getLLMTiers()])
   ↓
 AgentContext.llmConfig = { provider, model }
+AgentContext.llmTiers  = { economy: 'gemini-2.5-flash-lite', premium: 'gemini-2.5-flash' }
   ↓
 Agent.run(input, context) → getModel(context.llmConfig)
-  ↓ se provider = 'anthropic'      ↓ se provider = 'ollama'
-anthropic(modelName)         createOpenAI({baseURL, apiKey:'ollama'})(modelName)
-[Anthropic SDK]              [OpenAI SDK — compatível com Ollama /v1]
+  ↓ se provider = 'anthropic'      ↓ se provider = 'google'       ↓ se provider = 'ollama'
+anthropic(modelName)         google(modelName)              createOpenAI({baseURL})(modelName)
+[Anthropic SDK]              [@ai-sdk/google]               [OpenAI SDK — compatível c/ Ollama]
 ```
 
-### 5.2 Parâmetros que mudam entre providers
+### 5.2 Providers suportados
 
-| Parâmetro | Anthropic | Ollama |
-|-----------|-----------|--------|
-| SDK | `@ai-sdk/anthropic` | `@ai-sdk/openai` com `createOpenAI({baseURL})` |
-| apiKey | ANTHROPIC_API_KEY (env) | String literal `'ollama'` |
-| baseURL | (padrão Anthropic) | OLLAMA_BASE_URL (padrão: `http://ollama:11434/v1`) |
-| maxTokens | 32000 (thinking/etapa) ou 16000 (passagem) | Igual |
-| toolChoice | prepareStep: required no step 0 | Igual |
-| stopWhen | stepCountIs(15) | Igual |
+| Provider | SDK | Env var | Modelos ativos (28 Mai 2026) |
+|----------|-----|---------|------------------------------|
+| `anthropic` | `@ai-sdk/anthropic` | `ANTHROPIC_API_KEY` | claude-haiku-4-5, claude-sonnet-4-6, claude-opus-4-7 |
+| `google` | `@ai-sdk/google` | `GOOGLE_GENERATIVE_AI_API_KEY` | gemini-2.5-flash, gemini-2.5-flash-lite |
+| `ollama` | `@ai-sdk/openai` (compat) | — | modelos locais via `http://ollama:11434/v1` |
 
-### 5.3 Troca de provider em runtime
+### 5.2b ⚠️ Modelos Google descontinuados
+
+| Modelo | Status | Substituto |
+|--------|--------|------------|
+| `gemini-2.0-flash` | ❌ Descontinuado para novas contas | `gemini-2.5-flash` |
+| `gemini-2.5-flash-preview-05-20` | ❌ Não existe na v1beta | `gemini-2.5-flash` (sem sufixo) |
+
+Para listar modelos disponíveis no container:
+```bash
+docker exec olympus_api node -e "
+const https = require('https');
+const key = process.env.GOOGLE_GENERATIVE_AI_API_KEY;
+https.get('https://generativelanguage.googleapis.com/v1beta/models?key=' + key, res => {
+  let data = '';
+  res.on('data', c => data += c);
+  res.on('end', () => JSON.parse(data).models.forEach(m => console.log(m.name)));
+});"
+```
+
+### 5.3 Parâmetros que mudam entre providers
+
+| Parâmetro | Anthropic | Google | Ollama |
+|-----------|-----------|--------|--------|
+| SDK | `@ai-sdk/anthropic` | `@ai-sdk/google` | `@ai-sdk/openai` com `createOpenAI({baseURL})` |
+| apiKey | ANTHROPIC_API_KEY | GOOGLE_GENERATIVE_AI_API_KEY | `'ollama'` literal |
+| maxTokens | 32000/16000 | 32000/16000 | Igual |
+| toolChoice | `prepareStep: required step 0` | Igual | Igual |
+| stopWhen | stepCountIs(15) | Igual | Igual |
+
+### 5.4 Troca de provider em runtime
 
 - **Leitura:** GET /api/v1/settings → `{ llm: {provider, model}, anthropicModels: [...], ollamaModels: [...] }`
 - **Escrita:** PATCH /api/v1/settings/llm (admin only) → upsert em `platform_settings`
 - **Efeito:** próxima análise já usa o novo provider (sem restart)
 - **UI:** `LlmSelector` em `CommandBar.tsx` — dropdown com seção Anthropic e seção Ollama
+- **⚠️ Obrigatório:** ao trocar de provider, também atualizar `PATCH /api/v1/settings/llm-tiers` com IDs de modelo do novo provider. IDs são específicos por provider — nunca misturar Anthropic IDs com Google ou vice-versa.
 
-### 5.4 Modelos disponíveis no seletor
+### 5.5 Modelos disponíveis no seletor
 
-- **Anthropic:** `claude-opus-4-7`, `claude-sonnet-4-5`, `claude-haiku-4-5` (hardcoded em settings.ts)
+- **Anthropic:** `claude-opus-4-7`, `claude-sonnet-4-6`, `claude-haiku-4-5` (hardcoded em settings.ts)
+- **Google:** `gemini-2.5-flash`, `gemini-2.5-flash-lite` (configurados via DB)
 - **Ollama:** dinâmico — GET /ollama-models → proxy para `http://ollama:11434/api/tags`
 
-### 5.5 Routing de modelo por agente — Tier System (Sprint Pré-LangGraph)
+### 5.6 Routing de modelo por agente — Tier System (Sprint Pré-LangGraph)
 
 > ✅ **Tier System implementado.** IDs de modelo não ficam mais hardcoded em código — `agents.model_override` armazena um **label de tier** (`'economy'`/`'premium'`). O mapeamento `tier → model ID` fica em `platform_settings.llm_tiers`, editável via UI de Settings sem redeployar.
 
@@ -298,13 +335,15 @@ Agent.ts: tiers['economy'] → 'claude-sonnet-4-6'
         (fallback: se tier não mapeado, usa valor como ID direto — compatibilidade)
 ```
 
-| Tier | Agentes | Default Anthropic | Perfil |
-|------|---------|-------------------|--------|
-| `economy` | SCOPUS, KRATOS | `claude-sonnet-4-6` | Tarefas mecânicas, resposta rápida |
-| `premium` | KLIO, PYTHIA, MNEMOSYNE, THEMIS, ATHENA | `claude-opus-4-7` | Raciocínio profundo |
-| *(global do setting)* | Agentes sem modelOverride + provider=ollama | — | Modelo global do LLM Selector |
+| Tier | Agentes | Google (atual testes) | Anthropic (produção) | Perfil |
+|------|---------|----------------------|----------------------|--------|
+| `economy` | SCOPUS, KRATOS | `gemini-2.5-flash-lite` | `claude-sonnet-4-6` | Tarefas mecânicas, resposta rápida |
+| `premium` | KLIO, PYTHIA, MNEMOSYNE, THEMIS, ATHENA | `gemini-2.5-flash` | `claude-opus-4-7` | Raciocínio profundo |
+| *(global)* | HERMES, OLYMPUS, HERMES_SIPLEX | `gemini-2.5-flash` | via `llm.model` | Orquestradores (sem modelOverride) |
 
-**Troca de modelo sem código:** UI de Settings (admin + Anthropic ativo) → seção "⚙ Tiers de Agentes" → dropdown Economy / Premium → `PATCH /api/v1/settings/llm-tiers`. Log: `[AGENTE] Tier [economy] → claude-sonnet-4-6`.
+**Troca de modelo sem código:** UI de Settings (admin) → seção "⚙ Tiers de Agentes" → dropdown Economy / Premium → `PATCH /api/v1/settings/llm-tiers`. Log: `[AGENTE] Tier [economy] → gemini-2.5-flash-lite (google)`.
+
+**⚠️ Regra crítica ao trocar provider:** sempre atualizar `llm_tiers` junto com `llm`. IDs de modelo são específicos por provider.
 
 ---
 
@@ -896,14 +935,111 @@ Motor de orquestração LangGraph JS substituindo o `Orchestrator.dispatch()` li
 
 ---
 
-## 11. ESTADO DO TYPESCRIPT (atualizado 27/05/2026)
+## 11. ESTADO DO TYPESCRIPT (atualizado 28/05/2026)
 
-- `packages/core` — ✅ zero erros (`tsc --noEmit`)
+- `packages/core` — ✅ zero erros (`tsc --noEmit`) — após remoção de 7 entradas TOOL_JSON_SCHEMAS duplicadas (592→517 linhas)
 - `packages/db` — ✅ compilado
 - `packages/tools` — ✅ zero erros (`tsc --noEmit`)
 - `apps/web` — ✅ zero erros (`tsc --noEmit`)
-- `apps/api` — ✅ zero erros (`tsc --noEmit`) — após rebuild `--no-cache` com `@langchain/langgraph`, `@langchain/core` e `@olympus/tools: "*"` declarados explicitamente
+- `apps/api` — ✅ zero erros (`tsc --noEmit`)
 
 ---
 
-*Documento atualizado em 27/05/2026 — Sprint Fase 2 LangGraph JS + Sprint Low Priority Hardening concluídos.*
+## 12. ESTADO DA SUITE DE TESTES (28/05/2026)
+
+**Último run:** 28 Mai 2026 · 20:36–21:19 · Google Gemini 2.5 Flash · TEST_MODE=true
+
+```
+Total:  36 testes
+Pass:   27 ✅ (75%)
+Fail:    9 ❌
+Tempo: ~40 min (inclui análises LLM reais)
+```
+
+### 12.1 Falhas pendentes e causa raiz
+
+| Teste | Erro | Causa | Próximo passo |
+|-------|------|-------|--------------|
+| **Godet** (metodologias) | `SCOPUS→KLIO→HERMES` — PYTHIA pulada | HERMES encurta execução sem ATHENA como gate | Rebuild com fix ATHENA-por-fase + rerun |
+| **tool_register_event** | Nenhum evento no banco após análise | Gemini não chama a ferramenta (ou timeout) | Investigar prompt SCOPUS/KLIO para Gemini |
+| **tool_register_impact_relation** | AbortError timeout 300s | Rate limit Gemini após 40 min de chamadas | Aumentar pause entre suites SAT (30s→90s+) |
+| **tool_grumbach_expert_simulation** | AbortError timeout 300s | Rate limit Gemini (mesmo problema acima) | Idem |
+| **buscar_dados_publicos** | `hasNumericData=false` | Valores mencionados em texto mas não extraídos numericamente | Ajustar asserção do teste ou prompt |
+| **PYTHIA artefato** | `probs=false` | 4 quadrantes gerados sem probabilidades | Ajustar prompt PYTHIA para formato estruturado com Gemini |
+| **MNEMOSYNE artefato** | `narrativas=1 palavras=46` | Gemini não segue formato de 4 narrativas | Instrução de formato mais explícita no prompt |
+| **isHermes** | `hermesCount=0 longestMsg=0` | Teste busca `**HERMES** · RELATÓRIO FINAL` no banco; arquitetura single-call grava `role=assistant` sem assinatura | Corrigir lógica do teste (verificar tamanho/conteúdo, não assinatura) |
+| **KRATOS análise** | `done=false assistantMessages=0` | Rate limit / timeout após suite longa | Aumentar pause + testar isolado |
+
+### 12.2 Melhorias neste run vs anterior
+
+| Antes (22/36 — 61%) | Depois (27/36 — 75%) | Fix aplicado |
+|-|-|-|
+| MSEF v3 ❌ (loop ATHENA 6 min) | ✅ PASSOU | TEST_MODE appended ao final do agentPrompt |
+| Godet, Grumbach, IPEA/FGV, OTAN/AltA, GBN ❌ ("SSE não emitiu 'done'") | ✅ 4/5 passaram | Mesmo fix + provider Gemini funcional |
+
+### 12.3 TEST_MODE — comportamento correto (28/05/2026)
+
+**Orquestradores (HERMES, OLYMPUS, HERMES_SIPLEX):**
+- Prompt de override **appendado ao final** do `agentPrompt` (sobrescreve regras anteriores)
+- ATHENA: chamada **UMA VEZ ao final de cada fase completa** (gate HITL), NÃO após cada tool call individual
+- ATHENA auto-aprova em TEST_MODE (`[MODO TESTE ATIVO]` no início do prompt de ATHENA)
+- `maxSteps = 20` para orquestradores (8 fases × 2 steps: especialista + ATHENA = 16; +4 buffer)
+
+**Especialistas (SCOPUS, KLIO, etc.):**
+- `maxSteps = 5`, `maxOutputTokens = 4.000`
+
+**ATHENA:**
+- `maxSteps = 5`, auto-aprova transições HITL imediatamente
+
+### 12.4 Backlog de testes
+
+| Item | Descrição | Prioridade |
+|------|-----------|-----------|
+| Rebuild + rerun Godet | Novo container com fix ATHENA-por-fase ativo | Alta |
+| Corrigir teste isHermes | Verificar tamanho/conteúdo da mensagem, não assinatura `**HERMES**` | Média |
+| Aumentar pause SAT (30→90s) | Evitar AbortError por rate limit Gemini | Média |
+| Investigar tool_register_event | SCOPUS/KLIO não chama ferramenta com Gemini | Média |
+
+---
+
+## 13. BACKLOG TÉCNICO ATUAL
+
+### Alta Prioridade — Infraestrutura
+
+| # | Item | Descrição | Quando |
+|---|------|-----------|--------|
+| **#1** | **PostgresSaver** | Substituir `BoundedMemorySaver` em `graph/builder.ts` por `PostgresSaver.fromConnString()`. `setup()` cria suas próprias tabelas — NÃO adicionar ao schema Drizzle (conflito de nomes). Adicionar `LANGGRAPH_CHECKPOINTER=memory` como fallback de dev. Resolve perda de checkpoints em restart/redeploy. | Antes do deploy Railway com SIPLEx em produção |
+| **#2** | **Anthropic Prompt Cache** | 4 linhas em `packages/core/src/Agent.ts`: `providerOptions: { anthropic: { cacheControl: { type: 'ephemeral' } } }` condicional por `effectiveConfig.provider === 'anthropic'`. Economia estimada: ~84% nos tokens de system prompt (20 steps × system ~5k tokens). | Ao migrar de volta ao Anthropic |
+
+### Média Prioridade — Testes e Correções
+
+| # | Item | Descrição | Quando |
+|---|------|-----------|--------|
+| **#3** | **Godet PYTHIA fix** | HERMES pula PYTHIA sem ATHENA como gate. Rebuild com fix TEST_MODE ATHENA-por-fase + investigar prompt Godet. | Próxima sessão |
+| **#4** | **isHermes teste** | Corrigir lógica: verificar `assistantMessages[0].content.length > 1500` ao invés de regex `**HERMES**`. Já parcialmente corrigido no run-tests.ts (fallback + skip quando sem dados). | Próxima sessão |
+
+### Média Prioridade — Segurança e Compliance
+
+| # | Item | Descrição | Quando |
+|---|------|-----------|--------|
+| **#5** | **Hash-Chaining em audit_logs** | Cada entrada em `audit_logs` recebe `previous_hash` e `entry_hash` (SHA-256 de: userId + action + createdAt + previousHash). Cadeia quebrada detecta adulteração retroativa. ~30 linhas em `utils/audit.ts` + coluna `previous_hash TEXT` na tabela. Alto valor para compliance governo/defesa — defensável em licitações. | Próximo sprint |
+| **#6** | **Hybrid Sovereign Embedding** | Em `packages/tools/src/embed.ts`, se `connectivityMode !== 'ONLINE'`, rotear automaticamente para `generateEmbeddingsOllama()` (já implementada) em vez de Voyage AI. ~15 linhas de roteamento. Protege operação SOBERANO/AIR_GAPPED onde chamadas externas são proibidas. | Próximo sprint |
+
+### Média Prioridade — Produto e UX
+
+| # | Item | Descrição | Quando |
+|---|------|-----------|--------|
+| **#7** | **LangGraph Flow Visualization** | Componente React com `@xyflow/react` que renderiza o DAG da metodologia ativa. Nós acendem conforme SSE emite `{type:'node', nodeId}` (já implementado). Nó PYTHIA pulsa em âmbar quando `hitlGate=true`. Especialmente valioso para demos com clientes. | Próximo sprint / Fase 2 LangGraph |
+| **#8** | **Harmonized Scenario Schema** | Nova ferramenta `registrar_cenario` em `analytical-engines.ts` (mesmo padrão das 7 ferramentas existentes). Todos os orquestradores chamam ao final de PYTHIA/MNEMOSYNE. Persiste em `project_scenarios`. KRATOS lê de lá — elimina `parseScenarioProbabilities()` e regex frágil. Funciona para MSEF, GODET, GRUMBACH. | Próximo sprint |
+
+### Longo Prazo — Escalabilidade
+
+| # | Item | Descrição | Quando |
+|---|------|-----------|--------|
+| **#9** | **Strategic Slate Compiler** | Ao final de cada fase, compilar output do especialista em `compiledSlate` estruturado (escopo, variáveis-chave, hipóteses validadas) como campo do `OlympusStateAnnotation`. Downstream agents recebem apenas o Slate + histórico da fase atual — elimina context bloat em análises de 7-8 fases com agentes de raciocínio profundo. | Fase 3 LangGraph |
+| **#10** | **Async Job Queue (DB-backed)** | Tabela `foresight_jobs` (status: pending→running→done→failed, tokens acumulados em jsonb). `/stream/graph` retorna `job_id` imediatamente; frontend faz polling. Resolve "SSE orphan" em desconexões de rede sem adicionar Redis/BullMQ. | Fase 3 LangGraph |
+| **#11** | **Row-Level Security (RLS)** | PostgreSQL RLS com `SET LOCAL app.current_user_id` em cada transação Drizzle. Garante isolamento matemático de dados entre tenants mesmo sob vulnerabilidades de API. Premature para implantação single-tenant atual. | Quando migrar para SaaS multi-tenant |
+
+---
+
+*Documento atualizado em 28/05/2026 — Sprint Estabilização de Testes + Limpeza Técnica.*

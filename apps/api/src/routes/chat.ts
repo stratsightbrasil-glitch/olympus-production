@@ -6,6 +6,7 @@ import { tavilySearchTool, dadosPublicosTool } from '@olympus/tools';
 import { ragTool } from '../tools/rag';
 import { createSignalTools } from '../tools/signals';
 import { createAnalyticStandardsTools } from '../tools/analytic-standards';
+import { createAnalyticalEngineTools } from '../tools/analytical-engines';
 import { getTechniqueInstructions } from '../tools/technique-engine';
 import { getLLMConfig, getLLMTiers } from './settings';
 import { eq, inArray, and, asc } from 'drizzle-orm';
@@ -303,6 +304,7 @@ export async function runAnalysis(body: any, jwtPayload: any, cb: AnalysisCallba
 
   const { registrarSinal, buscarSinais, atualizarSentinela } = createSignalTools(projectId);
   const { declararJulgamento, registrarHipoteseAlternativa, avaliarFonte } = createAnalyticStandardsTools(projectId);
+  const analyticalEngineTools = createAnalyticalEngineTools(projectId);
 
   const availableTools: Record<string, Tool<any>> = {
     'web_search':                       tavilySearchTool,
@@ -314,6 +316,10 @@ export async function runAnalysis(body: any, jwtPayload: any, cb: AnalysisCallba
     'declarar_julgamento':              declararJulgamento,
     'registrar_hipotese_alternativa':   registrarHipoteseAlternativa,
     'avaliar_fonte':                    avaliarFonte,
+    // ── Analytical engine tools (DB-bound, projectId injetado via closure) ──
+    'tool_register_event':              analyticalEngineTools['tool_register_event'] as any,
+    'tool_register_impact_relation':    analyticalEngineTools['tool_register_impact_relation'] as any,
+    'tool_grumbach_expert_simulation':  analyticalEngineTools['tool_grumbach_expert_simulation'] as any,
   };
   if (dynamicConsultTool) availableTools['consultar_agente'] = dynamicConsultTool;
 
@@ -342,20 +348,24 @@ export async function runAnalysis(body: any, jwtPayload: any, cb: AnalysisCallba
         `Não solicite dados adicionais. Retorne aprovação imediata e sucinta.\n\n` + agentPrompt;
     }
 
-    // TEST_MODE: orquestradores (HERMES, OLYMPUS) seguem a sequência da metodologia
-    // sem repetir agentes nem chamar ATHENA para revisões — evita loops SCOPUS→ATHENA.
+    // TEST_MODE: orquestradores (HERMES, OLYMPUS) seguem a sequência da metodologia.
+    // Regra correta de ATHENA: chamada UMA VEZ ao final de cada fase completa (gate de
+    // aprovação HITL), NÃO após cada chamada individual de especialista dentro de uma fase.
+    // ATHENA auto-aprova em TEST_MODE (ver bloco acima para ag.name === 'ATHENA').
+    // IMPORTANTE: injetado no FIM do prompt para sobrescrever regras anteriores.
     if (process.env.TEST_MODE === 'true' && ag.type === 'orchestrator') {
-      agentPrompt = `[MODO TESTE ATIVO — SEQUÊNCIA METODOLÓGICA]\n` +
-        `Você está em modo de teste automatizado. Siga as instruções abaixo RIGOROSAMENTE:\n` +
-        `1. Execute TODAS as fases da metodologia na ordem definida no contexto. NÃO pule fases.\n` +
-        `2. Se uma fase exige o mesmo especialista que já foi chamado antes, chame-o NOVAMENTE — cada fase é independente.\n` +
-        `3. NÃO chame ATHENA para revisões intermediárias. Prossiga diretamente para a próxima fase.\n` +
-        `4. Após concluir TODAS as fases (incluindo as fases com especialistas repetidos), produza o RELATÓRIO FINAL.\n` +
-        `5. O RELATÓRIO FINAL deve:\n` +
-        `   - Começar com "**HERMES** · RELATÓRIO FINAL — [NOME DA METODOLOGIA]"\n` +
-        `   - Ter MÍNIMO 1500 palavras\n` +
-        `   - Incluir: Resumo Executivo, Análise e Cenários, Recomendações Estratégicas\n` +
-        `   - Ser escrito DIRETAMENTE sem acionar ferramentas adicionais\n\n` + agentPrompt;
+      agentPrompt = agentPrompt + `\n\n` +
+        `[⚠️ MODO TESTE ATIVO — ESTAS INSTRUÇÕES REVOGAM TODOS OS PROTOCOLOS ANTERIORES]\n` +
+        `Você está em modo de teste automatizado. As regras abaixo têm PRIORIDADE ABSOLUTA:\n` +
+        `1. PROTOCOLO DE QUALIDADE — REGRA CORRETA DE ATHENA: Chame ATHENA UMA ÚNICA VEZ ao CONCLUIR cada fase completa. ` +
+        `NÃO chame ATHENA após cada chamada individual de especialista dentro da mesma fase. ` +
+        `Se uma fase exige o mesmo especialista múltiplas vezes, chame ATHENA apenas DEPOIS da última chamada do especialista naquela fase.\n` +
+        `2. APROVAÇÃO AUTOMÁTICA: Quando ATHENA responder, ela aprovará imediatamente. Avance IMEDIATAMENTE para a fase seguinte sem solicitar input do usuário.\n` +
+        `3. SEQUÊNCIA DIRETA: Execute TODAS as fases da metodologia em ordem. Após a aprovação de ATHENA, inicie o próximo especialista da fase seguinte.\n` +
+        `4. Se uma fase exige o mesmo especialista de uma fase anterior, chame-o NOVAMENTE.\n` +
+        `5. Após concluir TODAS as fases, produza o RELATÓRIO FINAL DIRETAMENTE (sem acionar ferramentas):\n` +
+        `   - Começar com "**${ag.name}** · RELATÓRIO FINAL — [NOME DA METODOLOGIA]"\n` +
+        `   - Ter MÍNIMO 1500 palavras com Resumo Executivo, Análise e Cenários, Recomendações Estratégicas\n`;
     }
 
     const agentTechs: string[] = [];

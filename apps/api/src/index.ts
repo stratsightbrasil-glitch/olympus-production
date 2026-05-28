@@ -80,16 +80,21 @@ app.get('/health', async (c) => {
   } catch { /* */ }
   const anthropicConfigured = !!process.env.ANTHROPIC_API_KEY;
   const tavilyConfigured    = !!process.env.TAVILY_API_KEY;
-  const ollamaProvider      = process.env.LLM_PROVIDER === 'ollama';
   // eslint-disable-next-line @typescript-eslint/no-var-requires
   const pkg = require('../../../package.json');
+  let llmProvider = process.env.LLM_PROVIDER || 'anthropic';
+  try {
+    const { getLLMConfig } = await import('./routes/settings.js');
+    const cfg = await getLLMConfig();
+    llmProvider = cfg.provider;
+  } catch { /* não bloquear o health se a leitura falhar */ }
   return c.json({
     status:    dbStatus === 'connected' ? 'ok' : 'degraded',
     version:   pkg?.version || '4.0.0',
     database:  dbStatus,
     anthropic: anthropicConfigured ? 'configured' : 'not_configured',
     tavily:    tavilyConfigured    ? 'configured' : 'not_configured',
-    llm:       ollamaProvider      ? 'ollama'     : 'anthropic',
+    llm:       llmProvider,
     uptime:    Math.floor(process.uptime()),
     latencyMs: Date.now() - start,
     timestamp: new Date().toISOString(),

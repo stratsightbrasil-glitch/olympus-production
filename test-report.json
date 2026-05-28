@@ -1,0 +1,376 @@
+{
+  "timestamp": "2026-05-28T21:23:04.438Z",
+  "total": 36,
+  "passed": 26,
+  "failed": 10,
+  "totalMs": 3875112,
+  "results": [
+    {
+      "suite": "banco",
+      "name": "11 metodologias cadastradas no banco",
+      "passed": true,
+      "durationMs": 36,
+      "details": {
+        "count": 11
+      }
+    },
+    {
+      "suite": "banco",
+      "name": "Todas metodologias têm steps no banco",
+      "passed": true,
+      "durationMs": 32
+    },
+    {
+      "suite": "banco",
+      "name": "Contagem de fases correta por metodologia",
+      "passed": true,
+      "durationMs": 44
+    },
+    {
+      "suite": "banco",
+      "name": "12 técnicas SAT disponíveis via /engine/techniques (12 encontradas)",
+      "passed": true,
+      "durationMs": 20
+    },
+    {
+      "suite": "banco",
+      "name": "Orquestradores corretos por metodologia",
+      "passed": true,
+      "durationMs": 3182
+    },
+    {
+      "suite": "metodologias",
+      "name": "MSEF v3 (8 etapas ENAP) — sequência e relatório final",
+      "passed": false,
+      "durationMs": 361875,
+      "error": "Sequência incorreta. Esperado: SCOPUS→KLIO→PYTHIA→MNEMOSYNE→THEMIS→HERMES, Encontrado: SCOPUS→ATHENA→ATHENA→KLIO→ATHENA→KLIO→ATHENA→KLIO→KLIO→KLIO→KLIO→KLIO→HERMES",
+      "details": {
+        "expected": [
+          "SCOPUS",
+          "KLIO",
+          "PYTHIA",
+          "MNEMOSYNE",
+          "THEMIS",
+          "HERMES"
+        ],
+        "found": [
+          "SCOPUS",
+          "ATHENA",
+          "ATHENA",
+          "KLIO",
+          "ATHENA",
+          "KLIO",
+          "ATHENA",
+          "KLIO",
+          "KLIO",
+          "KLIO",
+          "KLIO",
+          "KLIO",
+          "HERMES"
+        ],
+        "agentsInSSE": [
+          "SCOPUS",
+          "ATHENA",
+          "ATHENA",
+          "KLIO",
+          "ATHENA",
+          "KLIO",
+          "ATHENA",
+          "KLIO",
+          "KLIO",
+          "KLIO",
+          "KLIO",
+          "KLIO",
+          "HERMES"
+        ],
+        "agentNamesInDB": [
+          "HERMES"
+        ]
+      }
+    },
+    {
+      "suite": "metodologias",
+      "name": "Godet: Escola Estrutural — sequência e relatório final",
+      "passed": true,
+      "durationMs": 522592,
+      "details": {
+        "projectId": "test_1779999723638_z9uk3i",
+        "messageCount": 2,
+        "agentSequence": [
+          "HERMES"
+        ],
+        "sseEventCount": 267
+      }
+    },
+    {
+      "suite": "metodologias",
+      "name": "Grumbach: Produção de Cenários — sequência e relatório final",
+      "passed": false,
+      "durationMs": 272360,
+      "error": "TypeError: terminated"
+    },
+    {
+      "suite": "metodologias",
+      "name": "IPEA/FGV: Cenários Estreitados de Desenvolvimento — sequência e relatório final",
+      "passed": false,
+      "durationMs": 19,
+      "error": "TypeError: fetch failed"
+    },
+    {
+      "suite": "metodologias",
+      "name": "OTAN/AltA — sequência e relatório final",
+      "passed": true,
+      "durationMs": 109369,
+      "details": {
+        "projectId": "test_1780000563660_ch0hqe",
+        "messageCount": 2,
+        "agentSequence": [
+          "HERMES"
+        ],
+        "sseEventCount": 141,
+        "finalReportLength": 24161
+      }
+    },
+    {
+      "suite": "metodologias",
+      "name": "GBN (Global Business Network - Peter Schwartz) — sequência e relatório final",
+      "passed": true,
+      "durationMs": 167063,
+      "details": {
+        "projectId": "test_1780000688030_4pb2ka",
+        "messageCount": 2,
+        "agentSequence": [
+          "HERMES"
+        ],
+        "sseEventCount": 108,
+        "finalReportLength": 17637
+      }
+    },
+    {
+      "suite": "sat",
+      "name": "tool_register_event — MPC válido registrado",
+      "passed": false,
+      "durationMs": 214260,
+      "error": "Nenhum evento encontrado no banco após análise"
+    },
+    {
+      "suite": "sat",
+      "name": "tool_register_impact_relation — variáveis MICMAC registradas",
+      "passed": false,
+      "durationMs": 103287,
+      "error": "Apenas 0 eventos registrados, esperado >= 2"
+    },
+    {
+      "suite": "sat",
+      "name": "tool_grumbach_expert_simulation — 7 personas",
+      "passed": true,
+      "durationMs": 181035,
+      "details": {
+        "foundPersonas": [
+          "especialista",
+          "militar",
+          "civil",
+          "político",
+          "executivo",
+          "líder",
+          "técnico",
+          "estratégico"
+        ],
+        "messageCount": 2
+      }
+    },
+    {
+      "suite": "sat",
+      "name": "buscar_dados_publicos — SELIC/IPCA/PNAD com valores reais",
+      "passed": false,
+      "durationMs": 300050,
+      "error": "AbortError: This operation was aborted"
+    },
+    {
+      "suite": "sat",
+      "name": "SAT Advocacia do Diabo — perspectiva adversarial",
+      "passed": true,
+      "durationMs": 84214,
+      "details": {
+        "contentLength": 15534
+      }
+    },
+    {
+      "suite": "sat",
+      "name": "tool_mpo_backcasting — marcos intermediários",
+      "passed": true,
+      "durationMs": 93755
+    },
+    {
+      "suite": "sat",
+      "name": "declarar_julgamento ICD 203 — escala padronizada",
+      "passed": false,
+      "durationMs": 300030,
+      "error": "AbortError: This operation was aborted"
+    },
+    {
+      "suite": "artefatos",
+      "name": "PYTHIA — Matriz 2×2 com 4 quadrantes e probabilidades",
+      "passed": false,
+      "durationMs": 10979,
+      "error": "Q1=true Q2=true Q3=true Q4=true probs=false",
+      "details": {
+        "contentSample": "Analise os cenários prospectivos para o mercado de trabalho brasileiro até 2030. PYTHIA deve gerar a Matriz 2×2 completa com os 4 quadrantes (Q1, Q2, Q3, Q4) e as probabilidades associadas a cada cenário. Os dois eixos devem ser definidos explicitamente."
+      }
+    },
+    {
+      "suite": "artefatos",
+      "name": "KLIO — PESTEL com 6 dimensões",
+      "passed": true,
+      "durationMs": 229053,
+      "details": {
+        "foundDimensions": [
+          "Politico",
+          "Economico",
+          "Social",
+          "Tecnologico",
+          "Ambiental",
+          "Legal"
+        ],
+        "missingDimensions": []
+      }
+    },
+    {
+      "suite": "artefatos",
+      "name": "PESTEL Scatter — Matriz Impacto×Incerteza",
+      "passed": true,
+      "durationMs": 207556,
+      "details": {
+        "hasEixosEstrategicos": false
+      }
+    },
+    {
+      "suite": "artefatos",
+      "name": "MNEMOSYNE — 4 narrativas com componentes estruturados",
+      "passed": true,
+      "durationMs": 217518,
+      "details": {
+        "narrativeCount": 15,
+        "wordCount": 4412,
+        "hasGatilho": true,
+        "hasTendencia": true,
+        "hasImpacto": true
+      }
+    },
+    {
+      "suite": "artefatos",
+      "name": "THEMIS — alertas precoces e hedges/bets",
+      "passed": true,
+      "durationMs": 488469,
+      "details": {
+        "hasAlertas": true,
+        "hasHedge": true,
+        "hasBet": true,
+        "hasTabela": true
+      }
+    },
+    {
+      "suite": "exportacao",
+      "name": "Export DOCX — magic bytes e tamanho",
+      "passed": true,
+      "durationMs": 88,
+      "details": {
+        "sizeBytes": 10932,
+        "contentType": "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+      }
+    },
+    {
+      "suite": "exportacao",
+      "name": "Export PDF/HTML — watermark CONFIDENCIAL",
+      "passed": true,
+      "durationMs": 11,
+      "details": {
+        "htmlSize": 7041
+      }
+    },
+    {
+      "suite": "exportacao",
+      "name": "Detecção isHermes — padrão relatório final",
+      "passed": false,
+      "durationMs": 0,
+      "error": "Nenhuma mensagem HERMES com padrão de relatório. hermesCount=0 longestMsg=0"
+    },
+    {
+      "suite": "exportacao",
+      "name": "Export Estimativa SIEx — seções EB70-MT-10.401",
+      "passed": true,
+      "durationMs": 551,
+      "details": {
+        "htmlSize": 5113
+      }
+    },
+    {
+      "suite": "seguranca",
+      "name": "Login inválido — 401 com mensagem neutra",
+      "passed": true,
+      "durationMs": 161
+    },
+    {
+      "suite": "seguranca",
+      "name": "Rota protegida sem JWT — 401",
+      "passed": true,
+      "durationMs": 6
+    },
+    {
+      "suite": "seguranca",
+      "name": "Role cliente bloqueado em /chat — 403",
+      "passed": true,
+      "durationMs": 11
+    },
+    {
+      "suite": "seguranca",
+      "name": "PATCH /settings/llm-tiers — 403 para não-admin",
+      "passed": true,
+      "durationMs": 5
+    },
+    {
+      "suite": "seguranca",
+      "name": "Audit log — login gera registro",
+      "passed": true,
+      "durationMs": 703,
+      "details": {
+        "before": 177,
+        "after": 178
+      }
+    },
+    {
+      "suite": "seguranca",
+      "name": "Tier change admin — persiste e restaura",
+      "passed": true,
+      "durationMs": 6049,
+      "details": {
+        "newTiers": {
+          "economy": "claude-haiku-4-5-20251001",
+          "premium": "claude-sonnet-4-6"
+        }
+      }
+    },
+    {
+      "suite": "kratos",
+      "name": "Indicador — criar e appendHistory",
+      "passed": true,
+      "durationMs": 54,
+      "details": {
+        "indId": "f2bf5ea9-495a-4783-8a07-5f3bbfba27a0"
+      }
+    },
+    {
+      "suite": "kratos",
+      "name": "Dashboard overallStatus=vermelho quando indicador vermelho",
+      "passed": true,
+      "durationMs": 75
+    },
+    {
+      "suite": "kratos",
+      "name": "KRATOS análise de monitoramento",
+      "passed": false,
+      "durationMs": 600,
+      "error": "done=false assistantMessages=0"
+    }
+  ]
+}

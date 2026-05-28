@@ -373,6 +373,56 @@ Persiste resultado em technique_execution_outputs para consulta pelo MNEMOSYNE.`
   },
 };
 
+// ── FACTORY — Tool<any> com projectId injetado via closure ───────────────────
+// Compatível com o sistema de ferramentas do Agent.ts (@olympus/core).
+// Mesma estrutura de createSignalTools: não expõe projectId no schema (o agente não precisa saber).
+
+export interface ProjectBoundTool {
+  name: string;
+  description: string;
+  schema: Record<string, any>;
+  execute: (args: any, ctx?: any) => Promise<string>;
+}
+
+export function createAnalyticalEngineTools(projectId: string): Record<string, ProjectBoundTool> {
+  // Helper: cria schema sem o campo projectId (injetado via closure)
+  function withoutProjectId(params: OlympusTool['parameters']): Record<string, any> {
+    const { projectId: _pid, ...rest } = params.properties;
+    return {
+      type: params.type,
+      properties: rest,
+      required: params.required.filter(r => r !== 'projectId'),
+    };
+  }
+
+  const registerEvent: ProjectBoundTool = {
+    name: toolRegisterEvent.name,
+    description: toolRegisterEvent.description,
+    schema: withoutProjectId(toolRegisterEvent.parameters),
+    execute: (args) => toolRegisterEvent.execute({ ...args, projectId }),
+  };
+
+  const registerImpactRelation: ProjectBoundTool = {
+    name: toolRegisterImpactRelation.name,
+    description: toolRegisterImpactRelation.description,
+    schema: withoutProjectId(toolRegisterImpactRelation.parameters),
+    execute: (args) => toolRegisterImpactRelation.execute({ ...args, projectId }),
+  };
+
+  const grumbachExpertSimulation: ProjectBoundTool = {
+    name: toolGrumbachExpertSimulation.name,
+    description: toolGrumbachExpertSimulation.description,
+    schema: withoutProjectId(toolGrumbachExpertSimulation.parameters),
+    execute: (args) => toolGrumbachExpertSimulation.execute({ ...args, projectId }),
+  };
+
+  return {
+    [registerEvent.name]:             registerEvent,
+    [registerImpactRelation.name]:    registerImpactRelation,
+    [grumbachExpertSimulation.name]:  grumbachExpertSimulation,
+  };
+}
+
 // ── EXPORTAÇÕES ────────────────────────────────────────────────────────────────
 export const analyticalEngineTools: OlympusTool[] = [
   toolUnifiedSearchEngine,

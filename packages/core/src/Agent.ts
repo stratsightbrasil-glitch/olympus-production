@@ -82,6 +82,12 @@ function getModel(config?: { provider: string; model: string }) {
 //
 // REGRA CRITICA: ZOD NAO E USADO AQUI. Ver secao 3.4 do HISTORICO_MIGRACAO.md.
 
+// Schemas de ferramentas built-in (consultar_agente, web_search) e das ferramentas
+// carregadas via DB que ainda não têm schema próprio no seu arquivo de implementação.
+// Ferramentas com schema próprio em analytical-engines.ts (tool_register_event,
+// tool_register_impact_relation, tool_grumbach_expert_simulation, tool_mactor_analysis,
+// tool_mpo_backcasting, tool_unified_search_engine, tool_mpc_source_evaluator) são
+// resolvidas pelo fallback `t.schema` em Agent.run() — não precisam de entrada aqui.
 const TOOL_JSON_SCHEMAS: Record<string, object> = {
   consultar_agente: {
     type: "object",
@@ -260,87 +266,6 @@ const TOOL_JSON_SCHEMAS: Record<string, object> = {
       notas:                  { type: "string" },
     },
     required: ["url","tipo","fidelidadeAoDocumento","informacaoUsada","avaliacaoCredibilidade"],
-  },
-  // ── Ferramentas Analíticas Avançadas (Fase 1 — JSON Schema puro, sem Zod) ──
-  tool_unified_search_engine: {
-    type: "object",
-    required: ["query", "connectivityMode"],
-    properties: {
-      query: { type: "string" },
-      connectivityMode: { type: "string", enum: ["ONLINE", "SOBERANO", "AIR_GAPPED"] },
-      domainRestriction: { type: "string" },
-      maxTokenBudget: { type: "integer", default: 6000 },
-    },
-  },
-  tool_register_event: {
-    type: "object",
-    required: ["projectId", "name", "description", "type"],
-    properties: {
-      projectId: { type: "string" },
-      name: { type: "string" },
-      description: { type: "string" },
-      type: { type: "string", enum: ["trend", "uncertainty", "inflection_factor", "fpf"] },
-      reliability: { type: "string", enum: ["A", "B", "C", "D", "E", "F"] },
-      credibility: { type: "string", enum: ["1", "2", "3", "4", "5", "6"] },
-    },
-  },
-  tool_mpc_source_evaluator: {
-    type: "object",
-    required: ["eventId", "reliability", "credibility"],
-    properties: {
-      eventId: { type: "string" },
-      reliability: { type: "string", enum: ["A", "B", "C", "D", "E", "F"] },
-      credibility: { type: "string", enum: ["1", "2", "3", "4", "5", "6"] },
-      justification: { type: "string" },
-    },
-  },
-  tool_register_impact_relation: {
-    type: "object",
-    required: ["projectId", "fromEventId", "toEventId", "impactScore"],
-    properties: {
-      projectId: { type: "string" },
-      fromEventId: { type: "string" },
-      toEventId: { type: "string" },
-      impactScore: { type: "integer", minimum: 0, maximum: 3 },
-    },
-  },
-  tool_grumbach_expert_simulation: {
-    type: "object",
-    required: ["projectId", "eventIds"],
-    properties: {
-      projectId: { type: "string" },
-      eventIds: { type: "array", items: { type: "string" } },
-      numberOfExpertPersonas: { type: "integer", default: 7 },
-      domain: { type: "string" },
-    },
-  },
-  tool_mactor_analysis: {
-    type: "object",
-    required: ["actorsRelations"],
-    properties: {
-      actorsRelations: {
-        type: "array",
-        items: {
-          type: "object",
-          properties: {
-            actorId: { type: "string" },
-            targetActorId: { type: "string" },
-            influenceScore: { type: "integer", minimum: -3, maximum: 3 },
-          },
-          required: ["actorId", "targetActorId", "influenceScore"],
-        },
-      },
-    },
-  },
-  tool_mpo_backcasting: {
-    type: "object",
-    required: ["projectId", "targetScenarioId"],
-    properties: {
-      projectId: { type: "string" },
-      targetScenarioId: { type: "string" },
-      horizonYears: { type: "integer", default: 30 },
-      intermediateHorizons: { type: "array", items: { type: "integer" } },
-    },
   },
 };
 
@@ -524,7 +449,8 @@ export class Agent {
       : vizMode === "thinking"  ? 32000
       : vizMode === "passagem"  ? 16000
       : 32000;
-    // Orquestradores: 20 em TEST_MODE (8 especialistas × 2 steps mín + síntese), 15 em produção.
+    // Orquestradores: 20 em TEST_MODE (8 fases × 2 steps: 1 especialista + 1 ATHENA + síntese), 15 em produção.
+    // ATHENA é chamada UMA VEZ ao final de cada fase (gate HITL), não após cada tool call.
     // Especialistas: 5 em TEST_MODE (resposta completa suficiente), 8 em produção.
     const maxSteps  = isOrchestrator ? (isTestMode ? 20 : 15) : (isTestMode ? 5 : 8);
 
