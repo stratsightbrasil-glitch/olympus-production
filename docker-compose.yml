@@ -50,11 +50,23 @@ services:
       - olympus_backups:/app/backups
     environment:
       - NODE_OPTIONS=--max-old-space-size=1024
+      - TEST_MODE=${TEST_MODE:-false}
+      # Bypass verificação SSL em redes com proxy/inspeção de certificado (desenvolvimento local).
+      # Em produção (Railway), não definir NODE_TLS_REJECT_UNAUTHORIZED no .env — Node usa SSL normal.
+      - NODE_TLS_REJECT_UNAUTHORIZED=${NODE_TLS_REJECT_UNAUTHORIZED:-}
+      # ── Providers LLM — API keys vêm do env_file (.env); não redefinir aqui
+      # para evitar que o shell sem as vars sobrescreva o .env com string vazia.
+      # Defaults de modelo e seletor de provider são seguros (não-secretos):
+      - ANTHROPIC_MODEL=${ANTHROPIC_MODEL:-claude-haiku-4-5-20251001}
+      - GOOGLE_MODEL=${GOOGLE_MODEL:-gemini-2.0-flash}
+      - GROQ_MODEL=${GROQ_MODEL:-llama-3.3-70b-versatile}
+      # Seletor de provider ativo (anthropic | google | groq | deepseek | ollama)
+      - LLM_PROVIDER=${LLM_PROVIDER:-anthropic}
       # A URL é sempre montada com o hostname interno (olympus_db) para que funcione
       # na rede Docker independentemente do DATABASE_URL do .env (que usa localhost).
-      # Defina POSTGRES_USER / POSTGRES_PASSWORD / POSTGRES_DB no .env ou no shell
-      # do host para usar credenciais customizadas em produção.
       - DATABASE_URL=postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@olympus_db:5432/${POSTGRES_DB:-olympus}
+      # URL do SearXNG quando rodando no perfil soberano. Vazio = Tavily é usado.
+      - SEARXNG_URL=${SEARXNG_URL:-http://searxng:8080}
     deploy:
       resources:
         limits:
@@ -109,7 +121,33 @@ services:
         max-size: "10m"
         max-file: "3"
 
+  # ── SearXNG — busca soberana self-hosted (Modo SOBERANO) ──────────────────
+  # Ativar com: docker compose --profile soberano up -d
+  # Garante que intenções de busca não são expostas a provedores SaaS externos.
+  # A API interna acessa via SEARXNG_URL=http://searxng:8080 (variável injetada).
+  searxng:
+    image: searxng/searxng:latest
+    container_name: olympus_searxng
+    profiles: ["soberano"]
+    environment:
+      - SEARXNG_BASE_URL=http://localhost:8888/
+      - SEARXNG_SECRET_KEY=${SEARXNG_SECRET_KEY:-olympus-soberano-secret-change-in-prod}
+    volumes:
+      - searxng_data:/etc/searxng
+    expose:
+      - "8080"
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
 volumes:
   pgdata:
   olympus_backups:
   ollama_data:
+  searxng_data:

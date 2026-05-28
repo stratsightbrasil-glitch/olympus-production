@@ -4,7 +4,12 @@
   "private": true,
   "scripts": {
     "dev": "tsx watch src/index.ts",
-    "build": "tsc"
+    "build": "tsc",
+    "test:seed": "npx tsx scripts/seed-test.ts",
+    "test:integration": "npx tsx scripts/run-tests.ts",
+    "test": "npx tsx scripts/seed-test.ts && npx tsx scripts/run-tests.ts",
+    "docs:update": "npm run docs:update --prefix ../..",
+    "docs:update:dry": "npm run docs:update:dry --prefix ../.."
   },
   "dependencies": {
     "@hono/node-server": "^1.11.1",

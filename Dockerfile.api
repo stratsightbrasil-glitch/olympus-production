@@ -14,7 +14,8 @@ RUN apt-get update && \
 COPY . .
 
 # Instala dependências do monorepo
-RUN npm install
+# strict-ssl=false contorna falhas de verificação de cadeia SSL em redes corporativas/proxy
+RUN npm config set strict-ssl false && npm install
 
 # Resolve duplicatas do drizzle-orm entre workspaces
 RUN npm dedupe

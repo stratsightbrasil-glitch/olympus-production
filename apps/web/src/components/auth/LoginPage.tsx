@@ -51,7 +51,7 @@ export function LoginPage({ auth }: LoginPageProps) {
     <div style={{ background: '#0D1612', minHeight: '100vh', display: 'flex', flexDirection: 'column', fontFamily: "'DM Sans', system-ui, sans-serif" }}>
 
       <div style={{ textAlign: 'center', padding: '9px 16px', fontFamily: "'DM Mono', 'Cascadia Code', monospace", fontSize: 9.5, letterSpacing: '2px', fontWeight: 700, color: '#E65100', background: 'rgba(230,81,0,.08)', borderBottom: '1px solid rgba(230,81,0,.18)', textTransform: 'uppercase' }}>
-        ⬢ CONFIDENCIAL — SISTEMA DE ACESSO RESTRITO
+        ⬢ ACESSO RESTRITO
       </div>
 
       <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '32px 40px', gap: 64, flexWrap: 'wrap' }}>

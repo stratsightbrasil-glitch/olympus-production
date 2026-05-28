@@ -12,11 +12,17 @@
     "build": "npm run build --workspaces --if-present",
     "lint": "npm run lint --workspaces --if-present",
     "db:generate": "npm run generate --workspace=@olympus/db",
-    "db:push": "npm run push --workspace=@olympus/db"
+    "db:push": "npm run push --workspace=@olympus/db",
+    "docs:update": "npx tsx apps/api/scripts/update-architecture-doc.ts",
+    "docs:update:dry": "npx tsx apps/api/scripts/update-architecture-doc.ts --dry-run",
+    "docs:update:section": "npx tsx apps/api/scripts/update-architecture-doc.ts --section",
+    "prepare": "git config core.hooksPath .githooks 2>/dev/null || true"
   },
   "dependencies": {
-    "zod": "^3.25.76",
-    "drizzle-orm": "^0.45.2"
+    "@ai-sdk/google": "^3.0.80",
+    "@ai-sdk/openai": "^3.0.65",
+    "drizzle-orm": "^0.45.2",
+    "zod": "^3.25.76"
   },
   "overrides": {
     "zod": "^3.25.76",

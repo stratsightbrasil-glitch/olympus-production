@@ -57,6 +57,10 @@ export interface AnthropicModel {
   label: string;
 }
 
+// Google e DeepSeek têm a mesma forma { id, label }
+export type GoogleModel    = AnthropicModel;
+export type DeepSeekModel  = AnthropicModel;
+
 export interface OllamaModel {
   id: string;
   size?: number;

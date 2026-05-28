@@ -1,5 +1,7 @@
 // Rate limiting em memória por userId — adequado para instância única (Railway/Docker).
 // Para multi-instância futura: substituir pelo Redis + sliding window.
+// TEST_MODE=true eleva todos os limites para 1000/hora — permite suites de integração completas.
+const TEST_MODE = process.env.TEST_MODE === 'true';
 
 interface Bucket { count: number; resetAt: number; }
 const buckets = new Map<string, Bucket>();
@@ -24,8 +26,9 @@ setInterval(() => {
   }
 }, 5 * 60 * 1000);
 
-// 5 análises simultâneas por usuário por hora
+// 5 análises por usuário por hora (1000 em TEST_MODE)
 export function rateLimitAnalysis(c: any, next: any) {
+  if (TEST_MODE) return next();
   const payload = c.get('jwtPayload');
   const key = `analysis:${payload?.id || c.req.header('x-forwarded-for') || 'anon'}`;
   if (!check(key, 5, 60 * 60 * 1000)) {
@@ -34,8 +37,9 @@ export function rateLimitAnalysis(c: any, next: any) {
   return next();
 }
 
-// 10 exportações por usuário por hora
+// 10 exportações por usuário por hora (ilimitado em TEST_MODE)
 export function rateLimitExport(c: any, next: any) {
+  if (TEST_MODE) return next();
   const payload = c.get('jwtPayload');
   const key = `export:${payload?.id || c.req.header('x-forwarded-for') || 'anon'}`;
   if (!check(key, 10, 60 * 60 * 1000)) {

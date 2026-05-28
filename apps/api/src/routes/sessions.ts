@@ -38,7 +38,7 @@ sessionsRoutes.get('/:id', async (c) => {
       orderBy: [asc(messages.createdAt)]
     });
 
-    return c.json({ ...projeto, mensagens: msgs });
+    return c.json({ ...projeto, messages: msgs });
   } catch (e: any) { return c.json({ error: e.message }, 500); }
 });
 
@@ -53,7 +53,7 @@ sessionsRoutes.patch('/:id', async (c) => {
       if (jwtPayload.role !== 'admin' && existing.createdBy !== jwtPayload.name) return c.json({ error: 'Acesso negado' }, 403);
       await db.update(projects).set({ name: body.name, status: body.status, kratosCron: body.kratosCron, alertEmails: body.alertEmails ?? existing.alertEmails, methodology: body.methodology, updatedBy: jwtPayload.name, updatedAt: new Date() }).where(eq(projects.id, id));
     } else {
-      await db.insert(projects).values({ id: id, name: body.name || 'Novo Projeto', status: body.status || 'Em produção', kratosCron: body.kratosCron || '0 6 * * *', alertEmails: body.alertEmails || '', methodology: 'MSEF', createdBy: jwtPayload.name, updatedBy: jwtPayload.name });
+      await db.insert(projects).values({ id: id, name: body.name || 'Novo Projeto', status: body.status || 'Em produção', kratosCron: body.kratosCron || '0 6 * * *', alertEmails: body.alertEmails || '', methodology: body.methodology || 'MSEF v3 (8 etapas ENAP)', createdBy: jwtPayload.name, updatedBy: jwtPayload.name });
     }
     // Await reload: ensures CRON is updated (jobs stopped/restarted) before the
     // HTTP response is sent. Prevents the brief race window where an inactivated

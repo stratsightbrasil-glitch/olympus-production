@@ -222,8 +222,10 @@ serve({ fetch: app.fetch, port, hostname: '0.0.0.0' });
       console.log('[pgvector] ✅ Extensão vector habilitada.');
 
       // Valores padrão em platform_settings — onConflictDoNothing = nunca sobrescreve customizações
+      // Padrão dev: Haiku (mais barato). Para prod, use a UI de Settings ou PATCH /api/v1/settings/llm
+      // onConflictDoNothing preserva customizações feitas via UI — nunca sobrescreve em restart.
       await db.insert(platformSettings)
-        .values({ key: 'llm', value: { provider: 'anthropic', model: 'claude-opus-4-7' } })
+        .values({ key: 'llm', value: { provider: 'google', model: 'gemini-2.0-flash' } })
         .onConflictDoNothing();
       await db.insert(platformSettings)
         .values({ key: 'anthropic_models', value: [
@@ -233,11 +235,9 @@ serve({ fetch: app.fetch, port, hostname: '0.0.0.0' });
         ]})
         .onConflictDoNothing();
       // Mapeamento de tiers de agentes → IDs de modelo.
-      // 'economy': agentes com tarefas mais mecânicas (ex: SCOPUS, KRATOS)
-      // 'premium': agentes com raciocínio profundo (ex: PYTHIA, KLIO, THEMIS)
-      // onConflictDoNothing preserva customizações feitas via UI de Settings.
+      // Padrão dev: ambos em Haiku. Prod: use PATCH /api/v1/settings/llm-tiers para promover premium.
       await db.insert(platformSettings)
-        .values({ key: 'llm_tiers', value: { economy: 'claude-sonnet-4-6', premium: 'claude-opus-4-7' } })
+        .values({ key: 'llm_tiers', value: { economy: 'gemini-2.0-flash', premium: 'gemini-2.5-flash-preview-05-20' } })
         .onConflictDoNothing();
       console.log('[Settings] ✅ platform_settings inicializada.');
 

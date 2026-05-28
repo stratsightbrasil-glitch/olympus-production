@@ -1,22 +1,50 @@
 import { generateText, streamText, jsonSchema, tool, stepCountIs } from "ai";
 import { anthropic } from "@ai-sdk/anthropic";
 import { createOpenAI } from "@ai-sdk/openai";
+import { google } from "@ai-sdk/google";
+import { createGroq } from "@ai-sdk/groq";
 import { AgentContext, Tool } from "./types";
 
 // ── Provider Factory ──────────────────────────────────────────────────────────
 // LLM_PROVIDER=anthropic (default) → Claude via Anthropic API
-// LLM_PROVIDER=ollama              → Ollama local via API OpenAI-compatível
-//   OLLAMA_BASE_URL  (default: http://ollama:11434/v1)
-//   OLLAMA_MODEL     (default: llama3.1:8b)
-// Adicionar novos providers aqui (gemini, bedrock, etc.) como novos cases no switch.
+//   ANTHROPIC_API_KEY, ANTHROPIC_MODEL (default: claude-haiku-4-5-20251001)
+// LLM_PROVIDER=google                → Google Gemini via AI Studio / Vertex
+//   GOOGLE_GENERATIVE_AI_API_KEY, model ex: gemini-2.0-flash
+// LLM_PROVIDER=groq                  → Groq (llama-3.3-70b-versatile, muito rápido)
+//   GROQ_API_KEY, GROQ_MODEL (default: llama-3.3-70b-versatile)
+// LLM_PROVIDER=ollama                → Ollama local via API OpenAI-compatível
+//   OLLAMA_BASE_URL (default: http://ollama:11434/v1), OLLAMA_MODEL
 function getModel(config?: { provider: string; model: string }) {
   const provider = config?.provider || process.env.LLM_PROVIDER || 'anthropic';
 
   switch (provider) {
     case 'anthropic': {
-      const modelName = config?.model || process.env.ANTHROPIC_MODEL || 'claude-opus-4-7';
+      const modelName = config?.model || process.env.ANTHROPIC_MODEL || 'claude-haiku-4-5-20251001';
       console.log(`[Provider] Anthropic — ${modelName}`);
       return anthropic(modelName);
+    }
+    case 'google': {
+      // Lê GOOGLE_GENERATIVE_AI_API_KEY automaticamente do ambiente
+      const modelName = config?.model || process.env.GOOGLE_MODEL || 'gemini-2.0-flash';
+      console.log(`[Provider] Google — ${modelName}`);
+      return google(modelName);
+    }
+    case 'groq': {
+      // Groq: inferência ultra-rápida (LPU), free tier generoso, ideal para testes
+      const apiKey    = process.env.GROQ_API_KEY || '';
+      const modelName = config?.model || process.env.GROQ_MODEL || 'llama-3.3-70b-versatile';
+      const groq      = createGroq({ apiKey });
+      console.log(`[Provider] Groq — ${modelName}`);
+      return groq(modelName);
+    }
+    case 'deepseek': {
+      // DeepSeek API é compatível com OpenAI — usa @ai-sdk/openai com base URL customizada
+      const baseURL   = 'https://api.deepseek.com/v1';
+      const apiKey    = process.env.DEEPSEEK_API_KEY || '';
+      const modelName = config?.model || 'deepseek-chat';
+      const deepseek  = createOpenAI({ baseURL, apiKey });
+      console.log(`[Provider] DeepSeek — ${modelName}`);
+      return deepseek.chat(modelName);
     }
     case 'ollama': {
       const baseURL   = process.env.OLLAMA_BASE_URL || 'http://ollama:11434/v1';
@@ -30,7 +58,7 @@ function getModel(config?: { provider: string; model: string }) {
     }
     default:
       throw new Error(
-        `[Provider] Provedor LLM desconhecido: "${provider}". Providers suportados: anthropic, ollama.`
+        `[Provider] Provedor LLM desconhecido: "${provider}". Suportados: anthropic, google, groq, deepseek, ollama.`
       );
   }
 }
@@ -465,26 +493,40 @@ export class Agent {
     // como fallback de compatibilidade, um ID de modelo direto (ex: 'claude-sonnet-4-6').
     // context.llmTiers carrega o mapa { economy: '<model-id>', premium: '<model-id>' }
     // de platform_settings — atualizável pela UI de Settings sem alterar código ou seed.
-    const isAnthropic = (context.llmConfig?.provider ?? 'anthropic') === 'anthropic';
-    const rawOverride  = this.modelOverride;                             // tier label ou ID direto
-    const resolvedModel = rawOverride
+    // P3: tier routing — provider-agnóstico
+    // agents.model_override = label do tier ('economy' | 'premium') ou ID de modelo direto.
+    // llmTiers mapeia tier label → model ID para o provider ativo.
+    // Funciona para qualquer provider: Anthropic, Google, DeepSeek, etc.
+    const activeProvider = context.llmConfig?.provider ?? 'anthropic';
+    const rawOverride    = this.modelOverride;                           // tier label ou ID direto
+    const resolvedModel  = rawOverride
       ? ((context.llmTiers ?? {})[rawOverride] ?? rawOverride)          // tier→ID ou passthrough
       : undefined;
-    const effectiveModel = isAnthropic && resolvedModel ? resolvedModel : undefined;
-    const effectiveConfig = effectiveModel
-      ? { provider: 'anthropic' as const, model: effectiveModel }
+    const effectiveConfig = resolvedModel
+      ? { provider: activeProvider, model: resolvedModel }
       : context.llmConfig;
-    if (effectiveModel) console.log(`[${this.name}] Tier [${rawOverride}] → ${effectiveModel}`);
+    if (resolvedModel) console.log(`[${this.name}] Tier [${rawOverride}] → ${resolvedModel} (${activeProvider})`);
 
     // ── vizMode — controla profundidade de orquestração e limite de tokens ────
     // "etapa"    (padrão): análise por etapa de metodologia, maxTokens=32_000
     // "passos"  : passo-a-passo detalhado — instrução extra injetada em chat.ts
     // "passagem": processo autônomo completo — maxTokens=16_000 (reduz custo)
     // "thinking": raciocínio estendido — instrução de profundidade em chat.ts
-    const maxTokens =
-      vizMode === "thinking" ? 32000
-      : vizMode === "passagem" ? 16000
+    // TEST_MODE: limita tokens e steps para completar em <30s/agente.
+    // Distingue orquestradores (têm consultar_agente) de especialistas:
+    //   • Especialistas: 3 steps × 4 000 tokens — resposta rápida e curta.
+    //   • Orquestradores: 15 steps × 8 000 tokens — ainda precisam chamar
+    //     todos os especialistas em sequência antes de sintetizar.
+    const isTestMode    = process.env.TEST_MODE === 'true';
+    const isOrchestrator = this.tools.some((t: any) => t.name === 'consultar_agente');
+    const maxTokens = isTestMode
+      ? (isOrchestrator ? 8_000 : 4_000)
+      : vizMode === "thinking"  ? 32000
+      : vizMode === "passagem"  ? 16000
       : 32000;
+    // Orquestradores: 20 em TEST_MODE (8 especialistas × 2 steps mín + síntese), 15 em produção.
+    // Especialistas: 5 em TEST_MODE (resposta completa suficiente), 8 em produção.
+    const maxSteps  = isOrchestrator ? (isTestMode ? 20 : 15) : (isTestMode ? 5 : 8);
 
     const hasTools = Object.keys(aiTools).length > 0;
 
@@ -493,13 +535,14 @@ export class Agent {
       system: finalSystemPrompt,
       messages,
       tools: hasTools ? aiTools : undefined,
-      stopWhen: stepCountIs(15),
+      stopWhen: stepCountIs(maxSteps),
       prepareStep: hasTools
         ? async ({ stepNumber }: { stepNumber: number }) => ({
             toolChoice: stepNumber === 0 ? ("required" as const) : ("auto" as const),
           })
         : undefined,
-      maxTokens,
+      // AI SDK v6: parâmetro correto é maxOutputTokens (maxTokens era v4/v5)
+      maxOutputTokens: maxTokens,
       onStepFinish: async ({ toolCalls, text }: any) => {
         if (!context.onStep) return;
         if (toolCalls && toolCalls.length > 0) {

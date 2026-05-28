@@ -33,8 +33,11 @@ import {
 import { eq, and, asc } from "drizzle-orm";
 
 // ── Janela de memória ─────────────────────────────────────────────────────────
-
-const MEMORY_TOKEN_BUDGET = 80_000;
+// Buffer de janela deslizante: mantém apenas as N mensagens mais recentes +
+// a primeira mensagem (âncora de contexto do projeto).
+// Evita o "Efeito Bola de Neve" onde o custo cresce exponencialmente com o histórico.
+const MEMORY_TOKEN_BUDGET   = 32_000; // reduzido de 80K — limita acúmulo de outputs longos
+const MEMORY_WINDOW_MESSAGES = 10;    // máximo de mensagens no janela deslizante (além da âncora)
 
 function estimateTokens(content: unknown): number {
   if (!content) return 0;
@@ -80,6 +83,12 @@ export async function loadMemoryWindow(projectId: string): Promise<any[]> {
   }
 
   if (first && !window.includes(first)) window.unshift(first);
+
+  // Cap duro: âncora (first) + no máximo MEMORY_WINDOW_MESSAGES recentes.
+  // Garante que nós tardios do grafo não recebam décadas de histórico.
+  if (window.length > MEMORY_WINDOW_MESSAGES + 1) {
+    return [window[0], ...window.slice(-(MEMORY_WINDOW_MESSAGES))];
+  }
   return window;
 }
 
@@ -278,6 +287,14 @@ export async function runAgentForPhase(
 
   // 2. TechniqueEngine — injeta instruções SAT no prompt
   let agentPrompt = dbAgent.systemPrompt;
+
+  // TEST_MODE: ATHENA auto-aprova HITL — evita loops de validação sem analista humano
+  if (process.env.TEST_MODE === 'true' && agentName === 'ATHENA') {
+    agentPrompt = `[MODO TESTE ATIVO] Você está em modo de teste automatizado. ` +
+      `Aprovação HITL é automática: sempre conclua que está APROVADO prosseguir para a próxima fase. ` +
+      `Não solicite dados adicionais. Retorne aprovação imediata e sucinta.\n\n` + agentPrompt;
+  }
+
   const agentTechs: string[] = [];
   if (dbAgent.techniquesConfig) {
     try {

@@ -62,7 +62,7 @@ authRoutes.post('/login', async (c) => {
   const ip = c.req.header('x-forwarded-for')?.split(',')[0].trim()
     || c.req.header('x-real-ip')
     || 'unknown';
-  if (!checkLoginRateLimit(ip)) {
+  if (process.env.TEST_MODE !== 'true' && !checkLoginRateLimit(ip)) {
     return c.json({ error: 'Muitas tentativas de login. Tente novamente em 15 minutos.' }, 429);
   }
 

@@ -88,6 +88,16 @@ engineRoutes.post('/install', async (c) => {
   }
 });
 
+// Endpoint para listar técnicas SAT disponíveis
+engineRoutes.get('/techniques', async (c) => {
+  try {
+    const list = await db.query.techniques.findMany();
+    return c.json(list);
+  } catch (e: any) {
+    return c.json({ error: e.message }, 500);
+  }
+});
+
 // Endpoint para listar as metodologias disponíveis
 // Retorna dados completos incluindo steps derivados de methodology_phases (banco)
 engineRoutes.get('/methodologies', async (c) => {

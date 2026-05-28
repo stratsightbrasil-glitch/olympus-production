@@ -6,9 +6,21 @@ const settingsRoutes = new Hono();
 
 // Fallback compilado — usado quando platform_settings.anthropic_models não existe
 export const ANTHROPIC_MODELS_DEFAULT = [
-  { id: 'claude-opus-4-7',    label: 'Claude Opus 4'     },
-  { id: 'claude-sonnet-4-6',  label: 'Claude Sonnet 4.6' },
-  { id: 'claude-haiku-4-5-20251001', label: 'Claude Haiku 4.5' },
+  { id: 'claude-opus-4-7',              label: 'Claude Opus 4'       },
+  { id: 'claude-sonnet-4-6',            label: 'Claude Sonnet 4.6'   },
+  { id: 'claude-haiku-4-5-20251001',    label: 'Claude Haiku 4.5'    },
+];
+
+// Modelos alternativos por provider (para UI de Settings futura)
+export const GOOGLE_MODELS_DEFAULT = [
+  { id: 'gemini-2.0-flash',             label: 'Gemini 2.0 Flash'    },  // ~8x mais barato que Haiku
+  { id: 'gemini-2.5-flash-preview-05-20', label: 'Gemini 2.5 Flash'  },
+  { id: 'gemini-1.5-pro',               label: 'Gemini 1.5 Pro'      },
+];
+
+export const DEEPSEEK_MODELS_DEFAULT = [
+  { id: 'deepseek-chat',                label: 'DeepSeek V3'         },  // ~6x mais barato que Haiku
+  { id: 'deepseek-reasoner',            label: 'DeepSeek R1 (raciocínio)' },
 ];
 
 // Lê lista de modelos do banco; cai no fallback se não houver registro
@@ -44,14 +56,24 @@ export async function getLLMConfig(): Promise<{ provider: string; model: string 
   } catch { /* tabela ainda não criada ou query falhou */ }
   return {
     provider: process.env.LLM_PROVIDER || 'anthropic',
-    model: process.env.ANTHROPIC_MODEL || 'claude-opus-4-7',
+    // Padrão de desenvolvimento: Haiku — mais barato, suficiente para a maioria dos agentes.
+    // Para produção com raciocínio mais elaborado, configure ANTHROPIC_MODEL=claude-sonnet-4-6
+    // ou use a UI de Settings para ajustar os tiers premium/economy.
+    model: process.env.ANTHROPIC_MODEL || 'claude-haiku-4-5-20251001',
   };
 }
 
 // ── Helper: carregar mapeamento de tiers de modelo ────────────────────────────
 // tier labels ('economy', 'premium') → IDs de modelo Anthropic
 // Armazenado em platform_settings.llm_tiers como JSONB.
-// Retorna {} se a chave não existir — Agent.ts usará modelOverride como ID direto (compatibilidade).
+//
+// Tiers padrão (desenvolvimento):
+//   economy → Haiku   (SCOPUS, KRATOS — tarefas estruturadas)
+//   premium → Haiku   (PYTHIA, MNEMOSYNE, THEMIS, ATHENA — em dev; Sonnet em produção)
+//
+// Para habilitar raciocínio premium em produção, via UI de Settings:
+//   PATCH /api/v1/settings/llm-tiers  { tiers: { economy: 'claude-haiku-4-5-20251001',
+//                                                  premium: 'claude-sonnet-4-6' } }
 export async function getLLMTiers(): Promise<Record<string, string>> {
   try {
     const result = await db.execute(
@@ -64,7 +86,12 @@ export async function getLLMTiers(): Promise<Record<string, string>> {
       if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) return parsed;
     }
   } catch { /* fallback */ }
-  return {};
+  // Fallback seguro: ambos os tiers apontam para Haiku — evita string literal 'economy'/'premium'
+  // chegar ao SDK da Anthropic como nome de modelo inválido.
+  return {
+    economy: 'claude-haiku-4-5-20251001',
+    premium: 'claude-haiku-4-5-20251001',
+  };
 }
 
 // ── Helper: busca modelos Ollama disponíveis ──────────────────────────────────
@@ -92,7 +119,9 @@ settingsRoutes.get('/', async (c) => {
   return c.json({
     llm,
     anthropicModels,
-    ollamaModels: ollama.models,
+    googleModels:   GOOGLE_MODELS_DEFAULT,
+    deepseekModels: DEEPSEEK_MODELS_DEFAULT,
+    ollamaModels:   ollama.models,
     ollamaAvailable: ollama.available,
     llmTiers,
   });
@@ -108,8 +137,8 @@ settingsRoutes.patch('/llm', async (c) => {
   const body = await c.req.json() as any;
   const { provider, model } = body;
 
-  if (!['anthropic', 'ollama'].includes(provider)) {
-    return c.json({ error: `Provedor inválido: ${provider}` }, 400);
+  if (!['anthropic', 'google', 'deepseek', 'ollama'].includes(provider)) {
+    return c.json({ error: `Provedor inválido: ${provider}. Suportados: anthropic, google, deepseek, ollama.` }, 400);
   }
   if (!model || typeof model !== 'string') {
     return c.json({ error: 'Campo "model" obrigatório.' }, 400);

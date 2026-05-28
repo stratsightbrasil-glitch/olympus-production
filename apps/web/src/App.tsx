@@ -306,6 +306,8 @@ function App() {
           methodologySteps={currentMethodologySteps}
           llmConfig={llm.llmConfig}
           anthropicModels={llm.anthropicModels}
+          googleModels={llm.googleModels}
+          deepseekModels={llm.deepseekModels}
           ollamaModels={llm.ollamaModels}
           ollamaAvailable={llm.ollamaAvailable}
           onLlmChange={user?.role === 'admin' ? llm.handleLlmChange : undefined}

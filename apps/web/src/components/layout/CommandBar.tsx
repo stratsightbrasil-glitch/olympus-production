@@ -33,6 +33,8 @@ interface CommandBarProps {
   // Seletor LLM
   llmConfig?: { provider: string; model: string };
   anthropicModels?: { id: string; label: string }[];
+  googleModels?: { id: string; label: string }[];
+  deepseekModels?: { id: string; label: string }[];
   ollamaModels?: { id: string; size?: number }[];
   ollamaAvailable?: boolean;
   onLlmChange?: (config: { provider: string; model: string }) => void;
@@ -91,13 +93,34 @@ function EngineChip({ mode }: { mode: string }) {
 // ─── Seletor de LLM ──────────────────────────────────────────────────────────
 
 const ANTHROPIC_DEFAULT = [
-  { id: 'claude-opus-4-7',   label: 'Claude Opus 4'     },
-  { id: 'claude-sonnet-4-5', label: 'Claude Sonnet 4.5' },
-  { id: 'claude-haiku-4-5',  label: 'Claude Haiku 4.5'  },
+  { id: 'claude-opus-4-7',          label: 'Claude Opus 4'     },
+  { id: 'claude-sonnet-4-6',        label: 'Claude Sonnet 4.6' },
+  { id: 'claude-haiku-4-5-20251001',label: 'Claude Haiku 4.5'  },
+];
+
+const GOOGLE_DEFAULT = [
+  { id: 'gemini-2.0-flash',                label: 'Gemini 2.0 Flash'    },
+  { id: 'gemini-2.5-flash-preview-05-20',  label: 'Gemini 2.5 Flash'    },
+  { id: 'gemini-1.5-pro',                  label: 'Gemini 1.5 Pro'      },
+];
+
+const DEEPSEEK_DEFAULT = [
+  { id: 'deepseek-chat',     label: 'DeepSeek V3'              },
+  { id: 'deepseek-reasoner', label: 'DeepSeek R1 (raciocínio)' },
 ];
 
 function modelShortLabel(provider: string, model: string): string {
   if (provider === 'ollama') return `⚡ ${model}`;
+  if (provider === 'google') {
+    if (model.includes('2.5')) return '🔮 Gemini 2.5';
+    if (model.includes('2.0') || model.includes('flash')) return '🔮 Gemini 2.0';
+    if (model.includes('pro')) return '🔮 Gemini Pro';
+    return `🔮 ${model.split('-')[1] ?? model}`;
+  }
+  if (provider === 'deepseek') {
+    if (model.includes('reasoner')) return '🌊 DeepSeek R1';
+    return '🌊 DeepSeek V3';
+  }
   if (model.includes('opus'))   return '☁ Opus 4';
   if (model.includes('sonnet')) return '☁ Sonnet';
   if (model.includes('haiku'))  return '☁ Haiku';
@@ -105,10 +128,13 @@ function modelShortLabel(provider: string, model: string): string {
 }
 
 function LlmSelector({
-  llmConfig, anthropicModels, ollamaModels, ollamaAvailable, onLlmChange, llmTiers, onTierChange,
+  llmConfig, anthropicModels, googleModels, deepseekModels,
+  ollamaModels, ollamaAvailable, onLlmChange, llmTiers, onTierChange,
 }: {
   llmConfig: { provider: string; model: string };
   anthropicModels: { id: string; label: string }[];
+  googleModels: { id: string; label: string }[];
+  deepseekModels: { id: string; label: string }[];
   ollamaModels: { id: string; size?: number }[];
   ollamaAvailable: boolean;
   onLlmChange?: (c: { provider: string; model: string }) => void;
@@ -127,7 +153,16 @@ function LlmSelector({
     return () => document.removeEventListener('mousedown', handler);
   }, [open]);
 
-  const models = anthropicModels.length > 0 ? anthropicModels : ANTHROPIC_DEFAULT;
+  const aModels   = anthropicModels.length > 0 ? anthropicModels : ANTHROPIC_DEFAULT;
+  const gModels   = googleModels.length > 0   ? googleModels   : GOOGLE_DEFAULT;
+  const dsModels  = deepseekModels.length > 0 ? deepseekModels : DEEPSEEK_DEFAULT;
+  // Modelos usados nos dropdowns de tier — usam os do provider ativo
+  const tierModels: { id: string; label: string }[] = (() => {
+    if (llmConfig.provider === 'google')   return gModels;
+    if (llmConfig.provider === 'deepseek') return dsModels;
+    if (llmConfig.provider === 'ollama')   return ollamaModels.map(m => ({ id: m.id, label: m.id }));
+    return aModels;
+  })();
   const isAdmin = !!onLlmChange;
   const label = modelShortLabel(llmConfig.provider, llmConfig.model);
 
@@ -168,18 +203,18 @@ function LlmSelector({
           borderRadius: 8, padding: '6px 0', minWidth: 220, zIndex: 999,
           boxShadow: '0 8px 24px rgba(0,0,0,.4)',
         }}>
-          {/* Anthropic */}
+          {/* ☁ Anthropic */}
           <div style={{ padding: '4px 12px 4px', fontSize: 9, color: '#6A9A7A', fontFamily: "'DM Mono',monospace", letterSpacing: 1.2, textTransform: 'uppercase' }}>
             ☁ Anthropic
           </div>
-          {models.map(m => {
+          {aModels.map(m => {
             const active = llmConfig.provider === 'anthropic' && llmConfig.model === m.id;
             return (
               <div
                 key={m.id}
                 onClick={() => select('anthropic', m.id)}
                 style={{
-                  padding: '7px 16px', fontSize: 12, cursor: 'pointer',
+                  padding: '3px 16px', fontSize: 12, cursor: 'pointer',
                   color: active ? '#C9A84C' : '#A3C9AE',
                   fontWeight: active ? 700 : 400,
                   fontFamily: "'DM Sans',system-ui,sans-serif",
@@ -198,7 +233,67 @@ function LlmSelector({
           {/* Divisor */}
           <div style={{ height: 1, background: 'rgba(255,255,255,.08)', margin: '6px 0' }} />
 
-          {/* Ollama */}
+          {/* 🔮 Google */}
+          <div style={{ padding: '4px 12px 4px', fontSize: 9, color: '#6A9A7A', fontFamily: "'DM Mono',monospace", letterSpacing: 1.2, textTransform: 'uppercase' }}>
+            🔮 Google
+          </div>
+          {gModels.map(m => {
+            const active = llmConfig.provider === 'google' && llmConfig.model === m.id;
+            return (
+              <div
+                key={m.id}
+                onClick={() => select('google', m.id)}
+                style={{
+                  padding: '3px 16px', fontSize: 12, cursor: 'pointer',
+                  color: active ? '#C9A84C' : '#A3C9AE',
+                  fontWeight: active ? 700 : 400,
+                  fontFamily: "'DM Sans',system-ui,sans-serif",
+                  display: 'flex', alignItems: 'center', gap: 8,
+                  background: 'transparent', transition: 'background .1s',
+                }}
+                onMouseEnter={e => (e.currentTarget.style.background = 'rgba(255,255,255,.07)')}
+                onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+              >
+                <span style={{ opacity: active ? 1 : 0, fontSize: 10 }}>●</span>
+                {m.label}
+              </div>
+            );
+          })}
+
+          {/* Divisor */}
+          <div style={{ height: 1, background: 'rgba(255,255,255,.08)', margin: '6px 0' }} />
+
+          {/* 🌊 DeepSeek */}
+          <div style={{ padding: '4px 12px 4px', fontSize: 9, color: '#6A9A7A', fontFamily: "'DM Mono',monospace", letterSpacing: 1.2, textTransform: 'uppercase' }}>
+            🌊 DeepSeek
+          </div>
+          {dsModels.map(m => {
+            const active = llmConfig.provider === 'deepseek' && llmConfig.model === m.id;
+            return (
+              <div
+                key={m.id}
+                onClick={() => select('deepseek', m.id)}
+                style={{
+                  padding: '3px 16px', fontSize: 12, cursor: 'pointer',
+                  color: active ? '#C9A84C' : '#A3C9AE',
+                  fontWeight: active ? 700 : 400,
+                  fontFamily: "'DM Sans',system-ui,sans-serif",
+                  display: 'flex', alignItems: 'center', gap: 8,
+                  background: 'transparent', transition: 'background .1s',
+                }}
+                onMouseEnter={e => (e.currentTarget.style.background = 'rgba(255,255,255,.07)')}
+                onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+              >
+                <span style={{ opacity: active ? 1 : 0, fontSize: 10 }}>●</span>
+                {m.label}
+              </div>
+            );
+          })}
+
+          {/* Divisor */}
+          <div style={{ height: 1, background: 'rgba(255,255,255,.08)', margin: '6px 0' }} />
+
+          {/* ⚡ Ollama local */}
           <div style={{ padding: '4px 12px 4px', fontSize: 9, color: ollamaAvailable ? '#6A9A7A' : '#4A5A4A', fontFamily: "'DM Mono',monospace", letterSpacing: 1.2, textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: 6 }}>
             ⚡ Ollama local
             {!ollamaAvailable && <span style={{ fontSize: 8, color: '#6A5A4A' }}>offline</span>}
@@ -210,7 +305,7 @@ function LlmSelector({
           )}
           {!ollamaAvailable && (
             <div style={{ padding: '6px 16px', fontSize: 11, color: '#6A5A4A', fontStyle: 'italic' }}>
-              Execute setup-ollama.ps1 para ativar
+              Inicie com: docker compose --profile ollama up
             </div>
           )}
           {ollamaAvailable && ollamaModels.map(m => {
@@ -221,7 +316,7 @@ function LlmSelector({
                 key={m.id}
                 onClick={() => select('ollama', m.id)}
                 style={{
-                  padding: '7px 16px', fontSize: 12, cursor: 'pointer',
+                  padding: '3px 16px', fontSize: 12, cursor: 'pointer',
                   color: active ? '#C9A84C' : '#A3C9AE',
                   fontWeight: active ? 700 : 400,
                   fontFamily: "'DM Mono','Cascadia Code',monospace",
@@ -240,8 +335,8 @@ function LlmSelector({
             );
           })}
 
-          {/* Tiers de Agentes — visível apenas para admin com Anthropic ativo */}
-          {onTierChange && llmConfig.provider === 'anthropic' && llmTiers && (
+          {/* ⚙ Tiers de Agentes — visível para admin em qualquer provider */}
+          {onTierChange && llmTiers && (
             <>
               <div style={{ height: 1, background: 'rgba(255,255,255,.08)', margin: '6px 0' }} />
               <div style={{ padding: '4px 12px 6px', fontSize: 9, color: '#6A9A7A', fontFamily: "'DM Mono',monospace", letterSpacing: 1.2, textTransform: 'uppercase' }}>
@@ -250,10 +345,9 @@ function LlmSelector({
               {(['economy', 'premium'] as const).map(tier => {
                 const TIER_LABELS: Record<string, string> = {
                   economy: 'Economy  (SCOPUS, KRATOS)',
-                  premium:  'Premium  (PYTHIA, KLIO, THEMIS…)',
+                  premium: 'Premium  (PYTHIA, KLIO, THEMIS…)',
                 };
                 const currentModelId = llmTiers[tier] ?? '';
-                const models = anthropicModels.length > 0 ? anthropicModels : ANTHROPIC_DEFAULT;
                 return (
                   <div key={tier} style={{ padding: '4px 12px 6px', display: 'flex', flexDirection: 'column', gap: 3 }}>
                     <span style={{ fontSize: 10, color: '#6A9A7A', fontFamily: "'DM Mono',monospace" }}>
@@ -271,7 +365,7 @@ function LlmSelector({
                       }}
                     >
                       <option value="" disabled>— escolha um modelo —</option>
-                      {models.map(m => (
+                      {tierModels.map(m => (
                         <option key={m.id} value={m.id}>{m.label}</option>
                       ))}
                     </select>
@@ -293,7 +387,8 @@ export function CommandBar({
   mainView, onToggleSidebar, onNovaSessao, onGerarRelatorio, onGerarPlaybook, onCopyClientLink, onToggleKratos,
   cliente, horizonte, questaoEstrategica, classificacao, teamName,
   methodologyName = 'MSEF', methodologySteps,
-  llmConfig, anthropicModels, ollamaModels, ollamaAvailable, onLlmChange, llmTiers, onTierChange,
+  llmConfig, anthropicModels, googleModels, deepseekModels,
+  ollamaModels, ollamaAvailable, onLlmChange, llmTiers, onTierChange,
 }: CommandBarProps) {
   const steps: MethodologyStep[] = methodologySteps ?? DEFAULT_STEPS;
   const isCliente = user?.role === 'cliente';
@@ -388,6 +483,8 @@ export function CommandBar({
           <LlmSelector
             llmConfig={llmConfig}
             anthropicModels={anthropicModels || []}
+            googleModels={googleModels || []}
+            deepseekModels={deepseekModels || []}
             ollamaModels={ollamaModels || []}
             ollamaAvailable={!!ollamaAvailable}
             onLlmChange={onLlmChange}

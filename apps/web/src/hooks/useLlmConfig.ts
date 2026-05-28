@@ -1,9 +1,11 @@
 import { useState, useEffect } from 'react';
-import type { LlmConfig, AnthropicModel, OllamaModel } from '../types';
+import type { LlmConfig, AnthropicModel, GoogleModel, DeepSeekModel, OllamaModel } from '../types';
 
 export function useLlmConfig(token: string | null) {
-  const [llmConfig, setLlmConfig] = useState<LlmConfig>({ provider: 'anthropic', model: 'claude-opus-4-7' });
+  const [llmConfig, setLlmConfig] = useState<LlmConfig>({ provider: 'google', model: 'gemini-2.0-flash' });
   const [anthropicModels, setAnthropicModels] = useState<AnthropicModel[]>([]);
+  const [googleModels, setGoogleModels] = useState<GoogleModel[]>([]);
+  const [deepseekModels, setDeepseekModels] = useState<DeepSeekModel[]>([]);
   const [ollamaModels, setOllamaModels] = useState<OllamaModel[]>([]);
   const [ollamaAvailable, setOllamaAvailable] = useState(false);
   const [llmTiers, setLlmTiers] = useState<Record<string, string>>({});
@@ -12,18 +14,18 @@ export function useLlmConfig(token: string | null) {
 
   useEffect(() => {
     if (!token) return;
+    // Tudo em uma única chamada — GET /api/v1/settings inclui Ollama, Google e DeepSeek
     fetch('/api/v1/settings', { headers: reqHeaders })
       .then(r => r.ok ? r.json() : null)
       .then(d => {
-        if (d?.llm) setLlmConfig(d.llm);
-        if (d?.anthropicModels) setAnthropicModels(d.anthropicModels);
-        if (d?.llmTiers) setLlmTiers(d.llmTiers);
-      })
-      .catch(() => {});
-    fetch('/api/v1/settings/ollama-models', { headers: reqHeaders })
-      .then(r => r.ok ? r.json() : null)
-      .then(d => {
-        if (d) { setOllamaAvailable(d.available); setOllamaModels(d.models || []); }
+        if (!d) return;
+        if (d.llm)             setLlmConfig(d.llm);
+        if (d.anthropicModels) setAnthropicModels(d.anthropicModels);
+        if (d.googleModels)    setGoogleModels(d.googleModels);
+        if (d.deepseekModels)  setDeepseekModels(d.deepseekModels);
+        if (d.ollamaModels)    setOllamaModels(d.ollamaModels);
+        if (d.ollamaAvailable !== undefined) setOllamaAvailable(d.ollamaAvailable);
+        if (d.llmTiers)        setLlmTiers(d.llmTiers);
       })
       .catch(() => {});
   }, [token]);
@@ -52,5 +54,9 @@ export function useLlmConfig(token: string | null) {
     } catch { alert('Erro na requisição'); }
   };
 
-  return { llmConfig, anthropicModels, ollamaModels, ollamaAvailable, llmTiers, handleLlmChange, handleTierChange };
+  return {
+    llmConfig, llmTiers,
+    anthropicModels, googleModels, deepseekModels, ollamaModels, ollamaAvailable,
+    handleLlmChange, handleTierChange,
+  };
 }
