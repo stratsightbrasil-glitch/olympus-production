@@ -1,0 +1,24 @@
+#!/bin/sh
+# Auto-update OLYMPUS_ARCHITECTURE.md on commits that touch source files.
+# Static sections (routes, schema, env vars) update without a running API.
+# Live sections (agentes, metodologias, técnicas) update only if API is reachable.
+
+CHANGED=$(git diff --cached --name-only)
+
+RELEVANT=$(echo "$CHANGED" | grep -E \
+  'apps/api/src/routes/|packages/db/src/schema\.ts|\.env\.example|apps/api/scripts/update-architecture-doc\.ts')
+
+if [ -z "$RELEVANT" ]; then
+  exit 0
+fi
+
+echo "  📐 Atualizando OLYMPUS_ARCHITECTURE.md..."
+
+npx tsx apps/api/scripts/update-architecture-doc.ts 2>/dev/null
+
+if git diff --quiet OLYMPUS_ARCHITECTURE.md 2>/dev/null; then
+  :
+else
+  git add OLYMPUS_ARCHITECTURE.md
+  echo "  ✅ OLYMPUS_ARCHITECTURE.md atualizado e staged"
+fi

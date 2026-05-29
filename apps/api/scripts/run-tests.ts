@@ -591,7 +591,7 @@ async function suiteMetodologias() {
     finalReportPattern: /RELAT[ÓO]RIO\s+(FINAL|DE\s+CEN[AÁ]RIOS|ESTRAT[ÉE]GICO)/i,
     minMessageCount: 2,  // single-call architecture: 1 user + 1 HERMES final
   });
-  await delay(15_000); // evita rate limiting entre análises consecutivas (Haiku ~170s/análise)
+  await delay(60_000); // 60s — Gemini rate limit recovery entre análises longas (8 fases)
 
   // ── GODET ────────────────────────────────────────────────────────────────
   await testMethodology({
@@ -603,7 +603,7 @@ async function suiteMetodologias() {
     finalReportPattern: /RAPPORT\s+PROSPECTIF|RELAT[ÓO]RIO\s+GODET|RELAT[ÓO]RIO\s+(FINAL|PROSPECTIVO|ESTRUTURAL)|ESCOLA\s+ESTRUTURAL|GODET/i,
     minMessageCount: 2,  // single-call architecture: 1 user + 1 HERMES final
   });
-  await delay(15_000); // evita rate limiting entre análises consecutivas
+  await delay(30_000); // 30s entre testes para evitar rate limit acumulado
 
   // ── GRUMBACH ─────────────────────────────────────────────────────────────
   await testMethodology({
@@ -614,7 +614,7 @@ async function suiteMetodologias() {
     finalReportPattern: /RELAT[ÓO]RIO|CENÁ|TENDENCIAL|PESSIMISTA|OTIMISTA|GRUMBACH/i,
     minMessageCount: 2,  // single-call architecture: 1 user + 1 HERMES final
   });
-  await delay(15_000); // evita rate limiting entre análises consecutivas
+  await delay(60_000); // 60s — pausa longa antes de IPEA/FGV (Gemini 503 frequente aqui)
 
   // ── IPEA/FGV (ex-MACROPLAN) ──────────────────────────────────────────────
   await testMethodology({
@@ -625,7 +625,7 @@ async function suiteMetodologias() {
     finalReportPattern: /RELAT[ÓO]RIO|CENÁRIOS|CEN[AÁ]RIOS/i,
     minMessageCount: 2,  // single-call architecture: 1 user + 1 HERMES final
   });
-  await delay(15_000); // evita rate limiting entre análises consecutivas
+  await delay(60_000); // 60s — pausa longa antes de OTAN/AltA
 
   // ── OTAN/AltA ────────────────────────────────────────────────────────────
   await testMethodology({
@@ -636,7 +636,7 @@ async function suiteMetodologias() {
     finalReportPattern: /PRODUTO\s+ALTA|ANÁLISE\s+ALTERNATIVA|RELAT[ÓO]RIO|CENÁRIO|CRISE\s+HÍDRICA/i,
     minMessageCount: 2,  // single-call architecture: 1 user + 1 HERMES final
   });
-  await delay(15_000); // evita rate limiting entre análises consecutivas
+  await delay(30_000); // 30s entre testes
 
   // ── GBN (ex-FUTURES) ─────────────────────────────────────────────────────
   await testMethodology({

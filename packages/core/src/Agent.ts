@@ -449,10 +449,11 @@ export class Agent {
       : vizMode === "thinking"  ? 32000
       : vizMode === "passagem"  ? 16000
       : 32000;
-    // Orquestradores: 20 em TEST_MODE (8 fases × 2 steps: 1 especialista + 1 ATHENA + síntese), 15 em produção.
+    // Orquestradores: 30 em TEST_MODE (8 fases × ~3 steps: 1 especialista + 1 ATHENA + buffer), 15 em produção.
+    // MSEF tem 8 fases (SCOPUS×1, KLIO×3, PYTHIA×2, MNEMOSYNE×1, THEMIS×1) + 8 ATHENA + síntese ≈ 25 steps mínimo.
     // ATHENA é chamada UMA VEZ ao final de cada fase (gate HITL), não após cada tool call.
     // Especialistas: 5 em TEST_MODE (resposta completa suficiente), 8 em produção.
-    const maxSteps  = isOrchestrator ? (isTestMode ? 20 : 15) : (isTestMode ? 5 : 8);
+    const maxSteps  = isOrchestrator ? (isTestMode ? 30 : 15) : (isTestMode ? 5 : 8);
 
     const hasTools = Object.keys(aiTools).length > 0;
 
