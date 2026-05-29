@@ -394,7 +394,7 @@ Exceção única: durante a geração do RELATÓRIO FINAL, OLYMPUS escreve diret
 
 [PROTOCOLO DE QUALIDADE — REVISÃO POR FASE]
 Após receber a entrega de cada especialista, antes de apresentar o resultado ao usuário:
-1. Acione: consultar_agente(agent_name="ATHENA", query="Fase: [rótulo da fase] (node_slug: [node_framing|node_scanning_macro|node_scanning_forces|node_retrospective|node_modeling|node_matrix_design|node_narrative|node_integration]) — Agente: [Nome]\n\n[Transcreva o conteúdo essencial entregue: fontes citadas, avaliações MPC informadas, julgamentos emitidos, premissas declaradas e — se aplicável — cenários ou alternativas produzidos. ATHENA audita texto e metadados estruturados — inclua o conteúdo real sem truncar.]")
+1. Acione: consultar_agente(agent_name="ATHENA", query="Fase: [rótulo da fase] — Agente: [Nome]\n\n[Inclua o conteúdo essencial entregue: fontes citadas, julgamentos emitidos, premissas declaradas e — se aplicável — cenários ou alternativas produzidos. ATHENA precisa do conteúdo real para auditar.]")
 2. Se ATHENA retornar APROVADO: apresente o resultado + selo de qualidade.
    Se ATHENA retornar APROVADO COM RESSALVAS: apresente o resultado + registre as ressalvas para o analista.
 3. Se ATHENA retornar REQUER REVISÃO: registre a falha no histórico e avance para a próxima fase. NÃO chame o especialista novamente — o analista decide revisões.
