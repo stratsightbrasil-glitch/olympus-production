@@ -121,7 +121,20 @@ async function _loadMethodologyFromDb(slug: string) {
 // FÁBRICA DINÂMICA DE FERRAMENTAS
 // ============================================================================
 
-function createConsultAgentTool(agentNames: string[], phaseCounts: Record<string, number>): Tool<any> {
+// Linha de evento aprovado com avaliação MPC — injetada no payload da ATHENA
+type ApprovedEventRow = {
+  id: string;
+  name: string;
+  description: string | null;
+  type: string | null;
+  sourceEvaluation: any;
+};
+
+function createConsultAgentTool(
+  agentNames: string[],
+  phaseCounts: Record<string, number>,
+  approvedEvents: ApprovedEventRow[] = [],
+): Tool<any> {
   const consultAgentSchema = {
     type: 'object',
     properties: {
@@ -132,7 +145,7 @@ function createConsultAgentTool(agentNames: string[], phaseCounts: Record<string
       },
       query: {
         type: 'string',
-        description: 'A pergunta ou tarefa que o agente deve resolver. MÁXIMO 300 CARACTERES. Seja objetivo e conciso para evitar limites de texto.'
+        description: 'A tarefa a ser executada pelo agente. Para especialistas analíticos: seja objetivo e conciso (~300 caracteres). Para ATHENA: inclua o conteúdo essencial entregue pelo especialista (fontes citadas, julgamentos, premissas, cenários produzidos) — sem limite de tamanho.',
       }
     },
     required: ['agent_name', 'query']
@@ -164,10 +177,33 @@ function createConsultAgentTool(agentNames: string[], phaseCounts: Record<string
         }
       }
 
-      console.log(`[Orquestração] Acionando especialista ${args.agent_name} para: "${args.query}"`);
+      // ── Injeção de metadados estruturados para ATHENA (produção) ─────────────
+      // Quando ATHENA é acionada fora do TEST_MODE, augmentamos a query com os
+      // registros aprovados do banco (projectEvents com avaliação MPC A-F × 1-6).
+      // Isso permite que ATHENA verifique ATS 1 contra evidência primária do DB,
+      // não apenas contra o texto que o especialista decidiu mencionar.
+      let dispatchQuery = args.query;
+      if (args.agent_name === 'ATHENA' && process.env.TEST_MODE !== 'true' && approvedEvents.length > 0) {
+        const mpcLines = approvedEvents.map(e => {
+          const ev = e.sourceEvaluation as any;
+          const mpc = (ev?.reliability && ev?.credibility)
+            ? ` [MPC:${ev.reliability}${ev.credibility}]`
+            : '';
+          return `  · ${e.name} (${e.type ?? 'evento'})${mpc}: ${e.description ?? '(sem descrição)'}`;
+        });
+        dispatchQuery =
+          args.query +
+          `\n\n╔══ METADADOS ESTRUTURADOS DO PROJETO (banco de dados) ══╗\n` +
+          `Registros aprovados pelo analista humano (${mpcLines.length} itens):\n` +
+          mpcLines.join('\n') +
+          `\n╚════════════════════════════════════════════════════════╝`;
+        console.log(`[Orquestração] 🔬 ATHENA receberá ${mpcLines.length} registros MPC do banco para auditoria de ATS 1.`);
+      }
+
+      console.log(`[Orquestração] Acionando especialista ${args.agent_name} para: "${args.query.slice(0, 120)}..."`);
       const start = Date.now();
       try {
-        const result = await context.dispatch(args.agent_name, args.query);
+        const result = await context.dispatch(args.agent_name, dispatchQuery);
         console.log(`[Orquestração] ✅ ${args.agent_name} concluiu em ${Date.now() - start}ms retornando ${result.length} caracteres.`);
         return `[ANÁLISE DE ${args.agent_name}]:\n${result}\n\n[INSTRUÇÃO CRÍTICA AO ORQUESTRADOR]: Transcreva os dados, análises e estatísticas acima para o usuário com extrema riqueza de detalhes. NÃO resuma excessivamente e NÃO omita fontes.`;
       } catch (err: any) {
@@ -320,7 +356,9 @@ export async function runAnalysis(body: any, jwtPayload: any, cb: AnalysisCallba
     const role = (p as any).agentRole as string;
     phaseCounts[role] = (phaseCounts[role] ?? 0) + 1;
   }
-  const dynamicConsultTool = expertNames.length > 0 ? createConsultAgentTool(expertNames, phaseCounts) : null;
+  const dynamicConsultTool = expertNames.length > 0
+    ? createConsultAgentTool(expertNames, phaseCounts, approvedEvents)
+    : null;
 
   const { registrarSinal, buscarSinais, atualizarSentinela } = createSignalTools(projectId);
   const { declararJulgamento, registrarHipoteseAlternativa, avaliarFonte } = createAnalyticStandardsTools(projectId);

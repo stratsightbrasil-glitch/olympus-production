@@ -2,7 +2,7 @@
 **StratSight Brasil · Strategic Foresight · IA Agêntica**
 
 <!-- AUTO:versao:START -->
-**Versão:** `4.0.0` · **Atualizado:** 28 de maio de 2026 · Gerado automaticamente
+**Versão:** `4.0.0` · **Atualizado:** 29 de maio de 2026 · Gerado automaticamente
 
 | Dependência | Versão |
 |-------------|--------|
@@ -162,17 +162,17 @@ Tool<any> { schema: JSONSchema sem projectId, execute: (args) => fn({ ...args, p
 <!-- AUTO:metodologias:START -->
 | Metodologia | Orquestrador | Fases | Categoria | Agentes |
 |-------------|-------------|-------|-----------|---------|
-| Grumbach: Produção de Cenários | HERMES | 9 | Cenários Prospectivos |  |
-| Godet: Escola Estrutural | HERMES | 7 | Cenários Prospectivos |  |
 | MPC: Conhecimento Estimativa EB | HERMES | 6 | Produção do Conhecimento |  |
 | SIPLEx/CEEEx: Cenários da Força Terrestre | HERMES | 8 | Planejamento Estratégico |  |
-| MSEF v3 (8 etapas ENAP) | HERMES | 8 | Cenários Prospectivos |  |
+| Grumbach: Produção de Cenários | HERMES | 9 | Cenários Prospectivos |  |
+| Godet: Escola Estrutural | HERMES | 7 | Cenários Prospectivos |  |
 | OTAN/AltA | HERMES | 5 | Cenários Prospectivos |  |
+| MSEF v3 (8 etapas ENAP) | HERMES | 8 | Cenários Prospectivos |  |
 | ASPLAN/MD: Planejamento Setorial de Defesa | HERMES | 7 | Planejamento Estratégico |  |
-| MPO: Estratégia Brasil 2050 | HERMES | 8 | Planejamento Estratégico |  |
-| IPEA/FGV: Cenários Estreitados de Desenvolvimento | HERMES | 7 | Cenários Prospectivos |  |
 | ESG: Cenários Prospectivos | HERMES | 6 | Cenários Prospectivos |  |
+| IPEA/FGV: Cenários Estreitados de Desenvolvimento | HERMES | 7 | Cenários Prospectivos |  |
 | GBN (Global Business Network - Peter Schwartz) | HERMES | 8 | Cenários Prospectivos |  |
+| MPO: Estratégia Brasil 2050 | HERMES | 8 | Planejamento Estratégico |  |
 <!-- AUTO:metodologias:END -->
 
 ---
@@ -182,18 +182,18 @@ Tool<any> { schema: JSONSchema sem projectId, execute: (args) => fn({ ...args, p
 <!-- AUTO:tecnicas:START -->
 | # | Nome | Descrição |
 |---|------|-----------|
-| 1 | Análise E-Se | Assume que um evento (positivo ou negativo) já ocorreu e explora como poderia te |
-| 2 | Análise SWOT | Avalia forças, fraquezas, oportunidades e ameaças de um projeto, decisão ou estr |
-| 3 | Cinco Porquês | Identifica a causa-raiz de um problema perguntando "por quê?" cinco vezes, quebr |
-| 4 | Advocacia do Diabo | Um analista assume o papel de crítico e constrói o melhor argumento possível con |
-| 5 | Análise Pré-Mortem | Simula mentalmente o fracasso de um plano ou análise e trabalha retrospectivamen |
+| 1 | Cinco Porquês | Identifica a causa-raiz de um problema perguntando "por quê?" cinco vezes, quebr |
+| 2 | Advocacia do Diabo | Um analista assume o papel de crítico e constrói o melhor argumento possível con |
+| 3 | Análise Pré-Mortem | Simula mentalmente o fracasso de um plano ou análise e trabalha retrospectivamen |
+| 4 | Análise E-Se | Assume que um evento (positivo ou negativo) já ocorreu e explora como poderia te |
+| 5 | Análise SWOT | Avalia forças, fraquezas, oportunidades e ameaças de um projeto, decisão ou estr |
 | 6 | Verificação de Qualidade da Informação | Avalia a completude, precisão, credibilidade e confiabilidade das fontes de info |
 | 7 | PMI — Prós, Contras e Pontos Interessantes | Técnica rápida que avalia os aspectos positivos, negativos e interessantes de um |
 | 8 | Adversário Substituto | Modela o comportamento de atores externos (adversários, competidores, neutros) r |
-| 9 | Pensamento de Fora para Dentro | Aborda um problema da perspectiva externa, mapeando forças externas que moldam a |
-| 10 | Identificação de Premissas-Chave | Identifica sistematicamente as premissas que sustentam o raciocínio e avalia qua |
+| 9 | Identificação de Premissas-Chave | Identifica sistematicamente as premissas que sustentam o raciocínio e avalia qua |
+| 10 | Time A / Time B | Dois grupos debatem hipóteses ou posições opostas diante de um júri neutro, expo |
 | 11 | Futuros Alternativos | Explora sistematicamente múltiplas formas em que uma situação complexa e incerta |
-| 12 | Time A / Time B | Dois grupos debatem hipóteses ou posições opostas diante de um júri neutro, expo |
+| 12 | Pensamento de Fora para Dentro | Aborda um problema da perspectiva externa, mapeando forças externas que moldam a |
 <!-- AUTO:tecnicas:END -->
 
 ---
