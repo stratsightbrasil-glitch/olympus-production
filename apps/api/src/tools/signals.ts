@@ -41,7 +41,7 @@ export const ATUALIZAR_SENTINELA_SCHEMA = {
   type: "object",
   properties: {
     signalId:        { type: "string" },
-    sentinela:       { type: "number", enum: [1, 2] },
+    sentinela:       { type: "string", enum: ["1", "2"], description: "Índice do sentinela a atualizar (\"1\" ou \"2\")." },
     descricao:       { type: "string" },
     fonte:           { type: "string" },
     status:          { type: "string", enum: ["inativo","ativo","disparado"] },
@@ -132,7 +132,7 @@ Quando ambos sentinelas ficam 'disparado', emite Alerta de Amplificação.`,
     schema: ATUALIZAR_SENTINELA_SCHEMA,
     execute: async (args: any, _ctx?: any): Promise<string> => {
       const update: Record<string, any> = { updatedAt: new Date() };
-      if (args.sentinela === 1) {
+      if (Number(args.sentinela) === 1) {
         if (args.descricao) update.sentinela1Descricao = args.descricao;
         if (args.fonte)     update.sentinela1Fonte     = args.fonte;
         update.sentinela1Status = args.status;
