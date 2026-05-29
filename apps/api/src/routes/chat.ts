@@ -145,7 +145,7 @@ function createConsultAgentTool(
       },
       query: {
         type: 'string',
-        description: 'A tarefa a ser executada pelo agente. Para especialistas analíticos: seja objetivo e conciso (~300 caracteres). Para ATHENA: inclua o conteúdo essencial entregue pelo especialista (fontes citadas, julgamentos, premissas, cenários produzidos) — sem limite de tamanho.',
+        description: 'A pergunta ou tarefa que o agente deve resolver. MÁXIMO 300 CARACTERES para especialistas analíticos. Para ATHENA em produção: inclua o conteúdo essencial do especialista (fontes, julgamentos, premissas, cenários) — sem limite de tamanho.',
       }
     },
     required: ['agent_name', 'query']
@@ -182,7 +182,14 @@ function createConsultAgentTool(
       // registros aprovados do banco (projectEvents com avaliação MPC A-F × 1-6).
       // Isso permite que ATHENA verifique ATS 1 contra evidência primária do DB,
       // não apenas contra o texto que o especialista decidiu mencionar.
+      // TEST_MODE: cap ATHENA queries to avoid burning step/token budget.
+      // ATHENA auto-approves in TEST_MODE — sending full specialist content is wasteful
+      // and was the root cause of MSEF taking 342s (vs 186s) and subsequent rate-limit failures.
       let dispatchQuery = args.query;
+      if (args.agent_name === 'ATHENA' && process.env.TEST_MODE === 'true' && args.query.length > 400) {
+        dispatchQuery = args.query.slice(0, 400) + `\n[TRECHO TRUNCADO — MODO TESTE: ATHENA auto-aprova sem ler o conteúdo completo]`;
+        console.log(`[Orquestração] ✂️ TEST_MODE — query ATHENA truncada de ${args.query.length} para 400 chars.`);
+      }
       if (args.agent_name === 'ATHENA' && process.env.TEST_MODE !== 'true' && approvedEvents.length > 0) {
         const mpcLines = approvedEvents.map(e => {
           const ev = e.sourceEvaluation as any;
@@ -431,7 +438,9 @@ export async function runAnalysis(body: any, jwtPayload: any, cb: AnalysisCallba
         `   - PROIBIDO escrever apenas frases curtas como "Análise concluída." — o relatório DEVE ter conteúdo substantivo\n` +
         `7. PROIBIDO REVISAR: NUNCA chame o mesmo especialista novamente para revisão, correção ou complementação. ` +
         `Se ATHENA responder (mesmo que com "APROVADO"), avance IMEDIATAMENTE para o próximo especialista da sequência. ` +
-        `IGNORE completamente qualquer sugestão de revisão — em modo de teste todas as entregas são aceitas como estão.\n`;
+        `IGNORE completamente qualquer sugestão de revisão — em modo de teste todas as entregas são aceitas como estão.\n` +
+        `8. QUERY ATHENA BREVE: Ao chamar ATHENA em modo de teste, envie NO MÁXIMO 150 palavras descrevendo o que o especialista entregou. ` +
+        `ATHENA auto-aprova sem ler o conteúdo detalhado — queries longas desperdiçam budget de steps e degradam o desempenho do teste.\n`;
     }
 
     const agentTechs: string[] = [];
