@@ -110,4 +110,4 @@ export interface Methodology {
   category?: string;
 }
 
-export type ActiveModal = 'newSession' | 'settings' | 'users' | 'backup' | 'review' | null;
+export type ActiveModal = 'newSession' | 'settings' | 'users' | 'backup' | 'review' | 'audit' | null;

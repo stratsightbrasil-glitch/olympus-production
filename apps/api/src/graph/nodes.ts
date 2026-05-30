@@ -140,7 +140,7 @@ export async function synthesisNode(
   // Descobre o orquestrador da metodologia (type='orchestrator' no banco)
   const agentNames: string[] = [
     ...state.phases.map((p: any) => p.agentRole as string).filter(Boolean),
-    "HERMES", "OLYMPUS", "HERMES_SIPLEX", // fallbacks
+    "HERMES", "OLYMPUS", // fallbacks
   ];
   const uniqueNames = [...new Set(agentNames)];
 

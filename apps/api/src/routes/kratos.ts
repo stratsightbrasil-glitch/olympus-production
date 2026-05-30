@@ -174,9 +174,13 @@ function parseScenarioProbabilities(text: string | null): Record<string, number>
 
 kratosRoutes.get('/:projectId/dashboard', async (c) => {
   const projectId = c.req.param('projectId');
+  const jwt = c.get('jwtPayload') as any;
+  const ownerFilter = jwt?.role === 'admin'
+    ? and(eq(projects.id, projectId), isNull(projects.deletedAt))
+    : and(eq(projects.id, projectId), isNull(projects.deletedAt), eq(projects.createdBy, jwt?.name || ''));
 
   const [projeto, inds, sinaisRes, lastKratosMsgRow] = await Promise.all([
-    db.query.projects.findFirst({ where: and(eq(projects.id, projectId), isNull(projects.deletedAt)) }),
+    db.query.projects.findFirst({ where: ownerFilter }),
     db.select().from(indicators).where(eq(indicators.projectId, projectId)),
     db.select().from(weakSignals).where(eq(weakSignals.projectId, projectId)),
     db.query.messages.findFirst({
@@ -217,10 +221,12 @@ kratosRoutes.get('/:projectId/dashboard', async (c) => {
 kratosRoutes.post('/:projectId/report', async (c) => {
   const projectId = c.req.param('projectId');
   const body = await c.req.json().catch(() => ({})) as { emails?: string[] };
+  const jwt = c.get('jwtPayload') as any;
+  const ownerFilter = jwt?.role === 'admin'
+    ? and(eq(projects.id, projectId), isNull(projects.deletedAt))
+    : and(eq(projects.id, projectId), isNull(projects.deletedAt), eq(projects.createdBy, jwt?.name || ''));
 
-  const projeto = await db.query.projects.findFirst({
-    where: and(eq(projects.id, projectId), isNull(projects.deletedAt))
-  });
+  const projeto = await db.query.projects.findFirst({ where: ownerFilter });
   if (!projeto) return c.json({ error: 'Projeto não encontrado.' }, 404);
 
   // Resolve destinatários
@@ -282,11 +288,13 @@ kratosRoutes.post('/:projectId/report', async (c) => {
 
 kratosRoutes.get('/:projectId/report/html', async (c) => {
   const projectId = c.req.param('projectId');
+  const jwt = c.get('jwtPayload') as any;
+  const ownerFilter = jwt?.role === 'admin'
+    ? and(eq(projects.id, projectId), isNull(projects.deletedAt))
+    : and(eq(projects.id, projectId), isNull(projects.deletedAt), eq(projects.createdBy, jwt?.name || ''));
 
   const [projeto, inds, sinaisRes, lastKratosMsgRow] = await Promise.all([
-    db.query.projects.findFirst({
-      where: and(eq(projects.id, projectId), isNull(projects.deletedAt)),
-    }),
+    db.query.projects.findFirst({ where: ownerFilter }),
     db.select().from(indicators).where(eq(indicators.projectId, projectId)),
     db.select().from(weakSignals).where(eq(weakSignals.projectId, projectId)),
     db.query.messages.findFirst({

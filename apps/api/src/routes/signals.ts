@@ -1,13 +1,24 @@
 import { Hono } from "hono";
-import { db, weakSignals } from "@olympus/db";
-import { eq } from "drizzle-orm";
+import { db, weakSignals, projects } from "@olympus/db";
+import { eq, and, isNull } from "drizzle-orm";
 
 const signalsRouter = new Hono();
+
+async function assertProjectOwner(c: any, projectId: string): Promise<boolean> {
+  const jwt = c.get('jwtPayload') as any;
+  if (jwt?.role === 'admin') return true;
+  const proj = await db.query.projects.findFirst({
+    where: and(eq(projects.id, projectId), isNull(projects.deletedAt), eq(projects.createdBy, jwt?.name || '')),
+  });
+  return !!proj;
+}
 
 // GET /api/v1/signals/:projectId
 signalsRouter.get("/:projectId", async (c) => {
   const { projectId } = c.req.param();
   const { classificacao, status } = c.req.query();
+
+  if (!(await assertProjectOwner(c, projectId))) return c.json({ error: 'Acesso negado' }, 403);
 
   const todos = await db.select()
     .from(weakSignals)
@@ -39,6 +50,11 @@ signalsRouter.get("/:projectId", async (c) => {
 signalsRouter.patch("/:id", async (c) => {
   const { id } = c.req.param();
   const body = await c.req.json();
+
+  const signal = await db.query.weakSignals.findFirst({ where: eq(weakSignals.id, id) });
+  if (!signal) return c.json({ error: 'Sinal não encontrado' }, 404);
+  if (!(await assertProjectOwner(c, signal.projectId))) return c.json({ error: 'Acesso negado' }, 403);
+
   const allowed = [
     "classificacao", "statusRadar", "interpretacaoAtual", "acaoRecomendada",
     "sentinela1Status", "sentinela2Status",

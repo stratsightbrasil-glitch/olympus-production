@@ -373,6 +373,80 @@ Persiste resultado em technique_execution_outputs para consulta pelo MNEMOSYNE.`
   },
 };
 
+// ── 8. REGISTRO ESTRUTURADO DE CENÁRIO (Harmonized Scenario Schema) ──────────
+// Substitui parseScenarioProbabilities() regex por ferramenta tipada.
+// PYTHIA/MNEMOSYNE chamam durante a cenarização para persistir cenários
+// com probabilidade Hendrikson, eixos, eventos e narrativa estruturada.
+export const toolRegisterScenario: OlympusTool = {
+  name: "tool_register_scenario",
+  description: `Registra um cenário prospectivo estruturado no banco do projeto.
+Use sempre que produzir um cenário com probabilidade, narrativa ou eventos binários.
+Substitui a necessidade de parsing posterior de texto por regex — os dados ficam estruturados.
+Chamado por PYTHIA (após criar a matriz) e MNEMOSYNE (ao redigir a narrativa).`,
+  parameters: {
+    type: "object",
+    properties: {
+      projectId: { type: "string" },
+      name:      { type: "string", description: "Nome do cenário (ex: Q1 — Crescimento Sustentado, Cenário Mais Provável)" },
+      type:      {
+        type: "string",
+        enum: ["inercial", "alternative", "target", "pessimist", "optimist"],
+        description: "Tipo: inercial=tendencial, alternative=quadrante alternativo, target=alvo/desejado, pessimist/optimist"
+      },
+      probability: {
+        type: "number",
+        minimum: 0, maximum: 1,
+        description: "Probabilidade estimada (0.0-1.0). Use escala Hendrikson: quase_certo≈0.97, muito_provavel≈0.87, provavel≈0.67, possivel≈0.40, improvavel≈0.15, remoto≈0.03"
+      },
+      hendriksonLabel: {
+        type: "string",
+        enum: ["quase_certo", "muito_provavel", "provavel", "possivel", "improvavel", "remoto"],
+        description: "Qualificador ICD 203/Hendrikson correspondente à probabilidade"
+      },
+      description: { type: "string", description: "Narrativa ou descrição do cenário" },
+      axes: {
+        type: "object",
+        description: "Eixos da matriz (IC1, IC2 e seus polos)",
+        properties: {
+          ic1Label: { type: "string" },
+          ic1Pole:  { type: "string", enum: ["+", "-"] },
+          ic2Label: { type: "string" },
+          ic2Pole:  { type: "string", enum: ["+", "-"] },
+        }
+      },
+      binaryEvents: {
+        type: "object",
+        description: "Mapa eventId→boolean — quais eventos ocorrem/não ocorrem neste cenário",
+        additionalProperties: { type: "boolean" }
+      },
+    },
+    required: ["projectId", "name", "type", "probability", "hendriksonLabel"],
+  },
+  execute: async (args) => {
+    const {
+      projectId, name, type, probability, hendriksonLabel,
+      description = "", axes = {}, binaryEvents = {}
+    } = args;
+    try {
+      const [scenario] = await db.insert(projectScenarios).values({
+        projectId,
+        name,
+        type,
+        probability,
+        description,
+        matrixValue: { hendriksonLabel, axes, binaryEvents },
+      }).returning({ id: projectScenarios.id });
+      return JSON.stringify({
+        success: true,
+        scenarioId: scenario.id,
+        message: `Cenário '${name}' [${hendriksonLabel} — ${(probability * 100).toFixed(0)}%] registrado.`,
+      });
+    } catch (err: any) {
+      return JSON.stringify({ error: `Falha ao registrar cenário: ${err.message}` });
+    }
+  },
+};
+
 // ── FACTORY — Tool<any> com projectId injetado via closure ───────────────────
 // Compatível com o sistema de ferramentas do Agent.ts (@olympus/core).
 // Mesma estrutura de createSignalTools: não expõe projectId no schema (o agente não precisa saber).
@@ -416,10 +490,18 @@ export function createAnalyticalEngineTools(projectId: string): Record<string, P
     execute: (args) => toolGrumbachExpertSimulation.execute({ ...args, projectId }),
   };
 
+  const registerScenario: ProjectBoundTool = {
+    name: toolRegisterScenario.name,
+    description: toolRegisterScenario.description,
+    schema: withoutProjectId(toolRegisterScenario.parameters),
+    execute: (args) => toolRegisterScenario.execute({ ...args, projectId }),
+  };
+
   return {
     [registerEvent.name]:             registerEvent,
     [registerImpactRelation.name]:    registerImpactRelation,
     [grumbachExpertSimulation.name]:  grumbachExpertSimulation,
+    [registerScenario.name]:          registerScenario,
   };
 }
 

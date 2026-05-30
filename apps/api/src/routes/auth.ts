@@ -1,10 +1,11 @@
 import { Hono } from 'hono';
-import { db, users } from '@olympus/db';
+import { db, users, revokedTokens } from '@olympus/db';
 import { eq } from 'drizzle-orm';
 import { sign } from 'hono/jwt';
 import bcrypt from 'bcryptjs';
 import qrcode from 'qrcode';
 import speakeasy from 'speakeasy';
+import { randomUUID } from 'crypto';
 import { logAudit } from '../utils/audit';
 
 // ── Rate limit genérico (login + register) ───────────────────────────────────
@@ -86,7 +87,8 @@ authRoutes.post('/login', async (c) => {
   }
 
   const exp = Math.floor(Date.now() / 1000) + jwtExpirySeconds();
-  const payload = { id: user.id, name: user.name, role: user.role, exp };
+  const jti = randomUUID();
+  const payload = { id: user.id, name: user.name, role: user.role, exp, jti };
   const token = await sign(payload, process.env.JWT_SECRET!);
   await logAudit({
     userId: user.id, userName: user.name, action: 'login', resourceType: 'user', resourceId: user.id,
@@ -139,6 +141,27 @@ authRoutes.post('/2fa/generate', async (c) => {
 
   await db.update(users).set({ twoFactorSecret: secret }).where(eq(users.id, userId));
   return c.json({ secret, qrCodeUrl });
+});
+
+// ── POST /auth/logout — revoga o token JWT atual imediatamente ───────────────
+// Requer autenticação (PROTECTED_PREFIXES cobre /api/v1/auth/2fa mas não /auth/logout).
+// A verificação do jti no middleware authMiddleware rejeita o token após este endpoint.
+authRoutes.post('/logout', async (c) => {
+  const jwtPayload = c.get('jwtPayload') as any;
+  if (!jwtPayload?.jti || !jwtPayload?.id || !jwtPayload?.exp) {
+    return c.json({ ok: true }); // token sem jti (emitido antes do Sprint 20) — logout gracioso
+  }
+  try {
+    await db.insert(revokedTokens).values({
+      jti:       jwtPayload.jti,
+      userId:    jwtPayload.id,
+      expiresAt: new Date(jwtPayload.exp * 1000),
+    }).onConflictDoNothing(); // idempotente — duplo logout não gera erro
+    await logAudit({ userId: jwtPayload.id, userName: jwtPayload.name, action: 'logout', resourceType: 'user', resourceId: jwtPayload.id });
+    return c.json({ ok: true });
+  } catch (e: any) {
+    return c.json({ error: e.message }, 500);
+  }
 });
 
 authRoutes.post('/2fa/enable', async (c) => {

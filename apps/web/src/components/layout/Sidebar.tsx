@@ -43,6 +43,7 @@ interface SidebarProps {
   onGerarRelatorioKratos: () => void;
   onShowUsers: () => void;
   onShowBackup: () => void;
+  onShowAudit: () => void;
   onCopyClientLink: () => void;
   onShowReviewModal: () => void;
   onGerarRelatorioPadrao: () => void;
@@ -138,7 +139,7 @@ export function Sidebar({
   open, user, projeto, sessoes, showSessoes, sessionSearch, filterStatus,
   analyticReview, sessionId, exportingPdf,
   currentMsefStep, currentStep, methodologySteps,
-  onNovaSessao, onShowUsers, onShowBackup,
+  onNovaSessao, onShowUsers, onShowBackup, onShowAudit,
   onCopyClientLink, onShowReviewModal, onGerarRelatorioPadrao, onGerarRelatorioEstendido,
   onShowSettings, onToggleSessoes, onSessionSearchChange, onFilterChange,
   onCarregarSessao, onDeletarSessao, onLogout,
@@ -471,6 +472,14 @@ export function Sidebar({
                     onMouseLeave={e => (e.currentTarget.style.color = '#A3C9AE')}
                   >
                     Backup
+                  </button>
+                  <button
+                    onClick={onShowAudit}
+                    style={{ background: 'none', border: 'none', textAlign: 'left' as const, padding: '5px 0', fontSize: 11.5, color: '#A3C9AE', cursor: 'pointer', fontFamily: "'DM Sans',system-ui,sans-serif", transition: 'color .12s' }}
+                    onMouseEnter={e => (e.currentTarget.style.color = '#fff')}
+                    onMouseLeave={e => (e.currentTarget.style.color = '#A3C9AE')}
+                  >
+                    Auditoria · Hash-chain
                   </button>
                   <button
                     onClick={onShowReviewModal}

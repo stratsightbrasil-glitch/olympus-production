@@ -8,6 +8,7 @@ interface UseChatProps {
   sessionId: string;
   projeto: Projeto;
   vizMode: string;
+  reportLayout: 'standard' | 'extended';
   onIndicatorsRefresh: (id: string) => void;
   onSignalsRefresh: (id: string) => void;
   onSessionsRefresh: () => void;
@@ -18,6 +19,7 @@ export function useChat({
   sessionId,
   projeto,
   vizMode,
+  reportLayout,
   onIndicatorsRefresh,
   onSignalsRefresh,
   onSessionsRefresh,
@@ -178,7 +180,7 @@ export function useChat({
 
     try {
       await callChatStream(
-        { projectId: sessionId, projectName: projeto.nome, metodologia: projeto.metodologia, vizMode, messages: newMessages },
+        { projectId: sessionId, projectName: projeto.nome, metodologia: projeto.metodologia, vizMode, reportLayout, messages: newMessages },
         ({ text, thinking, messageType }) => {
           appendAssistantMessage(text, thinking, messageType);
           if (text.toUpperCase().includes('KRATOS')) { onIndicatorsRefresh(sessionId); onSignalsRefresh(sessionId); }
@@ -266,6 +268,7 @@ export function useChat({
           projectName: opts.nome,
           metodologia: opts.metodologia,
           vizMode,
+          reportLayout,
           messages: newMessages,
           teamId: opts.selectedTeamId || undefined,
         },

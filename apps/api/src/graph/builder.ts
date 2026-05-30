@@ -11,14 +11,14 @@
  *                                     ├─ integration_node → (conditional) → ...
  *                                     └─ synthesis_node → END
  *
- * Checkpointer: MemorySaver (singleton de processo).
- *   - Persiste estado entre requisições SSE para o mesmo projectId (thread_id).
- *   - Suficiente para single-server. Fase 3 migrará para PostgresSaver.
+ * Checkpointer: PostgresSaver (Sprint 14).
+ *   - Persiste checkpoints no PostgreSQL — sobrevive a restarts de container/pod.
+ *   - Tabelas gerenciadas pelo próprio setup() do PostgresSaver (NÃO via Drizzle).
+ *   - thread_id = projectId — isolamento de checkpoint por projeto.
  *
  * interruptBefore: ['pythia_node']
  *   - HITL nativo: grafo pausa antes de PYTHIA se não há eventos aprovados.
  *   - pythiaNode chama interrupt() internamente (verificação condicional).
- *   - Para não interromper sempre, python_node verifica eventos antes de interrupt().
  *
  * thread_id = projectId — cada projeto tem seu próprio checkpoint.
  */
@@ -34,12 +34,7 @@ import {
   synthesisNode,
 } from "./nodes";
 import { routeFromState } from "./router";
-import { BoundedMemorySaver } from "./boundedMemorySaver";
-
-// ── Checkpointer singleton ────────────────────────────────────────────────────
-// BoundedMemorySaver: evição LRU (50 threads) + TTL (2 h) — previne OOM.
-// Fase 3: substituir por PostgresSaver para persistência entre restarts de pod.
-const checkpointer = new BoundedMemorySaver();
+import { getPostgresSaver } from "./postgresSaver";
 
 // ── Destinos válidos para arestas condicionais ────────────────────────────────
 // Lista completa de todos os nós especialistas do grafo.
@@ -55,9 +50,11 @@ const ALL_SPECIALIST_NODES = [
 ] as const;
 
 // ── Singleton do grafo compilado ──────────────────────────────────────────────
-let _compiled: ReturnType<typeof buildGraph> | null = null;
+// _compiledPromise garante que PostgresSaver.setup() só corre uma vez mesmo sob
+// chamadas concorrentes (ex: múltiplas requisições SSE chegando ao mesmo tempo).
+let _compiledPromise: Promise<ReturnType<typeof buildGraph>> | null = null;
 
-function buildGraph() {
+function buildGraph(checkpointer: Awaited<ReturnType<typeof getPostgresSaver>>) {
   return new StateGraph(OlympusStateAnnotation)
     // ── Nós ──────────────────────────────────────────────────────────────────
     .addNode("scopus_node",      scopusNode)
@@ -108,14 +105,17 @@ function buildGraph() {
 }
 
 /**
- * Retorna o grafo compilado (singleton).
- * Lazy-initialized na primeira chamada.
+ * Retorna o grafo compilado (singleton async).
+ * Lazy-initialized na primeira chamada — aguarda PostgresSaver.setup().
+ * Chamadas subsequentes resolvem imediatamente com a instância em cache.
  */
-export function getOlympusGraph() {
-  if (!_compiled) {
-    _compiled = buildGraph();
+export async function getOlympusGraph() {
+  if (!_compiledPromise) {
+    _compiledPromise = getPostgresSaver().then((checkpointer) =>
+      buildGraph(checkpointer)
+    );
   }
-  return _compiled;
+  return _compiledPromise;
 }
 
 /**

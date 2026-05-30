@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import type { LlmConfig, AnthropicModel, GoogleModel, DeepSeekModel, OllamaModel } from '../types';
 
 export function useLlmConfig(token: string | null) {
-  const [llmConfig, setLlmConfig] = useState<LlmConfig>({ provider: 'google', model: 'gemini-2.0-flash' });
+  const [llmConfig, setLlmConfig] = useState<LlmConfig>({ provider: 'google', model: 'gemini-2.5-flash-lite' });
   const [anthropicModels, setAnthropicModels] = useState<AnthropicModel[]>([]);
   const [googleModels, setGoogleModels] = useState<GoogleModel[]>([]);
   const [deepseekModels, setDeepseekModels] = useState<DeepSeekModel[]>([]);

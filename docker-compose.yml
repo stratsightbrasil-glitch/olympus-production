@@ -44,6 +44,8 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      ollama:
+        condition: service_started   # started, não healthy — não bloqueia a API se Ollama demorar
     env_file:
       - .env
     volumes:
@@ -58,7 +60,7 @@ services:
       # para evitar que o shell sem as vars sobrescreva o .env com string vazia.
       # Defaults de modelo e seletor de provider são seguros (não-secretos):
       - ANTHROPIC_MODEL=${ANTHROPIC_MODEL:-claude-haiku-4-5-20251001}
-      - GOOGLE_MODEL=${GOOGLE_MODEL:-gemini-2.0-flash}
+      - GOOGLE_MODEL=${GOOGLE_MODEL:-gemini-2.5-flash-lite}
       - GROQ_MODEL=${GROQ_MODEL:-llama-3.3-70b-versatile}
       # Seletor de provider ativo (anthropic | google | groq | deepseek | ollama)
       - LLM_PROVIDER=${LLM_PROVIDER:-anthropic}
@@ -67,6 +69,9 @@ services:
       - DATABASE_URL=postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@olympus_db:5432/${POSTGRES_DB:-olympus}
       # URL do SearXNG quando rodando no perfil soberano. Vazio = Tavily é usado.
       - SEARXNG_URL=${SEARXNG_URL:-http://searxng:8080}
+      # Embeddings: Ollama nomic-embed-text é o provider padrão (local, sem API key).
+      # Se VOYAGE_API_KEY estiver definido no .env, Voyage AI tem prioridade.
+      - OLLAMA_BASE_URL=http://ollama:11434/v1
     deploy:
       resources:
         limits:
@@ -102,24 +107,55 @@ services:
         max-size: "10m"
         max-file: "3"
 
-  # ── Ollama (opcional — ativar com: docker compose --profile ollama up -d) ────
+  # ── Ollama (sempre ativo — embeddings locais + LLM opcional) ────────────────
+  # Sobe automaticamente com `docker compose up -d`.
+  # Modelos são baixados pelo serviço ollama-init ao subir pela primeira vez.
+  # Para usar como LLM principal: definir LLM_PROVIDER=ollama no .env
   ollama:
     image: ollama/ollama:latest
     container_name: olympus_ollama
-    profiles: ["ollama"]
     volumes:
       - ollama_data:/root/.ollama
     ports:
       - "11434:11434"
+    healthcheck:
+      test: ["CMD", "ollama", "list"]
+      interval: 20s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
     deploy:
       resources:
         limits:
-          memory: 8192M   # 8 GB — suficiente para llama3.1:8b (CPU-only)
+          memory: 8192M   # 8 GB — suficiente para llama3.1:8b + nomic-embed-text (CPU-only)
     logging:
       driver: "json-file"
       options:
         max-size: "10m"
         max-file: "3"
+
+  # ── Inicializador de modelos Ollama ──────────────────────────────────────────
+  # Roda uma vez ao subir, baixa os modelos necessários e termina.
+  # nomic-embed-text: ~280MB — provider padrão de embeddings (substitui Voyage AI)
+  ollama-init:
+    image: curlimages/curl:latest
+    container_name: olympus_ollama_init
+    depends_on:
+      ollama:
+        condition: service_healthy
+    entrypoint: >
+      sh -c "
+        echo '[ollama-init] Verificando modelos...' &&
+        curl -sf http://ollama:11434/api/pull -d '{\"name\":\"nomic-embed-text\"}' &&
+        echo '[ollama-init] nomic-embed-text: OK' &&
+        echo '[ollama-init] Modelos carregados.'
+      "
+    restart: "no"
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "5m"
+        max-file: "1"
 
   # ── SearXNG — busca soberana self-hosted (Modo SOBERANO) ──────────────────
   # Ativar com: docker compose --profile soberano up -d

@@ -116,7 +116,11 @@ export const embeddings = pgTable("embeddings", {
   metadata: jsonb("metadata"), // { filename, source, chunk_index, ... }
   embedding: vector("embedding"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
-});
+}, (t) => ({
+  // HNSW index para busca semântica O(log n) — criado manualmente no Sprint 20.
+  // Drizzle não suporta hnsw nativo; índice existe no banco via CREATE INDEX CONCURRENTLY.
+  embeddingsProjectIdx: index("embeddings_project_idx").on(t.projectId),
+}));
 
 
 export const analyticReviews = pgTable("analytic_reviews", {
@@ -361,4 +365,31 @@ export const matrixDirectImpactsRelations = relations(matrixDirectImpacts, ({ on
 
 export const techniqueOutputsRelations = relations(techniqueExecutionOutputs, ({ one }) => ({
   project: one(projects, { fields: [techniqueExecutionOutputs.projectId], references: [projects.id] }),
+}));
+
+// ── Tokens JWT Revogados (T-04 Sprint 20) ─────────────────────────────────────
+// Garante que logout invalida o token imediatamente, mesmo sem rotação de segredo.
+// Limpeza automática via KRATOS cron: DELETE WHERE expires_at < NOW().
+export const revokedTokens = pgTable("revoked_tokens", {
+  jti:       uuid("jti").primaryKey(),
+  userId:    uuid("user_id").notNull(),
+  expiresAt: timestamp("expires_at").notNull(),
+  revokedAt: timestamp("revoked_at").defaultNow().notNull(),
+}, (t) => ({
+  // Cobre a query de verificação no middleware: WHERE jti = ?
+  // e a limpeza periódica: WHERE expires_at < NOW()
+  revokedExpiresIdx: index("revoked_tokens_expires_at_idx").on(t.expiresAt),
+}));
+
+// ── Rate Limit por Sliding Window (T-04b Sprint 20) ───────────────────────────
+// Substitui bucket in-memory — garante limite global entre múltiplas instâncias.
+// Limpeza automática via KRATOS cron: DELETE WHERE created_at < NOW() - 2h.
+export const rateLimitLogs = pgTable("rate_limit_logs", {
+  id:        uuid("id").primaryKey().defaultRandom(),
+  userId:    text("user_id").notNull(),
+  action:    text("action").notNull(),   // 'analysis' | 'export'
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (t) => ({
+  // Cobre a query de contagem: WHERE userId=? AND action=? AND createdAt > NOW()-1h
+  rateLimitUserActionIdx: index("rate_limit_logs_user_action_idx").on(t.userId, t.action, t.createdAt),
 }));

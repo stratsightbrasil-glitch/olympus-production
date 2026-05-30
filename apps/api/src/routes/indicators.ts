@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
-import { db, indicators, weakSignals } from '@olympus/db';
-import { eq, and } from 'drizzle-orm';
+import { db, indicators, weakSignals, projects } from '@olympus/db';
+import { eq, and, isNull } from 'drizzle-orm';
 
 const indicatorsRoutes = new Hono();
 
@@ -38,6 +38,13 @@ async function autoRegisterSignal(projectId: string, indicatorName: string, stat
 indicatorsRoutes.get('/project/:projectId', async (c) => {
   try {
     const projectId = c.req.param('projectId');
+    const jwt = c.get('jwtPayload') as any;
+    if (jwt?.role !== 'admin') {
+      const proj = await db.query.projects.findFirst({
+        where: and(eq(projects.id, projectId), isNull(projects.deletedAt), eq(projects.createdBy, jwt?.name || '')),
+      });
+      if (!proj) return c.json({ error: 'Acesso negado' }, 403);
+    }
     const list = await db.query.indicators.findMany({
       where: eq(indicators.projectId, projectId)
     });

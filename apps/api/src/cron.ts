@@ -1,6 +1,6 @@
 import cron from 'node-cron';
-import { db, projects, messages } from '@olympus/db';
-import { eq, and, isNull, asc, desc } from 'drizzle-orm';
+import { db, projects, messages, revokedTokens, rateLimitLogs } from '@olympus/db';
+import { eq, and, isNull, asc, desc, lt } from 'drizzle-orm';
 import { sql } from 'drizzle-orm';
 import { sendEmail } from './mailer';
 import { runAnalysis } from './routes/chat';
@@ -215,3 +215,19 @@ export function removeCronJob(projectId: string) {
     console.log(`⏰ Cron removido para projeto: ${projectId}`);
   }
 }
+
+// ── Limpeza diária de tokens expirados e rate_limit_logs antigos ─────────────
+// Executa toda madrugada às 03:00 — remove entradas que não têm mais utilidade.
+cron.schedule('0 3 * * *', async () => {
+  try {
+    const now = new Date();
+    const twoHoursAgo = new Date(now.getTime() - 2 * 60 * 60 * 1000);
+    const [revResult, rlResult] = await Promise.all([
+      db.delete(revokedTokens).where(lt(revokedTokens.expiresAt, now)).returning({ jti: revokedTokens.jti }),
+      db.delete(rateLimitLogs).where(lt(rateLimitLogs.createdAt, twoHoursAgo)).returning({ id: rateLimitLogs.id }),
+    ]);
+    console.log(`[Cron 03h] ♻ Limpeza: ${revResult.length} tokens revogados removidos, ${rlResult.length} logs de rate limit removidos.`);
+  } catch (err: any) {
+    console.error('[Cron 03h] Erro na limpeza:', err.message);
+  }
+});

@@ -13,9 +13,9 @@ export const ANTHROPIC_MODELS_DEFAULT = [
 
 // Modelos alternativos por provider (para UI de Settings futura)
 export const GOOGLE_MODELS_DEFAULT = [
-  { id: 'gemini-2.0-flash',             label: 'Gemini 2.0 Flash'    },  // ~8x mais barato que Haiku
-  { id: 'gemini-2.5-flash-preview-05-20', label: 'Gemini 2.5 Flash'  },
-  { id: 'gemini-1.5-pro',               label: 'Gemini 1.5 Pro'      },
+  { id: 'gemini-2.5-flash',      label: 'Gemini 2.5 Flash (premium)' },
+  { id: 'gemini-2.5-flash-lite', label: 'Gemini 2.5 Flash Lite'      },
+  { id: 'gemini-2.5-pro',        label: 'Gemini 2.5 Pro'             },
 ];
 
 export const DEEPSEEK_MODELS_DEFAULT = [
@@ -239,6 +239,27 @@ settingsRoutes.patch('/kratos-cooldown', async (c) => {
     ON CONFLICT (key) DO UPDATE SET value = ${value}::jsonb, updated_at = NOW()
   `);
   return c.json({ ok: true, kratos_cooldown_ms: ms });
+});
+
+// ── GET /api/v1/settings/cache/status — estado do cache de metodologias (admin) ─
+settingsRoutes.get('/cache/status', async (c) => {
+  const payload = c.get('jwtPayload') as any;
+  if (!payload || payload.role !== 'admin') {
+    return c.json({ error: 'Apenas administradores podem ver o status do cache.' }, 403);
+  }
+  const { getMethodologyCacheStatus } = await import('../services/analysis.service.js');
+  return c.json(getMethodologyCacheStatus());
+});
+
+// ── POST /api/v1/settings/cache/invalidate — limpa cache de metodologias (admin) ─
+settingsRoutes.post('/cache/invalidate', async (c) => {
+  const payload = c.get('jwtPayload') as any;
+  if (!payload || payload.role !== 'admin') {
+    return c.json({ error: 'Apenas administradores podem invalidar o cache.' }, 403);
+  }
+  const { invalidateMethodologyCache } = await import('../services/analysis.service.js');
+  invalidateMethodologyCache();
+  return c.json({ ok: true, clearedAt: new Date().toISOString() });
 });
 
 export default settingsRoutes;

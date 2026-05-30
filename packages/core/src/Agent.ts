@@ -205,7 +205,7 @@ const TOOL_JSON_SCHEMAS: Record<string, object> = {
     type: "object",
     properties: {
       signalId:        { type: "string" },
-      sentinela:       { type: "number", enum: [1, 2] },
+      sentinela:       { type: "string", enum: ["1", "2"] },
       descricao:       { type: "string" },
       fonte:           { type: "string" },
       status:          { type: "string", enum: ["inativo","ativo","disparado"] },
@@ -214,6 +214,20 @@ const TOOL_JSON_SCHEMAS: Record<string, object> = {
       statusRadar:     { type: "string", enum: ["monitorando","amplificando","materializado","arquivado"] },
     },
     required: ["signalId", "sentinela", "status"],
+  },
+  // ── Harmonized Scenario Schema ───────────────────────────────────────────────
+  tool_register_scenario: {
+    type: "object",
+    properties: {
+      name:            { type: "string" },
+      type:            { type: "string", enum: ["inercial","alternative","target","pessimist","optimist"] },
+      probability:     { type: "number", minimum: 0, maximum: 1 },
+      hendriksonLabel: { type: "string", enum: ["quase_certo","muito_provavel","provavel","possivel","improvavel","remoto"] },
+      description:     { type: "string" },
+      axes:            { type: "object", properties: { ic1Label: { type: "string" }, ic1Pole: { type: "string", enum: ["+","-"] }, ic2Label: { type: "string" }, ic2Pole: { type: "string", enum: ["+","-"] } } },
+      binaryEvents:    { type: "object", additionalProperties: { type: "boolean" } },
+    },
+    required: ["name", "type", "probability", "hendriksonLabel"],
   },
   // ── ICD 203 Analytic Standards Tools ────────────────────────────────────────
   declarar_julgamento: {
@@ -457,9 +471,16 @@ export class Agent {
 
     const hasTools = Object.keys(aiTools).length > 0;
 
+    // Anthropic Prompt Cache — marca o system prompt como ephemeral cache breakpoint.
+    // Economia estimada: ~84% tokens em chamadas repetidas com mesmo system prompt.
+    // Só ativo para provider 'anthropic'; outros providers ignoram o campo.
+    const systemContent: any = activeProvider === 'anthropic'
+      ? [{ type: 'text', text: finalSystemPrompt, providerOptions: { anthropic: { cacheControl: { type: 'ephemeral' } } } }]
+      : finalSystemPrompt;
+
     const sharedParams = {
       model: getModel(effectiveConfig),
-      system: finalSystemPrompt,
+      system: systemContent,
       messages,
       tools: hasTools ? aiTools : undefined,
       stopWhen: stepCountIs(maxSteps),

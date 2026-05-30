@@ -6,7 +6,14 @@ import { db, embeddings } from '@olympus/db';
 import { generateEmbedding, chunkText } from '@olympus/tools';
 
 async function autoIndex(projectId: string, text: string, filename: string): Promise<void> {
-  if (!process.env.VOYAGE_API_KEY) return; // silently skip if not configured
+  // Roteamento automático: Voyage (se VOYAGE_API_KEY) → Ollama (se OLLAMA_BASE_URL/LLM_PROVIDER=ollama)
+  // Não ignora silenciosamente — loga o motivo para o operador agir.
+  const hasVoyage = !!process.env.VOYAGE_API_KEY;
+  const hasOllama = !!(process.env.OLLAMA_BASE_URL || process.env.LLM_PROVIDER === 'ollama');
+  if (!hasVoyage && !hasOllama) {
+    console.warn('[RAG] Auto-indexing ignorado: nenhum provider de embedding configurado (VOYAGE_API_KEY ou OLLAMA_BASE_URL). Documentos não serão recuperáveis via buscar_documentos_internos.');
+    return;
+  }
   try {
     const chunks = chunkText(text);
     for (let i = 0; i < chunks.length; i++) {
@@ -18,7 +25,8 @@ async function autoIndex(projectId: string, text: string, filename: string): Pro
         embedding,
       });
     }
-    console.log(`[RAG] Auto-indexado: ${filename} (${chunks.length} chunks) → projeto ${projectId}`);
+    const provider = hasVoyage ? 'Voyage AI' : 'Ollama';
+    console.log(`[RAG] Auto-indexado via ${provider}: ${filename} (${chunks.length} chunks) → projeto ${projectId}`);
   } catch (e: any) {
     console.warn(`[RAG] Auto-indexing falhou para ${filename}:`, e.message);
   }

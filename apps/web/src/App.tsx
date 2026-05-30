@@ -13,6 +13,7 @@ import { NewSessionModal } from './components/modals/NewSessionModal';
 import { ProjectSettingsModal } from './components/modals/ProjectSettingsModal';
 import { UsersModal } from './components/modals/UsersModal';
 import { BackupModal } from './components/modals/BackupModal';
+import { AuditModal } from './components/modals/AuditModal';
 import { ReviewModal } from './components/modals/ReviewModal';
 import { getMethodologySteps, STEP_DETECTION_PATTERNS } from './data/methodologySteps';
 import { useAuth } from './hooks/useAuth';
@@ -35,7 +36,13 @@ function App() {
   const [activeModal, setActiveModal] = useState<ActiveModal>(null);
   const [mainView, setMainView] = useState<'chat' | 'kratos'>('chat');
   const [mode, setMode] = useState('production');
+  const [cacheStatus, setCacheStatus] = useState<{ entries: number; oldestEntryAt: string | null; ttlSeconds: number } | null>(null);
   const [vizMode, setVizMode] = useState('passos');
+  const [reportLayout, setReportLayout] = useState<'standard' | 'extended'>('standard');
+  const handleReportLayoutChange = (layout: 'standard' | 'extended') => {
+    setReportLayout(layout);
+    if (projectState?.sessionId) localStorage.setItem(`reportLayout:${projectState.sessionId}`, layout);
+  };
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [input, setInput] = useState('');
   const [methodologies, setMethodologies] = useState<any[]>([]);
@@ -65,6 +72,7 @@ function App() {
     sessionId: projectState.sessionId,
     projeto: projectState.projeto,
     vizMode,
+    reportLayout,
     onIndicatorsRefresh: projectData.carregarIndicadores,
     onSignalsRefresh: projectData.carregarSinais,
     onSessionsRefresh: sessions.carregarSessoes,
@@ -93,6 +101,32 @@ function App() {
       .catch(() => {});
     sessions.carregarSessoes();
   }, [token]);
+
+  // Carrega reportLayout persistido por projeto ao mudar de sessão
+  useEffect(() => {
+    if (!projectState?.sessionId) return;
+    const saved = localStorage.getItem(`reportLayout:${projectState.sessionId}`) as 'standard' | 'extended' | null;
+    if (saved) setReportLayout(saved);
+    else setReportLayout('standard');
+  }, [projectState?.sessionId]);
+
+  // Polling do status do cache de metodologias — apenas para admin, a cada 30s
+  useEffect(() => {
+    if (!token || user?.role !== 'admin') return;
+    const fetchStatus = () =>
+      fetch('/api/v1/settings/cache/status', { headers: reqHeaders })
+        .then(r => r.ok ? r.json() : null)
+        .then(d => d && setCacheStatus(d))
+        .catch(() => {});
+    fetchStatus();
+    const interval = setInterval(fetchStatus, 30_000);
+    return () => clearInterval(interval);
+  }, [token, user?.role]);
+
+  const handleInvalidateCache = async () => {
+    await fetch('/api/v1/settings/cache/invalidate', { method: 'POST', headers: reqHeaders });
+    setCacheStatus(prev => prev ? { ...prev, entries: 0, oldestEntryAt: null } : null);
+  };
 
   // ── Derived values ───────────────────────────────────────────────────────
   const cenariosMethodologies = useMemo(
@@ -233,6 +267,7 @@ function App() {
       )}
       {activeModal === 'users'  && <UsersModal  onClose={() => setActiveModal(null)} reqHeaders={reqHeaders} />}
       {activeModal === 'backup' && <BackupModal onClose={() => setActiveModal(null)} reqHeaders={reqHeaders} />}
+      {activeModal === 'audit'  && <AuditModal  onClose={() => setActiveModal(null)} reqHeaders={reqHeaders} />}
       {activeModal === 'review' && (
         <ReviewModal
           sessionId={projectState.sessionId}
@@ -269,6 +304,7 @@ function App() {
         onGerarRelatorioKratos={chat.gerarRelatorioKratos}
         onShowUsers={() => setActiveModal('users')}
         onShowBackup={() => setActiveModal('backup')}
+        onShowAudit={() => setActiveModal('audit')}
         onCopyClientLink={copyClientLink}
         onShowReviewModal={() => setActiveModal('review')}
         onGerarRelatorioPadrao={() => exports.gerarRelatorio('padrao')}
@@ -313,6 +349,10 @@ function App() {
           onLlmChange={user?.role === 'admin' ? llm.handleLlmChange : undefined}
           llmTiers={llm.llmTiers}
           onTierChange={user?.role === 'admin' ? llm.handleTierChange : undefined}
+          cacheStatus={user?.role === 'admin' ? cacheStatus : undefined}
+          onInvalidateCache={user?.role === 'admin' ? handleInvalidateCache : undefined}
+          reportLayout={reportLayout}
+          onReportLayoutChange={handleReportLayoutChange}
         />
 
         <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>

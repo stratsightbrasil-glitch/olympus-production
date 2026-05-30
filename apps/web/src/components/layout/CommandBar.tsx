@@ -41,6 +41,12 @@ interface CommandBarProps {
   /** Mapeamento tier→modelId (admin only). Ausente = sem controle de tiers na UI. */
   llmTiers?: Record<string, string>;
   onTierChange?: (tiers: Record<string, string>) => void;
+  /** Status do cache de metodologias (admin only). */
+  cacheStatus?: { entries: number; oldestEntryAt: string | null; ttlSeconds: number } | null;
+  onInvalidateCache?: () => void;
+  /** Modo de layout do relatório final. */
+  reportLayout?: 'standard' | 'extended';
+  onReportLayoutChange?: (layout: 'standard' | 'extended') => void;
 }
 
 // ─── Constantes ───────────────────────────────────────────────────────────────
@@ -99,9 +105,9 @@ const ANTHROPIC_DEFAULT = [
 ];
 
 const GOOGLE_DEFAULT = [
-  { id: 'gemini-2.0-flash',                label: 'Gemini 2.0 Flash'    },
-  { id: 'gemini-2.5-flash-preview-05-20',  label: 'Gemini 2.5 Flash'    },
-  { id: 'gemini-1.5-pro',                  label: 'Gemini 1.5 Pro'      },
+  { id: 'gemini-2.5-flash',       label: 'Gemini 2.5 Flash (premium)' },
+  { id: 'gemini-2.5-flash-lite',  label: 'Gemini 2.5 Flash Lite'      },
+  { id: 'gemini-2.5-pro',         label: 'Gemini 2.5 Pro'             },
 ];
 
 const DEEPSEEK_DEFAULT = [
@@ -112,10 +118,11 @@ const DEEPSEEK_DEFAULT = [
 function modelShortLabel(provider: string, model: string): string {
   if (provider === 'ollama') return `⚡ ${model}`;
   if (provider === 'google') {
-    if (model.includes('2.5')) return '🔮 Gemini 2.5';
-    if (model.includes('2.0') || model.includes('flash')) return '🔮 Gemini 2.0';
-    if (model.includes('pro')) return '🔮 Gemini Pro';
-    return `🔮 ${model.split('-')[1] ?? model}`;
+    if (model.includes('2.5-pro'))         return '🔮 Gemini 2.5 Pro';
+    if (model.includes('2.5-flash-lite'))  return '🔮 Gemini 2.5 Lite';
+    if (model.includes('2.5'))             return '🔮 Gemini 2.5 Flash';
+    if (model.includes('pro'))             return '🔮 Gemini Pro';
+    return `🔮 Gemini ${model.split('gemini-').pop() ?? model}`;
   }
   if (provider === 'deepseek') {
     if (model.includes('reasoner')) return '🌊 DeepSeek R1';
@@ -305,7 +312,7 @@ function LlmSelector({
           )}
           {!ollamaAvailable && (
             <div style={{ padding: '6px 16px', fontSize: 11, color: '#6A5A4A', fontStyle: 'italic' }}>
-              Inicie com: docker compose --profile ollama up
+              Iniciando… aguarde o container carregar
             </div>
           )}
           {ollamaAvailable && ollamaModels.map(m => {
@@ -389,6 +396,8 @@ export function CommandBar({
   methodologyName = 'MSEF', methodologySteps,
   llmConfig, anthropicModels, googleModels, deepseekModels,
   ollamaModels, ollamaAvailable, onLlmChange, llmTiers, onTierChange,
+  cacheStatus, onInvalidateCache,
+  reportLayout = 'standard', onReportLayoutChange,
 }: CommandBarProps) {
   const steps: MethodologyStep[] = methodologySteps ?? DEFAULT_STEPS;
   const isCliente = user?.role === 'cliente';
@@ -491,6 +500,66 @@ export function CommandBar({
             llmTiers={llmTiers}
             onTierChange={onTierChange}
           />
+        )}
+
+        {/* Badge de cache de metodologias — apenas admin */}
+        {cacheStatus != null && (() => {
+          const ageMs = cacheStatus.oldestEntryAt ? Date.now() - new Date(cacheStatus.oldestEntryAt).getTime() : 0;
+          const ageMin = Math.floor(ageMs / 60_000);
+          const isWarm = ageMin < 1;
+          const badgeColor = isWarm ? '#4CAF50' : ageMin < 5 ? '#FFC107' : '#FF7043';
+          const label = cacheStatus.entries === 0
+            ? 'Cache vazio'
+            : isWarm ? 'Prompt atual' : `Cache ${ageMin}m atrás`;
+          return (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 5, flexShrink: 0 }}>
+              <div style={{
+                display: 'flex', alignItems: 'center', gap: 5,
+                background: 'rgba(255,255,255,.05)', border: `1px solid ${badgeColor}44`,
+                borderRadius: 5, padding: '4px 9px',
+                fontSize: 10, color: badgeColor, whiteSpace: 'nowrap' as const,
+              }} title={`Entradas em cache: ${cacheStatus.entries}`}>
+                <div style={{ width: 5, height: 5, borderRadius: '50%', background: badgeColor, flexShrink: 0 }} />
+                {label}
+              </div>
+              {onInvalidateCache && (
+                <button
+                  onClick={onInvalidateCache}
+                  title="Limpar cache de metodologias — próxima análise recarrega do banco"
+                  style={{
+                    background: 'none', border: '1px solid rgba(255,255,255,.14)',
+                    borderRadius: 5, color: '#A3C9AE', fontSize: 10,
+                    fontFamily: "'DM Sans',system-ui,sans-serif",
+                    padding: '4px 8px', cursor: 'pointer',
+                    transition: 'all .15s', whiteSpace: 'nowrap' as const,
+                  }}
+                  onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,.07)'; e.currentTarget.style.color = '#fff'; }}
+                  onMouseLeave={e => { e.currentTarget.style.background = 'none'; e.currentTarget.style.color = '#A3C9AE'; }}
+                >
+                  ↺ Invalidar
+                </button>
+              )}
+            </div>
+          );
+        })()}
+
+        {/* Toggle Standard / Estendido — visível para analistas e admins */}
+        {!isCliente && onReportLayoutChange && (
+          <div style={{ display: 'flex', alignItems: 'center', background: 'rgba(255,255,255,.05)', border: '1px solid rgba(255,255,255,.12)', borderRadius: 5, overflow: 'hidden', flexShrink: 0 }}
+            title="Estendido inclui Raciocínio Analítico e Lastro Cognitivo completos">
+            {(['standard', 'extended'] as const).map(opt => (
+              <button key={opt} onClick={() => onReportLayoutChange(opt)} style={{
+                background: reportLayout === opt ? 'rgba(201,168,76,.22)' : 'none',
+                border: 'none', color: reportLayout === opt ? '#D9BF73' : '#7a9e87',
+                fontSize: 10.5, fontWeight: reportLayout === opt ? 700 : 400,
+                fontFamily: "'DM Sans',system-ui,sans-serif",
+                padding: '5px 10px', cursor: 'pointer', transition: 'all .15s',
+                whiteSpace: 'nowrap' as const,
+              }}>
+                {opt === 'standard' ? 'Padrão' : 'Estendido'}
+              </button>
+            ))}
+          </div>
         )}
 
         {/* Botões de ação */}

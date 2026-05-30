@@ -10,8 +10,19 @@
  */
 
 import { Hono } from 'hono';
-import { db, projectEvents } from '@olympus/db';
-import { eq, and, inArray } from 'drizzle-orm';
+import { db, projectEvents, projects } from '@olympus/db';
+import { eq, and, inArray, isNull } from 'drizzle-orm';
+
+async function assertEventOwner(c: any, eventId: string): Promise<{ event: any } | null> {
+  const jwt = c.get('jwtPayload') as any;
+  const event = await db.query.projectEvents.findFirst({ where: eq(projectEvents.id, eventId) });
+  if (!event) return null;
+  if (jwt?.role === 'admin') return { event };
+  const proj = await db.query.projects.findFirst({
+    where: and(eq(projects.id, event.projectId), isNull(projects.deletedAt), eq(projects.createdBy, jwt?.name || '')),
+  });
+  return proj ? { event } : null;
+}
 
 const eventsRoutes = new Hono();
 
@@ -22,6 +33,14 @@ eventsRoutes.get('/', async (c) => {
     const status    = c.req.query('status');   // 'proposed' | 'approved' | 'rejected'
 
     if (!projectId) return c.json({ error: 'projectId obrigatório' }, 400);
+
+    const jwt = c.get('jwtPayload') as any;
+    if (jwt?.role !== 'admin') {
+      const proj = await db.query.projects.findFirst({
+        where: and(eq(projects.id, projectId), isNull(projects.deletedAt), eq(projects.createdBy, jwt?.name || '')),
+      });
+      if (!proj) return c.json({ error: 'Acesso negado' }, 403);
+    }
 
     const VALID_STATUSES = ['proposed', 'approved', 'rejected'] as const;
     const statusFilter = VALID_STATUSES.includes(status as any)
@@ -50,6 +69,14 @@ eventsRoutes.post('/', async (c) => {
 
     if (!projectId || !name || !description || !type) {
       return c.json({ error: 'projectId, name, description e type são obrigatórios' }, 400);
+    }
+
+    const jwt = c.get('jwtPayload') as any;
+    if (jwt?.role !== 'admin') {
+      const proj = await db.query.projects.findFirst({
+        where: and(eq(projects.id, projectId), isNull(projects.deletedAt), eq(projects.createdBy, jwt?.name || '')),
+      });
+      if (!proj) return c.json({ error: 'Acesso negado' }, 403);
     }
 
     const VALID_TYPES = ['trend', 'uncertainty', 'inflection_factor', 'fpf'];
@@ -82,8 +109,9 @@ eventsRoutes.patch('/:id/status', async (c) => {
       return c.json({ error: `status inválido. Valores aceitos: ${VALID.join(', ')}` }, 400);
     }
 
-    const existing = await db.query.projectEvents.findFirst({ where: eq(projectEvents.id, id) });
-    if (!existing) return c.json({ error: 'Evento não encontrado' }, 404);
+    const owned = await assertEventOwner(c, id);
+    if (!owned) return c.json({ error: 'Evento não encontrado ou acesso negado' }, 404);
+    const existing = owned.event;
 
     const [updated] = await db
       .update(projectEvents)
@@ -126,8 +154,9 @@ eventsRoutes.patch('/:id', async (c) => {
     const id   = c.req.param('id');
     const body = await c.req.json() as any;
 
-    const existing = await db.query.projectEvents.findFirst({ where: eq(projectEvents.id, id) });
-    if (!existing) return c.json({ error: 'Evento não encontrado' }, 404);
+    const owned = await assertEventOwner(c, id);
+    if (!owned) return c.json({ error: 'Evento não encontrado ou acesso negado' }, 404);
+    const existing = owned.event;
 
     const allowed = ['name', 'description', 'type', 'sourceEvaluation'] as const;
     const patch: Record<string, any> = { updatedAt: new Date() };
@@ -149,8 +178,8 @@ eventsRoutes.patch('/:id', async (c) => {
 eventsRoutes.delete('/:id', async (c) => {
   try {
     const id = c.req.param('id');
-    const existing = await db.query.projectEvents.findFirst({ where: eq(projectEvents.id, id) });
-    if (!existing) return c.json({ error: 'Evento não encontrado' }, 404);
+    const owned = await assertEventOwner(c, id);
+    if (!owned) return c.json({ error: 'Evento não encontrado ou acesso negado' }, 404);
 
     await db.delete(projectEvents).where(eq(projectEvents.id, id));
     return c.json({ ok: true });

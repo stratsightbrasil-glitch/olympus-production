@@ -1,7 +1,16 @@
 import { Hono } from 'hono';
-import { db, embeddings } from '@olympus/db';
-import { eq } from 'drizzle-orm';
+import { db, embeddings, projects } from '@olympus/db';
+import { eq, and, isNull } from 'drizzle-orm';
 import { generateEmbedding, chunkText } from '@olympus/tools';
+
+async function assertProjectOwner(c: any, projectId: string): Promise<boolean> {
+  const jwt = c.get('jwtPayload') as any;
+  if (jwt?.role === 'admin') return true;
+  const proj = await db.query.projects.findFirst({
+    where: and(eq(projects.id, projectId), isNull(projects.deletedAt), eq(projects.createdBy, jwt?.name || '')),
+  });
+  return !!proj;
+}
 
 const router = new Hono();
 
@@ -15,6 +24,8 @@ router.post('/index', async (c) => {
     if (!projectId || !text) {
       return c.json({ error: 'projectId e text são obrigatórios.' }, 400);
     }
+
+    if (!(await assertProjectOwner(c, projectId))) return c.json({ error: 'Acesso negado' }, 403);
 
     const chunks = chunkText(String(text), Number(chunkSize));
     console.log(`[RAG] Indexando ${chunks.length} chunks para projeto ${projectId}`);
@@ -44,6 +55,7 @@ router.post('/index', async (c) => {
 router.delete('/:projectId', async (c) => {
   try {
     const projectId = c.req.param('projectId');
+    if (!(await assertProjectOwner(c, projectId))) return c.json({ error: 'Acesso negado' }, 403);
     const deleted = await db.delete(embeddings)
       .where(eq(embeddings.projectId, projectId))
       .returning({ id: embeddings.id });
@@ -57,6 +69,7 @@ router.delete('/:projectId', async (c) => {
 router.get('/:projectId/count', async (c) => {
   try {
     const projectId = c.req.param('projectId');
+    if (!(await assertProjectOwner(c, projectId))) return c.json({ error: 'Acesso negado' }, 403);
     const rows = await db.select({ id: embeddings.id })
       .from(embeddings)
       .where(eq(embeddings.projectId, projectId));

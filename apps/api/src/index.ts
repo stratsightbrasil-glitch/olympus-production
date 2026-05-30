@@ -15,7 +15,7 @@ import { logger } from 'hono/logger';
 import { config } from 'dotenv';
 import { jwt } from 'hono/jwt';
 import path from 'path';
-import { db, users, platformSettings } from '@olympus/db';
+import { db, users, platformSettings, revokedTokens } from '@olympus/db';
 import { eq, sql } from 'drizzle-orm';
 
 // Força o carregamento do .env localizado na raiz do monorepo
@@ -123,6 +123,12 @@ const verifyUserExists = async (c: any, next: any) => {
   const payload = c.get('jwtPayload');
   // Ignora o id 'system' usado pelas automações do KRATOS em background
   if (payload && payload.id && payload.id !== 'system') {
+    // Verifica revogação por jti (logout explícito)
+    if (payload.jti) {
+      const revoked = await db.query.revokedTokens.findFirst({ where: eq(revokedTokens.jti, payload.jti) });
+      if (revoked) return c.json({ error: 'Sessão encerrada. Faça login novamente.' }, 401);
+    }
+
     const now = Date.now();
     const cached = userExistenceCache.get(payload.id);
     let exists: boolean;
@@ -161,6 +167,7 @@ const PROTECTED_PREFIXES = [
   '/api/v1/audit',
   '/api/v1/painel',
   '/api/v1/auth/2fa',    // 2FA requer autenticação prévia — userId vem do token
+  '/api/v1/auth/logout', // logout revoga o jti — requer token válido para identificar qual revogar
 ];
 for (const prefix of PROTECTED_PREFIXES) {
   app.use(`${prefix}/*`, authMiddleware, verifyUserExists);
@@ -230,7 +237,7 @@ serve({ fetch: app.fetch, port, hostname: '0.0.0.0' });
       // Padrão dev: Haiku (mais barato). Para prod, use a UI de Settings ou PATCH /api/v1/settings/llm
       // onConflictDoNothing preserva customizações feitas via UI — nunca sobrescreve em restart.
       await db.insert(platformSettings)
-        .values({ key: 'llm', value: { provider: 'google', model: 'gemini-2.0-flash' } })
+        .values({ key: 'llm', value: { provider: 'google', model: 'gemini-2.5-flash-lite' } })
         .onConflictDoNothing();
       await db.insert(platformSettings)
         .values({ key: 'anthropic_models', value: [
@@ -242,9 +249,33 @@ serve({ fetch: app.fetch, port, hostname: '0.0.0.0' });
       // Mapeamento de tiers de agentes → IDs de modelo.
       // Padrão dev: ambos em Haiku. Prod: use PATCH /api/v1/settings/llm-tiers para promover premium.
       await db.insert(platformSettings)
-        .values({ key: 'llm_tiers', value: { economy: 'gemini-2.0-flash', premium: 'gemini-2.5-flash-preview-05-20' } })
+        .values({ key: 'llm_tiers', value: { economy: 'gemini-2.5-flash-lite', premium: 'gemini-2.5-flash' } })
         .onConflictDoNothing();
       console.log('[Settings] ✅ platform_settings inicializada.');
+
+      // Guard de dimensão de embeddings — falha ruidosa > falha silenciosa.
+      // Voyage (512d) e Ollama (768d) são incompatíveis: cosine similarity entre
+      // vetores de dimensões diferentes retorna resultados plausíveis mas errados.
+      try {
+        const dimResult = await db.execute(sql`SELECT vector_dims(embedding) AS dims FROM embeddings LIMIT 1`);
+        const dimRows = dimResult as unknown as Array<{ dims: number }>;
+        if (dimRows.length > 0) {
+          const stored = Number(dimRows[0].dims);
+          const expected = process.env.VOYAGE_API_KEY ? 512 : 768;
+          if (stored !== expected) {
+            console.error(`[Embeddings] ❌ MISMATCH: banco=${stored}d provider_esperado=${expected}d`);
+            console.error('[Embeddings]    Solução: reindexar todos os embeddings antes de subir.');
+            console.error('[Embeddings]    DELETE FROM embeddings; então re-extraia os documentos.');
+            process.exit(1);
+          }
+          console.log(`[Embeddings] ✅ Dimensões OK: ${stored}d`);
+        } else {
+          console.log('[Embeddings] ✅ Banco vazio — nenhuma verificação de dimensão necessária.');
+        }
+      } catch (e: any) {
+        // vector_dims() requer pgvector — se falhar aqui, a extensão ainda está sendo criada
+        console.log(`[Embeddings] ⚠ Guard de dimensão ignorado (pgvector ainda não disponível): ${e.message}`);
+      }
 
       await reloadCronJobs();
       console.log('[KRATOS] ✅ Cron jobs carregados com sucesso.');

@@ -1,49 +1,54 @@
-// Rate limiting em memória por userId — adequado para instância única (Railway/Docker).
-// Para multi-instância futura: substituir pelo Redis + sliding window.
-// TEST_MODE=true eleva todos os limites para 1000/hora — permite suites de integração completas.
+// Rate limiting por sliding window via PostgreSQL — garante limite global entre
+// múltiplas instâncias Docker/Railway. Substitui o bucket in-memory do Sprint anterior.
+// TEST_MODE=true bypassa todos os limites para suites de integração.
+import { db, rateLimitLogs } from '@olympus/db';
+import { eq, and, gt, count } from 'drizzle-orm';
+import { sql } from 'drizzle-orm';
+
 const TEST_MODE = process.env.TEST_MODE === 'true';
 
-interface Bucket { count: number; resetAt: number; }
-const buckets = new Map<string, Bucket>();
+const LIMITS: Record<string, { max: number; windowMs: number; message: string }> = {
+  analysis: { max: 5,  windowMs: 60 * 60 * 1000, message: 'Limite de análises atingido (5/hora). Aguarde antes de iniciar nova análise.' },
+  export:   { max: 10, windowMs: 60 * 60 * 1000, message: 'Limite de exportações atingido (10/hora). Aguarde antes de exportar novamente.' },
+};
 
-function check(key: string, max: number, windowMs: number): boolean {
-  const now = Date.now();
-  const bucket = buckets.get(key);
-  if (!bucket || now > bucket.resetAt) {
-    buckets.set(key, { count: 1, resetAt: now + windowMs });
-    return true;
-  }
-  if (bucket.count >= max) return false;
-  bucket.count++;
+async function checkRateLimit(userId: string, action: string): Promise<boolean> {
+  const limit = LIMITS[action];
+  if (!limit) return true;
+
+  const windowStart = new Date(Date.now() - limit.windowMs);
+
+  const [result] = await db
+    .select({ total: count() })
+    .from(rateLimitLogs)
+    .where(
+      and(
+        eq(rateLimitLogs.userId, userId),
+        eq(rateLimitLogs.action, action),
+        gt(rateLimitLogs.createdAt, windowStart)
+      )
+    );
+
+  if ((result?.total ?? 0) >= limit.max) return false;
+
+  await db.insert(rateLimitLogs).values({ userId, action });
   return true;
 }
 
-// Limpeza periódica para evitar leak de memória em sessões longas
-setInterval(() => {
-  const now = Date.now();
-  for (const [k, v] of buckets) {
-    if (now > v.resetAt) buckets.delete(k);
-  }
-}, 5 * 60 * 1000);
-
-// 5 análises por usuário por hora (1000 em TEST_MODE)
-export function rateLimitAnalysis(c: any, next: any) {
+export async function rateLimitAnalysis(c: any, next: any) {
   if (TEST_MODE) return next();
   const payload = c.get('jwtPayload');
-  const key = `analysis:${payload?.id || c.req.header('x-forwarded-for') || 'anon'}`;
-  if (!check(key, 5, 60 * 60 * 1000)) {
-    return c.json({ error: 'Limite de análises atingido (5/hora). Aguarde antes de iniciar nova análise.' }, 429);
-  }
+  const userId = payload?.id || c.req.header('x-forwarded-for') || 'anon';
+  const allowed = await checkRateLimit(userId, 'analysis');
+  if (!allowed) return c.json({ error: LIMITS.analysis.message }, 429);
   return next();
 }
 
-// 10 exportações por usuário por hora (ilimitado em TEST_MODE)
-export function rateLimitExport(c: any, next: any) {
+export async function rateLimitExport(c: any, next: any) {
   if (TEST_MODE) return next();
   const payload = c.get('jwtPayload');
-  const key = `export:${payload?.id || c.req.header('x-forwarded-for') || 'anon'}`;
-  if (!check(key, 10, 60 * 60 * 1000)) {
-    return c.json({ error: 'Limite de exportações atingido (10/hora). Aguarde antes de exportar novamente.' }, 429);
-  }
+  const userId = payload?.id || c.req.header('x-forwarded-for') || 'anon';
+  const allowed = await checkRateLimit(userId, 'export');
+  if (!allowed) return c.json({ error: LIMITS.export.message }, 429);
   return next();
 }
