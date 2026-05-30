@@ -1,0 +1,6 @@
+# Scripts shell sempre com LF — CRLF quebra shebang no Linux
+*.sh text eol=lf
+
+# Dockerfiles e configs nginx com LF
+Dockerfile* text eol=lf
+nginx*.conf text eol=lf
