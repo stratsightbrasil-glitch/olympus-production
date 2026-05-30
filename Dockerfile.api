@@ -1,14 +1,18 @@
 # ── OLYMPUS v4 — API (Hono + Node.js) ─────────────────────────────────────────
-# Usa node:20-slim (Debian). NÃO usar Alpine — dependências nativas (bcrypt, pg)
+# Stage 1: extrai pg_dump da imagem oficial postgres:18 (versão que Railway usa)
+# Evita instalar postgresql-client-15 do Debian que rejeita servidor 18+ (version mismatch)
+FROM postgres:18-bookworm AS pg_tools
+
+# Stage 2: imagem principal
+# Usa node:20-slim (Debian Bookworm). NÃO usar Alpine — dependências nativas (bcrypt, pg)
 # falham silenciosamente em Alpine.
 FROM node:20-slim
 
 WORKDIR /app
 
-# Instala cliente PostgreSQL (necessário para pg_dump nos backups)
-RUN apt-get update && \
-    apt-get install -y --no-install-recommends postgresql-client && \
-    rm -rf /var/lib/apt/lists/*
+# Copia pg_dump 18 e a libpq necessária do stage anterior
+COPY --from=pg_tools /usr/bin/pg_dump /usr/bin/pg_dump
+COPY --from=pg_tools /usr/lib/x86_64-linux-gnu/libpq.so.5 /usr/lib/x86_64-linux-gnu/libpq.so.5
 
 # Copia todo o monorepo
 COPY . .
