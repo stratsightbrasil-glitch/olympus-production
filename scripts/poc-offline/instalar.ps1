@@ -121,15 +121,29 @@ if (-not $apiOk) {
     Write-Host "✅ API pronta"
 }
 
-# ── 6. Abrir navegador ────────────────────────────────────────────────────────
+# ── 6. Aplicar schema e seed (somente na primeira instalação) ────────────────
 Write-Host ""
-Write-Host "[6/6] Abrindo OLYMPUS no navegador..." -ForegroundColor Cyan
+Write-Host "[6/7] Aplicando schema do banco de dados..." -ForegroundColor Cyan
+$schemaCheck = docker exec olympus_api sh -c "node -e ""require('./packages/db/dist/db.js').db.execute(require('drizzle-orm').sql\`SELECT 1 FROM methodologies LIMIT 1\`).then(()=>process.exit(0)).catch(()=>process.exit(1))"" 2>NUL"
+if ($LASTEXITCODE -ne 0) {
+    Write-Host "   Primeira instalação — aplicando schema..."
+    docker exec olympus_api sh -c "cd /app && npx drizzle-kit push --config packages/db/drizzle.config.ts --force 2>&1" | Select-Object -Last 5
+    Write-Host "   Populando banco com metodologias e agentes..."
+    docker exec olympus_api sh -c "cd /app && DATABASE_URL=postgresql://postgres:postgres@olympus_db:5432/olympus npx tsx apps/api/src/scripts/seed.ts 2>&1" | Select-Object -Last 10
+    Write-Host "✅ Banco inicializado"
+} else {
+    Write-Host "✅ Schema ja existe — pulando seed"
+}
+
+# ── 7. Abrir navegador ────────────────────────────────────────────────────────
+Write-Host ""
+Write-Host "[7/7] Abrindo OLYMPUS no navegador..." -ForegroundColor Cyan
 Start-Sleep 2
 Start-Process "http://localhost"
 
 Write-Host ""
 Write-Host "╔══════════════════════════════════════════════════════════════╗" -ForegroundColor Green
-Write-Host "║   ✅ OLYMPUS instalado e rodando!                            ║" -ForegroundColor Green
+Write-Host "║   ✅ OLYMPUS instalado e rodando!                             ║" -ForegroundColor Green
 Write-Host "║                                                              ║" -ForegroundColor Green
 Write-Host "║   Acesso: http://localhost                                   ║" -ForegroundColor Green
 Write-Host "║   API:    http://localhost:3333/ping                         ║" -ForegroundColor Green
