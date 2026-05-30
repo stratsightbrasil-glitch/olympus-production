@@ -38,6 +38,8 @@ async function checkRateLimit(userId: string, action: string): Promise<boolean> 
 export async function rateLimitAnalysis(c: any, next: any) {
   if (TEST_MODE) return next();
   const payload = c.get('jwtPayload');
+  // Admins são isentos: uma análise MSEF em passos exige ~8-10 chamadas (1 por fase)
+  if (payload?.role === 'admin') return next();
   const userId = payload?.id || c.req.header('x-forwarded-for') || 'anon';
   const allowed = await checkRateLimit(userId, 'analysis');
   if (!allowed) return c.json({ error: LIMITS.analysis.message }, 429);

@@ -110,8 +110,9 @@ export function EventsPanel({ proposedEvents, loading, onApprove, onReject, onAp
   const [busy, setBusy] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
 
-  // Painel visível quando: há eventos propostos OU o motor está pausado no gate HITL
-  if (proposedEvents.length === 0 && !loading && !hitlGate) return null;
+  // Painel visível apenas quando: há eventos propostos OU o motor está pausado no gate HITL.
+  // NÃO mostrar durante loading com array vazio — evita flicker enquanto fetch está em andamento.
+  if (proposedEvents.length === 0 && !hitlGate) return null;
 
   const handleApprove = async (id: string) => {
     setBusy(true);
