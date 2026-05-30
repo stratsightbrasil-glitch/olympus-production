@@ -97,33 +97,9 @@ eventsRoutes.post('/', async (c) => {
   } catch (e: any) { return c.json({ error: e.message }, 500); }
 });
 
-// ── PATCH /events/:id/status — aprovação / rejeição pelo analista ──────────────
-eventsRoutes.patch('/:id/status', async (c) => {
-  try {
-    const id     = c.req.param('id');
-    const body   = await c.req.json() as any;
-    const status = body.status as string;
-
-    const VALID = ['approved', 'rejected', 'proposed'];
-    if (!VALID.includes(status)) {
-      return c.json({ error: `status inválido. Valores aceitos: ${VALID.join(', ')}` }, 400);
-    }
-
-    const owned = await assertEventOwner(c, id);
-    if (!owned) return c.json({ error: 'Evento não encontrado ou acesso negado' }, 404);
-    const existing = owned.event;
-
-    const [updated] = await db
-      .update(projectEvents)
-      .set({ status, updatedAt: new Date() })
-      .where(eq(projectEvents.id, id))
-      .returning();
-
-    return c.json(updated);
-  } catch (e: any) { return c.json({ error: e.message }, 500); }
-});
-
 // ── PATCH /events/batch/status — aprovação em lote ────────────────────────────
+// DEVE estar antes de /:id/status — Hono casa /batch/status como id='batch' se
+// /:id/status vier primeiro, causando UUID parse error (500) no banco.
 eventsRoutes.patch('/batch/status', async (c) => {
   try {
     const body   = await c.req.json() as any;
@@ -138,6 +114,22 @@ eventsRoutes.patch('/batch/status', async (c) => {
       return c.json({ error: `status inválido. Valores aceitos: ${VALID.join(', ')}` }, 400);
     }
 
+    // IDOR: verificar que todos os eventos pertencem ao usuário autenticado
+    const jwt = c.get('jwtPayload') as any;
+    if (jwt?.role !== 'admin') {
+      const events = await db.query.projectEvents.findMany({
+        where: inArray(projectEvents.id, ids),
+        columns: { id: true, projectId: true },
+      });
+      const projectIds = [...new Set(events.map(e => e.projectId))];
+      for (const pid of projectIds) {
+        const proj = await db.query.projects.findFirst({
+          where: and(eq(projects.id, pid), isNull(projects.deletedAt), eq(projects.createdBy, jwt?.name || '')),
+        });
+        if (!proj) return c.json({ error: 'Acesso negado a um ou mais eventos' }, 403);
+      }
+    }
+
     const updated = await db
       .update(projectEvents)
       .set({ status, updatedAt: new Date() })
@@ -145,6 +137,31 @@ eventsRoutes.patch('/batch/status', async (c) => {
       .returning({ id: projectEvents.id, status: projectEvents.status });
 
     return c.json({ updated: updated.length, rows: updated });
+  } catch (e: any) { return c.json({ error: e.message }, 500); }
+});
+
+// ── PATCH /events/:id/status — aprovação / rejeição pelo analista ──────────────
+eventsRoutes.patch('/:id/status', async (c) => {
+  try {
+    const id     = c.req.param('id');
+    const body   = await c.req.json() as any;
+    const status = body.status as string;
+
+    const VALID = ['approved', 'rejected', 'proposed'];
+    if (!VALID.includes(status)) {
+      return c.json({ error: `status inválido. Valores aceitos: ${VALID.join(', ')}` }, 400);
+    }
+
+    const owned = await assertEventOwner(c, id);
+    if (!owned) return c.json({ error: 'Evento não encontrado ou acesso negado' }, 404);
+
+    const [updated] = await db
+      .update(projectEvents)
+      .set({ status, updatedAt: new Date() })
+      .where(eq(projectEvents.id, id))
+      .returning();
+
+    return c.json(updated);
   } catch (e: any) { return c.json({ error: e.message }, 500); }
 });
 

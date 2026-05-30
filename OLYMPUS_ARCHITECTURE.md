@@ -37,7 +37,7 @@
 | POST   | `/api/v1/2fa/enable` | Público | Cria 2fa | auth.ts |
 | POST   | `/api/v1/2fa/generate` | Público | userId derivado do token JWT — nunca da payload do request (previne IDOR/escalada). | auth.ts |
 | PATCH  | `/api/v1/anthropic-models` | Público | ── PATCH /api/v1/settings/anthropic-models ── atualiza lista sem rebuild ────── | settings.ts |
-| PATCH  | `/api/v1/batch/status` | Público | ── PATCH /events/batch/status — aprovação em lote ──────────────────────────── | events.ts |
+| PATCH  | `/api/v1/batch/status` | Público | /:id/status vier primeiro, causando UUID parse error (500) no banco. | events.ts |
 | POST   | `/api/v1/cache/invalidate` | Público | ── POST /api/v1/settings/cache/invalidate — limpa cache de metodologias (admin) ─ | settings.ts |
 | GET    | `/api/v1/cache/status` | Público | ── GET /api/v1/settings/cache/status — estado do cache de metodologias (admin) ─ | settings.ts |
 | POST   | `/api/v1/docx` | Público | Cria docx | export.ts |
