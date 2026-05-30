@@ -307,7 +307,7 @@ tr:nth-child(even) td { background: #f9fbfa; }
 </head>
 <body>
 
-<div class="watermark" aria-hidden="true">${(classificacao || 'CONFIDENCIAL').toUpperCase()}</div>
+<div class="watermark" aria-hidden="true">${(classificacao || 'ACESSO RESTRITO').toUpperCase()}</div>
 
 <div class="save-bar">
   <div class="save-bar-left">
@@ -537,7 +537,7 @@ tr:nth-child(even) td { background:#f9f9f9; }
 
 <div class="doc">
   <div class="cabecalho">
-    <div class="classif conf">CONFIDENCIAL</div>
+    <div class="classif conf">ACESSO RESTRITO</div>
     <div class="doc-titulo">Estimativa</div>
     <div class="doc-subtitulo">Sistema de Inteligência do Exército (SIEx) · EB70-MT-10.401</div>
     <div class="doc-meta">
@@ -571,7 +571,7 @@ tr:nth-child(even) td { background:#f9f9f9; }
     ${md2html(conclusaoBlock || interpretacaoBlock)}
   </div>
 
-  <div class="rodape">OLYMPUS v5.0 · SIEx/EB · EB70-MT-10.401 · CONFIDENCIAL</div>
+  <div class="rodape">OLYMPUS v5.0 · SIEx/EB · EB70-MT-10.401 · ACESSO RESTRITO</div>
 </div>
 
 </body>

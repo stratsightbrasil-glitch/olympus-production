@@ -403,6 +403,12 @@ export class Agent {
 
     const aiTools: Record<string, any> = {};
 
+    // Guard contra loop de ferramenta (Bug A — Gemini chama a mesma ferramenta N vezes
+    // com args idênticos quando não recebe resposta satisfatória).
+    // Rastreia por ferramenta: { argsKey, count, cachedResult }.
+    const toolCallTracker: Record<string, { argsKey: string; count: number; cachedResult: any }> = {};
+    const TOOL_LOOP_MAX = 2; // permite até 2 chamadas idênticas consecutivas; da 3ª em diante devolve cache
+
     for (const t of this.tools) {
       // Prioriza o schema dinâmico vindo da ferramenta, ou faz fallback para o estático
       const rawSchema = t.schema || TOOL_JSON_SCHEMAS[t.name] || FALLBACK_JSON_SCHEMA;
@@ -415,8 +421,24 @@ export class Agent {
         parameters: wrappedSchema,
         execute: async (args: any) => {
           if (context.onToolCall) context.onToolCall(t.name, args);
+
+          // Detectar chamadas consecutivas idênticas (loop de ferramenta)
+          const argsKey = JSON.stringify(args);
+          const tracker = toolCallTracker[t.name];
+          if (tracker && tracker.argsKey === argsKey) {
+            tracker.count++;
+            if (tracker.count > TOOL_LOOP_MAX) {
+              console.warn(`[${this.name}] ⚠️ Loop detectado: ${t.name} chamado ${tracker.count}× com args idênticos — devolvendo resultado em cache.`);
+              return tracker.cachedResult;
+            }
+          } else {
+            toolCallTracker[t.name] = { argsKey, count: 1, cachedResult: null };
+          }
+
           console.log(`[${this.name}] Executando ferramenta: ${t.name}`, JSON.stringify(args));
-          return await t.execute(args, context);
+          const result = await t.execute(args, context);
+          toolCallTracker[t.name].cachedResult = result;
+          return result;
         },
       } as any);
 

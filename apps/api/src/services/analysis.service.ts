@@ -25,7 +25,7 @@ import { eq, inArray, and, asc } from 'drizzle-orm';
 // ─── Janela de memória ────────────────────────────────────────────────────────
 
 const MEMORY_TOKEN_BUDGET    = 32_000;
-const MEMORY_WINDOW_MESSAGES = 10;
+const MEMORY_WINDOW_MESSAGES = 20; // aumentado de 10 → 20 para cobrir análises de 8+ fases em passos
 
 function estimateTokens(content: any): number {
   if (!content) return 0;
@@ -450,6 +450,25 @@ export async function runAnalysis(body: any, jwtPayload: any, cb: AnalysisCallba
   let modeInstruction = '';
 
   const isTestMode = process.env.TEST_MODE === 'true';
+
+  // Bug B fix: em vizMode=passos, injetar contexto de fase no "CONFIRMAR"
+  // Após muitas fases, buildMemoryWindow pode descartar mensagens antigas e HERMES
+  // perde o rastreio de onde está. Injetar a fase atual evita o reinício do SCOPUS.
+  if (
+    vizMode === 'passos' &&
+    !isTestMode &&
+    typeof inputMsgStr === 'string' &&
+    inputMsgStr.trim().toUpperCase() === 'CONFIRMAR'
+  ) {
+    const assistantMsgCount = dbMessages.filter(m => m.role === 'assistant').length;
+    const totalPhases = phases.length;
+    const currentPhase = Math.min(assistantMsgCount + 1, totalPhases);
+    const isLastPhase = currentPhase >= totalPhases;
+    const phaseCtx = isLastPhase
+      ? `\n\n[CONTEXTO DO SISTEMA — Fase ${totalPhases}/${totalPhases} concluída. Execute o RELATÓRIO FINAL da metodologia agora.]`
+      : `\n\n[CONTEXTO DO SISTEMA — Fase ${currentPhase}/${totalPhases} aprovada. Prosseguir para Fase ${currentPhase + 1}: "${phases[currentPhase]?.label ?? 'próxima fase'}". NÃO reiniciar do início.]`;
+    finalInputMsg = inputMsgStr + phaseCtx;
+  }
   const toolPlanningBlock = isTestMode ? '' : `\n\n[PROTOCOLO DE PLANEJAMENTO DE FASE]
 Antes de acionar cada especialista via consultar_agente, elabore o PLANO DE FASE:
 1. Ferramentas/SAT MANDATÓRIAS pela metodologia ativa para esta fase
