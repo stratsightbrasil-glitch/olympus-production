@@ -34,11 +34,24 @@ backupRoute.post("/generate", async (c) => {
     const filePath = path.join(BACKUP_DIR, fileName);
 
     console.log(`[Backup] Gerando backup: ${fileName}...`);
-    
-    // Executa o pg_dump. Usamos gzip para economizar bastante espaço em disco.
-    await execPromise(`pg_dump "${dbUrl}" | gzip > "${filePath}"`);
-    
-    console.log(`[Backup] Concluído com sucesso! Salvo em: ${filePath}`);
+
+    // pg_dump com stderr capturado — evita arquivo vazio silencioso.
+    // Railway: DATABASE_URL já inclui sslmode; PGPASSWORD não é necessário com URL.
+    const { stderr } = await execPromise(
+      `pg_dump "${dbUrl}" | gzip > "${filePath}"`,
+      { env: { ...process.env, PGSSLMODE: 'require' } }
+    );
+    if (stderr) console.warn(`[Backup] pg_dump stderr: ${stderr}`);
+
+    // Arquivo vazio = pg_dump falhou (pipe oculta o exit code)
+    const stat = fs.statSync(filePath);
+    if (stat.size < 200) {
+      fs.unlinkSync(filePath);
+      const hint = stderr || 'pg_dump retornou vazio. Verifique DATABASE_URL e conectividade.';
+      return c.json({ error: 'Backup falhou — arquivo vazio gerado.', details: hint }, 500);
+    }
+
+    console.log(`[Backup] Concluído: ${filePath} (${stat.size} bytes)`);
     return c.json({ success: true, fileName, message: "Backup gerado com sucesso!" });
   } catch (error: any) {
     console.error("[Backup] Erro ao gerar backup:", error);
