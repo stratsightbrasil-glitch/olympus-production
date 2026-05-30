@@ -35,10 +35,11 @@ backupRoute.post("/generate", async (c) => {
 
     console.log(`[Backup] Gerando backup: ${fileName}...`);
 
-    // pg_dump com stderr capturado — evita arquivo vazio silencioso.
-    // Railway: DATABASE_URL já inclui sslmode; PGPASSWORD não é necessário com URL.
+    // Chama o binário real do PGDG (não o wrapper Perl /usr/bin/pg_dump).
+    // Railway: DATABASE_URL já inclui credenciais e sslmode.
+    const pgDump = '/usr/lib/postgresql/18/bin/pg_dump';
     const { stderr } = await execPromise(
-      `pg_dump "${dbUrl}" | gzip > "${filePath}"`,
+      `"${pgDump}" "${dbUrl}" | gzip > "${filePath}"`,
       { env: { ...process.env, PGSSLMODE: 'require' } }
     );
     if (stderr) console.warn(`[Backup] pg_dump stderr: ${stderr}`);

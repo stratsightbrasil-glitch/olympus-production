@@ -1,25 +1,25 @@
 # ── OLYMPUS v4 — API (Hono + Node.js) ─────────────────────────────────────────
-# Stage 1: extrai pg_dump da imagem oficial postgres:18 (versão que Railway usa)
-# Evita instalar postgresql-client-15 do Debian que rejeita servidor 18+ (version mismatch)
-FROM postgres:18-bookworm AS pg_tools
-
-# Stage 2: imagem principal
 # Usa node:20-slim (Debian Bookworm). NÃO usar Alpine — dependências nativas (bcrypt, pg)
 # falham silenciosamente em Alpine.
 FROM node:20-slim
 
 WORKDIR /app
 
-# Dependências do pg_dump 18 ausentes no node:20-slim:
-# libssl3 = OpenSSL 3 (libssl.so.3 + libcrypto.so.3)
-# libgssapi-krb5-2 = GSSAPI/Kerberos (puxa libkrb5-3, libk5crypto3, etc. automaticamente)
+# postgresql-client-18 do repositório oficial PGDG (Railway usa PostgreSQL 18).
+# O apt do Debian padrão traz client-15 que falha com "version mismatch" contra servidor 18.
+# PGDG instala o binário real + todas as dependências (libssl, libkrb5, libldap, etc.)
+# sem a instabilidade de copiar libs individualmente entre imagens.
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends libssl3 libgssapi-krb5-2 && \
+    apt-get install -y --no-install-recommends curl ca-certificates && \
+    install -d /usr/share/postgresql-common/pgdg && \
+    curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc \
+         -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc && \
+    echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] \
+         https://apt.postgresql.org/pub/repos/apt bookworm-pgdg main" \
+         > /etc/apt/sources.list.d/pgdg.list && \
+    apt-get update && \
+    apt-get install -y --no-install-recommends postgresql-client-18 && \
     rm -rf /var/lib/apt/lists/*
-
-# Copia pg_dump 18 real (não o wrapper Perl) e libpq 18 do stage postgres
-COPY --from=pg_tools /usr/lib/postgresql/18/bin/pg_dump /usr/bin/pg_dump
-COPY --from=pg_tools /usr/lib/x86_64-linux-gnu/libpq.so.5 /usr/lib/x86_64-linux-gnu/libpq.so.5
 
 # Copia todo o monorepo
 COPY . .
