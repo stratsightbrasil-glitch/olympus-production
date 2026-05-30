@@ -10,7 +10,13 @@ FROM node:20-slim
 
 WORKDIR /app
 
-# Copia pg_dump 18 real (não o wrapper Perl de /usr/bin) e a libpq necessária
+# libssl3 (OpenSSL 3) — necessário para pg_dump 18; node:20-slim não inclui por padrão
+# Ambas imagens são Debian Bookworm — versões compatíveis
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends libssl3 && \
+    rm -rf /var/lib/apt/lists/*
+
+# Copia pg_dump 18 real (não o wrapper Perl de /usr/bin) e a libpq 18 necessária
 COPY --from=pg_tools /usr/lib/postgresql/18/bin/pg_dump /usr/bin/pg_dump
 COPY --from=pg_tools /usr/lib/x86_64-linux-gnu/libpq.so.5 /usr/lib/x86_64-linux-gnu/libpq.so.5
 
