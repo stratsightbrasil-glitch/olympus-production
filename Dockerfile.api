@@ -10,13 +10,14 @@ FROM node:20-slim
 
 WORKDIR /app
 
-# libssl3 (OpenSSL 3) — necessário para pg_dump 18; node:20-slim não inclui por padrão
-# Ambas imagens são Debian Bookworm — versões compatíveis
+# Dependências do pg_dump 18 ausentes no node:20-slim:
+# libssl3 = OpenSSL 3 (libssl.so.3 + libcrypto.so.3)
+# libgssapi-krb5-2 = GSSAPI/Kerberos (puxa libkrb5-3, libk5crypto3, etc. automaticamente)
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends libssl3 && \
+    apt-get install -y --no-install-recommends libssl3 libgssapi-krb5-2 && \
     rm -rf /var/lib/apt/lists/*
 
-# Copia pg_dump 18 real (não o wrapper Perl de /usr/bin) e a libpq 18 necessária
+# Copia pg_dump 18 real (não o wrapper Perl) e libpq 18 do stage postgres
 COPY --from=pg_tools /usr/lib/postgresql/18/bin/pg_dump /usr/bin/pg_dump
 COPY --from=pg_tools /usr/lib/x86_64-linux-gnu/libpq.so.5 /usr/lib/x86_64-linux-gnu/libpq.so.5
 
