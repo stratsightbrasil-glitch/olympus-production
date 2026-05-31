@@ -1,13 +1,23 @@
+import { PgBoss } from 'pg-boss';
+import type { Job } from 'pg-boss';
 import cron from 'node-cron';
 import { db, projects, messages, revokedTokens, rateLimitLogs } from '@olympus/db';
-import { eq, and, isNull, asc, desc, lt } from 'drizzle-orm';
+import { eq, and, isNull, asc, lt } from 'drizzle-orm';
 import { sql } from 'drizzle-orm';
 import { sendEmail } from './mailer';
 import { runAnalysis } from './routes/chat';
 
+// ── pg-boss — fila KRATOS com isolamento por PostgreSQL ──────────────────────
+// Substitui KratosOrchestrator in-memory (T-10c Sprint 20).
+// teamSize: 1 garante execução sequencial — sem esgotamento de pool de conexões
+// mesmo com N projetos disparando ao mesmo tempo.
+// Histórico auditável em pgboss.job (não está no schema Drizzle).
+let boss: PgBoss | null = null;
+
+// ── Email builder ────────────────────────────────────────────────────────────
+
 export function buildKratosEmailHtml(projectName: string, conteudo: string): string {
   const geradoEm = new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' });
-  // Converte markdown mínimo em HTML
   const html = conteudo
     .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
     .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
@@ -37,124 +47,73 @@ export function buildKratosEmailHtml(projectName: string, conteudo: string): str
 </body></html>`;
 }
 
-interface KratosTask {
-  projectId: string;
-  projectName: string;
-  metodologia: string;
-}
+// ── Worker KRATOS (executa o job enfileirado pelo pg-boss) ───────────────────
 
-class KratosOrchestrator {
-  private queue: KratosTask[] = [];
-  private isProcessing = false;
+type KratosJobData = { projectId: string; projectName: string; metodologia: string };
 
-  addTask(task: KratosTask) {
-    this.queue.push(task);
-    console.log(`[KRATOS] 📥 Projeto "${task.projectName}" entrou na Fila de Processamento (Posição: ${this.queue.length}).`);
-    this.processQueue();
-  }
+async function runKratosJob(job: Job<KratosJobData>): Promise<void> {
+  const { projectId, projectName, metodologia } = job.data;
+  console.log(`[KRATOS pg-boss] 🤖 Iniciando job ${job.id} — projeto: ${projectName}`);
 
-  private async processQueue() {
-    if (this.isProcessing || this.queue.length === 0) return;
-    this.isProcessing = true;
+  try {
+    const msgs = await db.query.messages.findMany({
+      where: eq(messages.projectId, projectId),
+      orderBy: [asc(messages.createdAt)],
+      limit: 100,
+    });
 
-    console.log(`[KRATOS] ⚙️ Iniciando processamento em lote da fila...`);
-    while (this.queue.length > 0) {
-      const task = this.queue.shift();
-      if (task) {
-        await this.runKratos(task);
-        if (this.queue.length > 0) {
-          const cooldown = await getKratosCooldown();
-          console.log(`[KRATOS] ⏱️ Resfriamento de ${cooldown / 1000}s (Rate Limit) antes do próximo...`);
-          await new Promise(r => setTimeout(r, cooldown));
-        }
-      }
+    const formattedMsgs = msgs.map(m => ({ role: m.role, content: m.content }));
+    const systemCommand = `COMANDO DO SISTEMA EM MODO AUTÔNOMO (CRON): Acione o agente KRATOS para o projeto de nome oficial "${projectName}". \nREGRAS ESTRITAS DE OPERAÇÃO MÁQUINA:\n1. Você está operando em background (sem interação humana). NUNCA converse, peça permissão ou ofereça opções (A, B, C).\n2. Se houver falha na ferramenta de busca, NÃO relate o erro técnico; proceda imediatamente com a análise baseada nos últimos dados conhecidos do histórico.\n3. Gere EXCLUSIVAMENTE o Relatório de Acompanhamento padronizado (Dashboard, Síntese de Mudanças, Sinais Fracos).\n4. IMPORTANTE: O usuário pode ter alterado o nome, fatores, eventos e indicadores ao longo da análise. Baseie-se SEMPRE nas decisões MAIS RECENTES do histórico e use o título atualizado ("${projectName}").\nInicie a geração do relatório agora.`;
+    formattedMsgs.push({ role: 'user', content: systemCommand });
+
+    const cooldown = await getKratosCooldown();
+    const systemPayload = { id: 'system', name: 'Sistema Automático', role: 'admin' };
+    const result = await runAnalysis(
+      { projectId, projectName, metodologia, vizMode: 'etapa', messages: formattedMsgs },
+      systemPayload,
+      {
+        onStatus: (t) => console.log(`[KRATOS pg-boss] Status: ${t}`),
+        onAgent:  (n) => console.log(`[KRATOS pg-boss] Agente: ${n}`),
+      },
+    );
+
+    const lastMessage = result.responseText || 'Análise concluída sem detalhes legíveis.';
+    const projeto = await db.query.projects.findFirst({ where: eq(projects.id, projectId) });
+    const emailsStr = projeto?.alertEmails?.trim() || process.env.ALERT_EMAIL || process.env.SMTP_USER || '';
+    const destinatarios = emailsStr.split(',').map((e: string) => e.trim()).filter(Boolean);
+
+    if (destinatarios.length > 0) {
+      const subject = `[OLYMPUS] Relatório KRATOS - ${projectName}`;
+      const htmlContent = buildKratosEmailHtml(projectName, lastMessage);
+      for (const dest of destinatarios) await sendEmail(dest, subject, htmlContent);
+      console.log(`[KRATOS pg-boss] 📧 Relatório enviado para: ${destinatarios.join(', ')}`);
     }
-    this.isProcessing = false;
-    console.log(`[KRATOS] ✅ Lote concluído. Fila vazia.`);
-  }
 
-  private async runKratos(task: KratosTask) {
-    const { projectId, projectName, metodologia } = task;
-    console.log(`[KRATOS CRON] 🤖 Iniciando extração autônoma para: ${projectName}`);
-    try {
-      // ── Carrega histórico (sem self-mint de JWT, sem HTTP interno) ────────────
-      // Limita a 100 mensagens para evitar contexto gigantesco para o LLM.
-      const msgs = await db.query.messages.findMany({
-        where: eq(messages.projectId, projectId),
-        orderBy: [asc(messages.createdAt)],
-        limit: 100,
-      });
-
-      const formattedMsgs = msgs.map(m => ({ role: m.role, content: m.content }));
-      const systemCommand = `COMANDO DO SISTEMA EM MODO AUTÔNOMO (CRON): Acione o agente KRATOS para o projeto de nome oficial "${projectName}". \nREGRAS ESTRITAS DE OPERAÇÃO MÁQUINA:\n1. Você está operando em background (sem interação humana). NUNCA converse, peça permissão ou ofereça opções (A, B, C).\n2. Se houver falha na ferramenta de busca, NÃO relate o erro técnico; proceda imediatamente com a análise baseada nos últimos dados conhecidos do histórico.\n3. Gere EXCLUSIVAMENTE o Relatório de Acompanhamento padronizado (Dashboard, Síntese de Mudanças, Sinais Fracos).\n4. IMPORTANTE: O usuário pode ter alterado o nome, fatores, eventos e indicadores ao longo da análise. Baseie-se SEMPRE nas decisões MAIS RECENTES do histórico e use o título atualizado ("${projectName}").\nInicie a geração do relatório agora.`;
-      formattedMsgs.push({ role: 'user', content: systemCommand });
-
-      console.log(`[KRATOS CRON] 🧠 Solicitando análise à IA...`);
-
-      // ── Chamada direta — sem JWT self-mint, sem loopback HTTP ────────────────
-      // jwtPayload com id='system' é ignorado pelo verifyUserExists no middleware.
-      const systemPayload = { id: 'system', name: 'Sistema Automático', role: 'admin' };
-      const result = await runAnalysis(
-        { projectId, projectName, metodologia, vizMode: 'etapa', messages: formattedMsgs },
-        systemPayload,
-        {
-          onStatus: (t) => console.log(`[KRATOS CRON] Status: ${t}`),
-          onAgent:  (n) => console.log(`[KRATOS CRON] Agente: ${n}`),
-        },
-      );
-
-      console.log(`[KRATOS CRON] ✅ Análise gerada! Preparando envio de E-mail...`);
-
-      // 1. Disparo de E-mail — usa responseText direto (sem re-query ao banco)
-      const lastMessage = result.responseText || 'Análise concluída sem detalhes legíveis.';
-
-      const projeto = await db.query.projects.findFirst({ where: eq(projects.id, projectId) });
-      const emailsStr = projeto?.alertEmails?.trim() || process.env.ALERT_EMAIL || process.env.SMTP_USER || '';
-      const destinatarios = emailsStr.split(',').map((e: string) => e.trim()).filter(Boolean);
-
-      if (destinatarios.length === 0) {
-        console.log(`[KRATOS CRON] ⚠️ Nenhum e-mail de alerta configurado para "${projectName}". Pulando envio.`);
-      } else {
-        const subject = `[OLYMPUS] Relatório KRATOS - ${projectName}`;
-        const htmlContent = buildKratosEmailHtml(projectName, lastMessage);
-        for (const dest of destinatarios) {
-          await sendEmail(dest, subject, htmlContent);
-        }
-        console.log(`[KRATOS CRON] 📧 Relatório enviado para: ${destinatarios.join(', ')}`);
-      }
-
-      // 2. Webhook n8n opcional — este SIM é um HTTP externo legítimo (não loopback)
-      const webhookUrl = process.env.N8N_WEBHOOK_URL;
-      if (webhookUrl) {
-        try {
-          const hookRes = await fetch(webhookUrl, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              projetoId:            projectId,
-              projetoNome:          projectName,
-              ultimaAnaliseKratos:  lastMessage,
-              timestamp:            new Date().toISOString(),
-            }),
-          });
-          if (hookRes.ok) console.log(`[KRATOS CRON] Webhook n8n disparado com sucesso.`);
-        } catch {
-          // Ignora silenciosamente — n8n pode estar offline
-        }
-      }
-
-      console.log(`[KRATOS CRON] 🚀 Automação concluída com sucesso para ${projectName}!`);
-    } catch (err: any) {
-      console.error(`[KRATOS CRON] ❌ Erro na automação de ${projectName}:`, err);
+    const webhookUrl = process.env.N8N_WEBHOOK_URL;
+    if (webhookUrl) {
+      try {
+        const hookRes = await fetch(webhookUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ projetoId: projectId, projetoNome: projectName, ultimaAnaliseKratos: lastMessage, timestamp: new Date().toISOString() }),
+        });
+        if (hookRes.ok) console.log(`[KRATOS pg-boss] Webhook n8n disparado.`);
+      } catch { /* n8n offline — ignorar */ }
     }
+
+    // Cooldown entre jobs — cede espaço para próximo sem sobrecarregar a API do LLM
+    if (cooldown > 0) await new Promise(r => setTimeout(r, cooldown));
+
+    console.log(`[KRATOS pg-boss] ✅ Job ${job.id} concluído — ${projectName}`);
+  } catch (err: any) {
+    console.error(`[KRATOS pg-boss] ❌ Erro no job ${job.id} — ${projectName}:`, err.message);
+    throw err; // pg-boss recoloca em fila para retry automático
   }
 }
 
 async function getKratosCooldown(): Promise<number> {
   try {
-    const result = await db.execute(
-      sql`SELECT value FROM platform_settings WHERE key = 'kratos_cooldown_ms'`
-    );
+    const result = await db.execute(sql`SELECT value FROM platform_settings WHERE key = 'kratos_cooldown_ms'`);
     const rows = (result as any).rows ?? result;
     if (rows.length > 0) {
       const v = rows[0].value;
@@ -165,7 +124,46 @@ async function getKratosCooldown(): Promise<number> {
   return 15_000;
 }
 
-const kratos = new KratosOrchestrator();
+// ── Enfileirar job KRATOS (chamado pelo node-cron no disparo) ────────────────
+
+async function enqueueKratosJob(data: KratosJobData): Promise<void> {
+  if (boss) {
+    await boss.send('kratos-analysis', data, {
+      retryLimit: 2,
+      retryDelay: 60, // 60s entre retries
+      expireInSeconds: 3600, // expira após 1h sem processar
+    });
+    console.log(`[KRATOS] 📥 Job enfileirado via pg-boss — "${data.projectName}"`);
+  } else {
+    // Fallback se pg-boss não inicializou (ex: DATABASE_URL ausente em dev)
+    console.warn(`[KRATOS] ⚠️ pg-boss não disponível — executando diretamente (sem isolamento)`);
+    await runKratosJob({ id: 'direct', data } as any);
+  }
+}
+
+// ── Inicialização do pg-boss (chamada em index.ts após DB ready) ─────────────
+
+export async function initKratosQueue(): Promise<void> {
+  const dbUrl = process.env.DATABASE_URL;
+  if (!dbUrl) {
+    console.warn('[pg-boss] DATABASE_URL ausente — KRATOS sem isolamento de fila');
+    return;
+  }
+  try {
+    boss = new PgBoss({ connectionString: dbUrl });
+    // teamSize: 1 = processa 1 job por vez (sequencial) — sem concorrência de conexões
+    // localConcurrency: 1 → apenas 1 job KRATOS executado por vez nesta instância
+    await boss.work('kratos-analysis', { localConcurrency: 1 }, runKratosJob as any);
+    await boss.start();
+    console.log('[pg-boss] ✅ Fila KRATOS inicializada (teamSize=1, histórico em pgboss.job)');
+  } catch (err: any) {
+    console.error('[pg-boss] Erro ao inicializar:', err.message);
+    boss = null;
+  }
+}
+
+// ── Gestão de cron jobs (API pública — mantida compatível com index.ts) ──────
+
 let activeJobs: Record<string, any> = {};
 
 export async function reloadCronJobs() {
@@ -178,7 +176,7 @@ export async function reloadCronJobs() {
     ativos.forEach(p => {
       if (p.kratosCron && cron.validate(p.kratosCron)) {
         activeJobs[p.id] = cron.schedule(p.kratosCron, () => {
-          kratos.addTask({ projectId: p.id, projectName: p.name, metodologia: p.methodology });
+          enqueueKratosJob({ projectId: p.id, projectName: p.name, metodologia: p.methodology });
         });
         console.log(`⏰ Automação agendada para [${p.name}]: ${p.kratosCron}`);
       }
@@ -186,28 +184,19 @@ export async function reloadCronJobs() {
   } catch (err) { console.error('Erro ao recarregar crons:', err); }
 }
 
-/**
- * Atualiza (ou cria) o cron de um único projeto sem recarregar todos.
- * Chamado quando o cronExpression de um projeto muda via API de configurações.
- */
 export function updateCronJob(projectId: string, projectName: string, metodologia: string, cronExpr: string | null | undefined) {
-  // Para o job anterior se existir
   if (activeJobs[projectId]) {
     activeJobs[projectId].stop();
     delete activeJobs[projectId];
   }
   if (cronExpr && cron.validate(cronExpr)) {
     activeJobs[projectId] = cron.schedule(cronExpr, () => {
-      kratos.addTask({ projectId, projectName, metodologia });
+      enqueueKratosJob({ projectId, projectName, metodologia });
     });
     console.log(`⏰ Cron atualizado para [${projectName}]: ${cronExpr}`);
   }
 }
 
-/**
- * Remove o cron de um projeto específico (deletado ou desativado).
- * Chamado quando o projeto é arquivado/deletado via API — evita o full reload.
- */
 export function removeCronJob(projectId: string) {
   if (activeJobs[projectId]) {
     activeJobs[projectId].stop();
@@ -216,8 +205,7 @@ export function removeCronJob(projectId: string) {
   }
 }
 
-// ── Limpeza diária de tokens expirados e rate_limit_logs antigos ─────────────
-// Executa toda madrugada às 03:00 — remove entradas que não têm mais utilidade.
+// ── Limpeza diária às 03:00 — tokens expirados e rate_limit_logs ─────────────
 cron.schedule('0 3 * * *', async () => {
   try {
     const now = new Date();

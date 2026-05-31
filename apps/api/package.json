@@ -31,6 +31,7 @@
     "nodemailer": "^8.0.5",
     "otplib": "^13.4.0",
     "pdfreader": "^3.0.8",
+    "pg-boss": "^12.18.2",
     "qrcode": "^1.5.4",
     "speakeasy": "^2.0.0",
     "undici": "^6.21.2",

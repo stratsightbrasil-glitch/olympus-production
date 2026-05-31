@@ -40,7 +40,7 @@ import exportRoutes from './routes/export';
 import painelRoutes from './routes/painel';
 import authRoutes from './routes/auth';
 import usersRoutes from './routes/users';
-import { reloadCronJobs } from './cron';
+import { reloadCronJobs, initKratosQueue } from './cron';
 import engineRoutes from './routes/engine';
 import { sendEmail } from './mailer';
 import backupRoute from './routes/backup';
@@ -277,6 +277,8 @@ serve({ fetch: app.fetch, port, hostname: '0.0.0.0' });
         console.log(`[Embeddings] ⚠ Guard de dimensão ignorado (pgvector ainda não disponível): ${e.message}`);
       }
 
+      // pg-boss: inicializa fila KRATOS antes de recarregar os crons
+      await initKratosQueue();
       await reloadCronJobs();
       console.log('[KRATOS] ✅ Cron jobs carregados com sucesso.');
 
