@@ -166,9 +166,13 @@ function App() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [messageCount, currentMethodologySteps]);
 
-  // Detecta quando o orquestrador aguarda confirmação do usuário (vizMode=passos)
+  // Detecta quando o motor aguarda confirmação do analista (vizMode=passos).
+  // Dois casos: interrupt LangGraph 'phase_complete' OU mensagem HERMES legado.
   const isWaiting = useMemo(() => {
     if (vizMode !== 'passos' || chat.loading) return false;
+    // Caso 1: LangGraph emitiu interrupt phase_complete (fonte primária)
+    if (chat.hitlGate?.interruptType === 'phase_complete') return true;
+    // Caso 2: legado — mensagem de orquestrador com texto de confirmação
     for (let i = chat.messages.length - 1; i >= 0; i--) {
       if (chat.messages[i].role === 'assistant') {
         const c = typeof chat.messages[i].content === 'string' ? chat.messages[i].content as string : '';
@@ -176,7 +180,7 @@ function App() {
       }
     }
     return false;
-  }, [vizMode, chat.loading, chat.messages]);
+  }, [vizMode, chat.loading, chat.messages, chat.hitlGate]);
 
   // ── Helpers ──────────────────────────────────────────────────────────────
   const getAgentInfo = (text: string) => {
@@ -473,8 +477,20 @@ function App() {
 
         {mainView === 'chat' && isWaiting && (
           <HitlDecisionCard
-            onConfirm={() => { chat.sendMessage('CONFIRMAR', [], undefined); setInput(''); }}
-            onRedirect={(instruction) => { chat.sendMessage(instruction, [], undefined); setInput(''); }}
+            onConfirm={() => {
+              // LangGraph 'phase_complete': retomar grafo via Command({resume})
+              if (chat.hitlGate?.interruptType === 'phase_complete') {
+                chat.resumeGraph();
+              } else {
+                // Legado: orquestrador aguarda CONFIRMAR textual
+                chat.sendMessage('CONFIRMAR', [], undefined);
+              }
+              setInput('');
+            }}
+            onRedirect={(instruction) => {
+              chat.sendMessage(instruction, [], undefined);
+              setInput('');
+            }}
           />
         )}
 

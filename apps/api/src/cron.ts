@@ -146,8 +146,14 @@ export async function initKratosQueue(): Promise<void> {
   }
   try {
     boss = new PgBoss({ connectionString: dbUrl });
-    // Captura erros não tratados do pg-boss (ex: reconexão) para não crashar o processo
-    boss.on('error', (err: any) => console.error('[pg-boss] Erro interno:', err?.message ?? err));
+    // Captura erros não tratados do pg-boss para não crashar o processo.
+    // "does not exist" é ruído benigno: a queue é criada automaticamente na primeira
+    // chamada enqueueKratosJob() — não precisa existir no startup.
+    boss.on('error', (err: any) => {
+      const msg = err?.message ?? String(err);
+      if (msg.includes('does not exist')) return;
+      console.error('[pg-boss] Erro interno:', msg);
+    });
     // start() DEVE preceder work() — pg-boss precisa da conexão antes de registrar workers
     await boss.start();
     await boss.work('kratos-analysis', { localConcurrency: 1 }, runKratosJob as any);

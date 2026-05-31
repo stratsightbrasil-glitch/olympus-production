@@ -32,11 +32,16 @@ export function useChat({
   const [thinkingBlocks, setThinkingBlocks] = useState<Record<number, string>>({});
   const [thinkingOpen, setThinkingOpen] = useState<Record<number, boolean>>({});
 
-  // ── HITL gate — ativado quando /stream/graph emite hitl_gate (PYTHIA pausa) ──
+  // ── HITL gate — ativado quando /stream/graph emite hitl_gate ──
+  // interruptType distingue os dois casos:
+  //   'hitl_required'  → PYTHIA aguarda aprovação de eventos (EventsPanel)
+  //   'phase_complete' → fase especialista concluída em passos (HitlDecisionCard)
   const [hitlGate, setHitlGate] = useState<{
-    message:   string;
-    agent:     string;
-    projectId: string;
+    message:       string;
+    agent:         string;
+    projectId:     string;
+    interruptType: string;
+    output?:       string;
   } | null>(null);
 
   const reqHeaders = { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` };
@@ -116,11 +121,22 @@ export function useChat({
             setStepLog([]);
             onDone({ text: event.text, agentName: event.agentName, thinking: event.thinking || '', messageType: event.messageType || 'parcial' });
           } else if (event.type === 'hitl_gate') {
-            // Motor LangGraph pausou antes de PYTHIA — aguardando aprovação humana
+            const interruptType = (event as any).interruptType || 'hitl_required';
+            // phase_complete: mostrar output do especialista como mensagem no chat
+            if (interruptType === 'phase_complete' && (event as any).output) {
+              setMessages(prev => [...prev, {
+                role: 'assistant' as const,
+                content: (event as any).output,
+                agentName: event.agent || '',
+                messageType: 'parcial',
+              }]);
+            }
             setHitlGate({
-              message:   event.message   || 'PYTHIA aguarda aprovação de eventos.',
-              agent:     event.agent     || 'PYTHIA',
-              projectId: event.projectId || '',
+              message:       event.message   || 'Fase concluída. Confirme para prosseguir.',
+              agent:         event.agent     || 'PYTHIA',
+              projectId:     event.projectId || '',
+              interruptType,
+              output:        (event as any).output,
             });
             setProgressAgent('');
             // Não chama onDone — stream encerra sem mensagem final (o grafo continua depois do resume)

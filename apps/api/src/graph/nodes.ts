@@ -52,7 +52,8 @@ async function runNextPhaseNode(
   // Modo Passo a Passo: pausa após cada fase para o analista revisar antes de avançar
   if (state.vizMode === 'passos' && process.env.TEST_MODE !== 'true') {
     interrupt({
-      type:      'phase_complete',
+      // interruptType (não 'type') para não colidir com o campo 'type: hitl_gate' do SSE
+      interruptType: 'phase_complete',
       agent:     agentName,
       phaseSlug: nextSlug,
       message:   `Fase '${nextSlug}' (${agentName}) concluída. Confirme para prosseguir | Oriente com ajustes`,
@@ -104,7 +105,8 @@ export async function pythiaNode(
   if (approvedEvents.length === 0 && process.env.TEST_MODE !== 'true') {
     onStep?.("[PYTHIA] ⏸️  Aguardando aprovação de eventos pelo analista...");
     interrupt({
-      type:      "hitl_required",
+      // interruptType (não 'type') para não colidir com o campo 'type: hitl_gate' do SSE
+      interruptType: "hitl_required",
       agent:     "PYTHIA",
       message:   "PYTHIA requer eventos aprovados para iniciar a modelagem prospectiva. "
                  + "Revise os eventos propostos no painel HITL e aprove os que forem "
