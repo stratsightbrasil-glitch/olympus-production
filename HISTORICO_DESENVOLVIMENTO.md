@@ -128,10 +128,12 @@ Olympus/
 
 | Agente | Metodologias | Observação |
 |--------|--------------|------------|
-| **HERMES** | MSEF, Godet, GBN, IPEA/FGV, OTAN/AltA, MPO, ASPLAN, ESG, SIPLEx/CEEEx | Orquestrador universal |
-| **OLYMPUS** | Grumbach, SIEX-MPC | Planejamento Estratégico |
+| **HERMES** | MSEF, Godet, Grumbach/Cenários, OTAN/AltA, SIEx/Estimativa, SIPLEx/CEEEx, IPEA/FGV, MPO, ASPLAN/Cenários, GBN, ESG | Orquestrador universal de cenários prospectivos e estimativas |
+| **OLYMPUS** | Grumbach/Planejamento Estratégico, SIEx-MPC, SIPLEx/Planejamento, SPED | Planejamento Estratégico e Produção do Conhecimento — **fases não implementadas** |
 
-> **Sprint 17:** HERMES_SIPLEX foi removido como anti-padrão (orquestrador específico por metodologia). SIPLEx/CEEEx agora usa HERMES + `agentMethodPrompts/siplex`. O agente permanece no banco como legado mas não é recriado pelo seed.
+> **Regra crítica (Sprint 21):** HERMES é orquestrador para TODAS as metodologias de cenários implementadas no LangGraph. OLYMPUS reservado para variantes de Planejamento Estratégico ainda não implementadas (slugs: `grumbach_plj`, `siex_mpc`, `siplex_plj`, `asplan_sped`). Não confundir Grumbach/Produção de Cenários (HERMES, slug `grumbach`) com Grumbach/Planejamento (OLYMPUS, slug futuro `grumbach_plj`).
+>
+> **Sprint 17:** HERMES_SIPLEX foi removido como anti-padrão. SIPLEx/CEEEx usa HERMES + `agentMethodPrompts/siplex`.
 
 ### Especialistas
 
@@ -164,36 +166,61 @@ Todas criadas via `createAnalyticalEngineTools(projectId)` — projectId injetad
 
 ## PARTE 5 — METODOLOGIAS
 
-| Nome (banco) | Slug | Orquestrador | Fases |
+**Fonte canônica:** `D:\Pessoais\DEV\_Diversos\_contexto\Design\REVISAO_ARQUITETURA\metodologias.txt`
+**Fonte canônica:** `D:\Pessoais\DEV\_Diversos\_contexto\Design\REVISAO_ARQUITETURA\orquestradores.txt`
+
+### Metodologias de Cenários Prospectivos e Estimativas — Implementadas ✅
+
+| Nome Canônico | Slug canônico | Slug atual no banco | Orquestrador | Fases |
+|---|---|---|---|---|
+| MSEF v3 (8 etapas ENAP) | `msef` | `msef` ✅ | HERMES | 8 |
+| Godet: Escola Estrutural | `godet` | `godet` ✅ | HERMES | 7 |
+| Grumbach: Produção de Cenários | `grumbach` | `grumbach` ✅ | HERMES | 9 |
+| OTAN/AltA | `otan` | `alta` ⚠️ | HERMES | 6 |
+| SIEx: Conhecimento Estimativa EB | `siex` | `siex` ✅ | HERMES | 5 |
+| SIPLEx/CEEEx: Cenários da Força Terrestre | `siplex_ceex` | `siplex` ⚠️ | HERMES | 7 |
+| IPEA/FGV: Cenários Estreitados | `ipea` | `macroplan` ⚠️ | HERMES | 7 |
+| MPO: Estratégia Brasil 2050 | `mpo` | `mpo` ✅ | HERMES | 8 |
+| ASPLAN/MD: Produção de Cenários | `asplan` | `asplan` ✅ | HERMES | 7 |
+| GBN (Global Business Network) | `gbn` | `futures` ⚠️ | HERMES | 8 |
+| ESG: Cenários Prospectivos | `esg` | `esg` ✅ | HERMES | 6 |
+
+### Metodologias de Planejamento Estratégico e Produção do Conhecimento — Não implementadas 🔲
+
+| Nome Canônico | Slug canônico | Orquestrador | Status |
 |---|---|---|---|
-| MSEF v3 (8 etapas ENAP) | msef | HERMES | 8 |
-| Godet: Escola Estrutural | godet | HERMES | 7 |
-| Grumbach: Produção de Cenários | grumbach | OLYMPUS | 9 |
-| OTAN/AltA | alta | HERMES | 5 |
-| MPC: Conhecimento Estimativa EB | siex | OLYMPUS | 5 |
-| SIPLEx/CEEEx: Cenários da Força Terrestre | siplex | HERMES | 7 |
-| IPEA/FGV: Cenários Estreitados | macroplan | HERMES | 7 |
-| MPO: Estratégia Brasil 2050 | mpo | HERMES | 8 |
-| ASPLAN/MD: Planejamento Setorial | asplan | HERMES | 7 |
-| GBN (Global Business Network) | futures | HERMES | 8 |
-| ESG: Cenários Prospectivos | esg | HERMES | 6 |
+| Grumbach: Planejamento Estratégico | `grumbach_plj` | OLYMPUS | 🔲 Fases não definidas |
+| SIEx: Metodologia de Produção do Conhecimento | `siex_mpc` | OLYMPUS | 🔲 Fases não definidas |
+| SIPLEx: Sistema de Planejamento Estratégico do Exército | `siplex_plj` | OLYMPUS | 🔲 Fases não definidas |
+| SPED: Sistema de Planejamento Estratégico de Defesa | `asplan_sped` | OLYMPUS | 🔲 Fases não definidas |
 
-### Fluxo de execução
+> **⚠️ Slugs divergentes** (`alta`, `macroplan`, `futures`, `siplex`): slugs históricos no banco que diferem dos canônicos. Não afetam o funcionamento (loadMethodology busca por nome E slug). Migração requer UPDATE com preservação de FKs de `agent_method_prompts`.
+
+### Fluxo de execução (Sprint 21 — Motor único LangGraph)
 
 ```
-POST /api/v1/chat/stream
-  └─ runAnalysis()
-       ├─ loadMethodology()          → banco (lança exceção se ausente)
-       ├─ getLLMConfig()+getLLMTiers()  → paralelo, de platform_settings
-       ├─ buildMemoryWindow()        → orçamento 32k tokens
-       ├─ buildAnchorContext()       → eventos approved como âncora HITL
-       ├─ generateReportTemplateInstructions()  → seções obrigatórias
-       ├─ PROTOCOLO DE PLANEJAMENTO DE FASE     → todos os vizModes
-       ├─ Orquestrador.run() → streamText(stopWhen: stepCountIs(30))
-       │    ├─ consultar_agente(ESPECIALISTA) → generateText(stepCountIs(8))
-       │    └─ consultar_agente(ATHENA) → veredicto ATS por fase
-       └─ Salva 2 mensagens no banco (1 user + 1 assistant)
+POST /api/v1/chat/stream/graph          ← único endpoint (runAnalysis() eliminado)
+  ├─ loadMethodology()                  → banco (lança exceção se ausente)
+  ├─ getLLMConfig()+getLLMTiers()       → paralelo, de platform_settings
+  └─ getOlympusGraph().stream()         → LangGraph StateGraph
+       ├─ routeFromState()              → determinístico via currentNodeSlug+phaseSlug
+       ├─ scopusNode  → runAgentForPhase(SCOPUS,  phaseSlug)
+       ├─ klioNode    → runAgentForPhase(KLIO,    phaseSlug)   ← pode repetir (fases múltiplas)
+       ├─ pythiaNode  → HITL gate (interrupt se sem eventos aprovados)
+       │               runAgentForPhase(PYTHIA,   phaseSlug)
+       ├─ mnemosyeNode→ runAgentForPhase(MNEMOSYNE,phaseSlug)
+       ├─ integrationNode→runAgentForPhase(THEMIS/KRATOS,phaseSlug)
+       └─ synthesisNode → Agent(HERMES/OLYMPUS).run() com token streaming
+            └─ Salva mensagem final (relatorio_final) no banco
+
+vizMode como configuração do grafo:
+  passos   → interrupt() após cada nó especialista (analista confirma cada fase)
+  etapa    → interrupt() apenas no HITL obrigatório de PYTHIA
+  passagem → sem interrupts (totalmente autônomo)
+  thinking → sem interrupts + extended thinking nos agentes
 ```
+
+KRATOS (pg-boss): usa `runDirectAgent()` de `graph/helpers.ts` — execução direta sem grafo.
 
 ---
 

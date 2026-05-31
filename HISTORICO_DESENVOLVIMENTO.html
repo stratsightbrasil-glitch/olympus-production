@@ -1,3 +1,55 @@
+﻿<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>OLYMPUS v4 — Histórico de Desenvolvimento e Estado Atual</title>
+<style>
+  :root{--dark:#1B3A2D;--medium:#2E7D52;--light:#E8F5E9;--gold:#C9A84C;--text:#1a1a1a;--bg:#fafafa;--code-bg:#f4f4f4;--border:#d0d0d0}
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:'Segoe UI',system-ui,sans-serif;font-size:14px;line-height:1.7;color:var(--text);background:var(--bg);display:flex;min-height:100vh}
+  #toc{width:260px;min-width:260px;background:var(--dark);color:#e0e0e0;padding:20px 16px;position:sticky;top:0;height:100vh;overflow-y:auto;font-size:12px}
+  #toc h2{color:var(--gold);font-size:11px;letter-spacing:2px;text-transform:uppercase;margin-bottom:12px;padding-bottom:8px;border-bottom:1px solid rgba(255,255,255,.15)}
+  #toc ul{list-style:none}
+  #toc li{margin:2px 0}
+  #toc a{color:#b0c4b0;text-decoration:none;display:block;padding:3px 6px;border-radius:4px;transition:.15s}
+  #toc a:hover,#toc a.active{background:rgba(255,255,255,.1);color:#fff}
+  #toc .toc-h2{font-weight:700;color:#c8e6c9;margin-top:8px}
+  #toc .toc-h3{padding-left:16px;font-size:11px}
+  #content{flex:1;max-width:900px;padding:40px 48px;overflow-x:hidden}
+  h1{font-size:22px;color:var(--dark);border-bottom:3px solid var(--gold);padding-bottom:10px;margin:0 0 6px}
+  h2{font-size:16px;color:var(--dark);background:var(--light);border-left:4px solid var(--medium);padding:8px 14px;margin:32px 0 14px;border-radius:0 4px 4px 0}
+  h3{font-size:14px;color:var(--medium);margin:20px 0 8px;font-weight:700}
+  h4{font-size:13px;color:#555;margin:14px 0 6px}
+  p{margin:0 0 10px}
+  a{color:var(--medium)}
+  strong{color:var(--dark)}
+  em{color:#555}
+  code{background:var(--code-bg);border:1px solid var(--border);border-radius:3px;padding:1px 5px;font-family:'Cascadia Code','Consolas',monospace;font-size:12px}
+  pre{background:var(--dark);color:#d4e6d4;border-radius:6px;padding:16px 20px;overflow-x:auto;margin:10px 0 16px;font-size:12px;line-height:1.6}
+  pre code{background:transparent;border:none;padding:0;color:inherit;font-size:inherit}
+  table{border-collapse:collapse;width:100%;margin:10px 0 16px;font-size:13px}
+  thead th{background:var(--dark);color:#fff;padding:7px 12px;text-align:left;font-size:12px;letter-spacing:.3px}
+  td{border:1px solid var(--border);padding:6px 12px;vertical-align:top}
+  tr:nth-child(even) td{background:#f0f9f2}
+  blockquote{border-left:4px solid var(--gold);background:#fffde7;padding:10px 16px;margin:10px 0 16px;border-radius:0 4px 4px 0;font-size:13px}
+  blockquote p{margin:0}
+  hr{border:none;border-top:1px solid var(--border);margin:24px 0}
+  ul,ol{margin:6px 0 12px 22px}
+  li{margin-bottom:3px}
+  del{color:#999}
+  .meta{color:#777;font-size:13px;margin-bottom:24px}
+  @media(max-width:768px){body{flex-direction:column}#toc{width:100%;height:auto;position:static}#content{padding:24px 20px}}
+</style>
+</head>
+<body>
+
+<nav id="toc">
+  <h2>Índice</h2>
+  <ul id="toc-list"></ul>
+</nav>
+
+<div id="content">
 <h1>OLYMPUS v4 — Histórico de Desenvolvimento e Estado Atual</h1>
 <p><strong>StratSight Brasil · Strategic Foresight · IA Agêntica</strong>
 <strong>Atualizado em:</strong> 31 Mai 2026 (Sprint 21 concluído)
@@ -219,17 +271,18 @@
 </thead>
 <tbody><tr>
 <td><strong>HERMES</strong></td>
-<td>MSEF, Godet, GBN, IPEA/FGV, OTAN/AltA, MPO, ASPLAN, ESG, SIPLEx/CEEEx</td>
-<td>Orquestrador universal</td>
+<td>MSEF, Godet, Grumbach/Cenários, OTAN/AltA, SIEx/Estimativa, SIPLEx/CEEEx, IPEA/FGV, MPO, ASPLAN/Cenários, GBN, ESG</td>
+<td>Orquestrador universal de cenários prospectivos e estimativas</td>
 </tr>
 <tr>
 <td><strong>OLYMPUS</strong></td>
-<td>Grumbach, SIEX-MPC</td>
-<td>Planejamento Estratégico</td>
+<td>Grumbach/Planejamento Estratégico, SIEx-MPC, SIPLEx/Planejamento, SPED</td>
+<td>Planejamento Estratégico e Produção do Conhecimento — <strong>fases não implementadas</strong></td>
 </tr>
 </tbody></table>
 <blockquote>
-<p><strong>Sprint 17:</strong> HERMES_SIPLEX foi removido como anti-padrão (orquestrador específico por metodologia). SIPLEx/CEEEx agora usa HERMES + <code>agentMethodPrompts/siplex</code>. O agente permanece no banco como legado mas não é recriado pelo seed.</p>
+<p><strong>Regra crítica (Sprint 21):</strong> HERMES é orquestrador para TODAS as metodologias de cenários implementadas no LangGraph. OLYMPUS reservado para variantes de Planejamento Estratégico ainda não implementadas (slugs: <code>grumbach_plj</code>, <code>siex_mpc</code>, <code>siplex_plj</code>, <code>asplan_sped</code>). Não confundir Grumbach/Produção de Cenários (HERMES, slug <code>grumbach</code>) com Grumbach/Planejamento (OLYMPUS, slug futuro <code>grumbach_plj</code>).</p>
+<p><strong>Sprint 17:</strong> HERMES_SIPLEX foi removido como anti-padrão. SIPLEx/CEEEx usa HERMES + <code>agentMethodPrompts/siplex</code>.</p>
 </blockquote>
 <h3>Especialistas</h3>
 <table>
@@ -337,96 +390,157 @@
 </tbody></table>
 <hr>
 <h2>PARTE 5 — METODOLOGIAS</h2>
+<p><strong>Fonte canônica:</strong> <code>D:\Pessoais\DEV\_Diversos\_contexto\Design\REVISAO_ARQUITETURA\metodologias.txt</code>
+<strong>Fonte canônica:</strong> <code>D:\Pessoais\DEV\_Diversos\_contexto\Design\REVISAO_ARQUITETURA\orquestradores.txt</code></p>
+<h3>Metodologias de Cenários Prospectivos e Estimativas — Implementadas ✅</h3>
 <table>
 <thead>
 <tr>
-<th>Nome (banco)</th>
-<th>Slug</th>
+<th>Nome Canônico</th>
+<th>Slug canônico</th>
+<th>Slug atual no banco</th>
 <th>Orquestrador</th>
 <th>Fases</th>
 </tr>
 </thead>
 <tbody><tr>
 <td>MSEF v3 (8 etapas ENAP)</td>
-<td>msef</td>
+<td><code>msef</code></td>
+<td><code>msef</code> ✅</td>
 <td>HERMES</td>
 <td>8</td>
 </tr>
 <tr>
 <td>Godet: Escola Estrutural</td>
-<td>godet</td>
+<td><code>godet</code></td>
+<td><code>godet</code> ✅</td>
 <td>HERMES</td>
 <td>7</td>
 </tr>
 <tr>
 <td>Grumbach: Produção de Cenários</td>
-<td>grumbach</td>
-<td>OLYMPUS</td>
+<td><code>grumbach</code></td>
+<td><code>grumbach</code> ✅</td>
+<td>HERMES</td>
 <td>9</td>
 </tr>
 <tr>
 <td>OTAN/AltA</td>
-<td>alta</td>
+<td><code>otan</code></td>
+<td><code>alta</code> ⚠️</td>
+<td>HERMES</td>
+<td>6</td>
+</tr>
+<tr>
+<td>SIEx: Conhecimento Estimativa EB</td>
+<td><code>siex</code></td>
+<td><code>siex</code> ✅</td>
 <td>HERMES</td>
 <td>5</td>
 </tr>
 <tr>
-<td>MPC: Conhecimento Estimativa EB</td>
-<td>siex</td>
-<td>OLYMPUS</td>
-<td>5</td>
-</tr>
-<tr>
 <td>SIPLEx/CEEEx: Cenários da Força Terrestre</td>
-<td>siplex</td>
+<td><code>siplex_ceex</code></td>
+<td><code>siplex</code> ⚠️</td>
 <td>HERMES</td>
 <td>7</td>
 </tr>
 <tr>
 <td>IPEA/FGV: Cenários Estreitados</td>
-<td>macroplan</td>
+<td><code>ipea</code></td>
+<td><code>macroplan</code> ⚠️</td>
 <td>HERMES</td>
 <td>7</td>
 </tr>
 <tr>
 <td>MPO: Estratégia Brasil 2050</td>
-<td>mpo</td>
+<td><code>mpo</code></td>
+<td><code>mpo</code> ✅</td>
 <td>HERMES</td>
 <td>8</td>
 </tr>
 <tr>
-<td>ASPLAN/MD: Planejamento Setorial</td>
-<td>asplan</td>
+<td>ASPLAN/MD: Produção de Cenários</td>
+<td><code>asplan</code></td>
+<td><code>asplan</code> ✅</td>
 <td>HERMES</td>
 <td>7</td>
 </tr>
 <tr>
 <td>GBN (Global Business Network)</td>
-<td>futures</td>
+<td><code>gbn</code></td>
+<td><code>futures</code> ⚠️</td>
 <td>HERMES</td>
 <td>8</td>
 </tr>
 <tr>
 <td>ESG: Cenários Prospectivos</td>
-<td>esg</td>
+<td><code>esg</code></td>
+<td><code>esg</code> ✅</td>
 <td>HERMES</td>
 <td>6</td>
 </tr>
 </tbody></table>
-<h3>Fluxo de execução</h3>
-<pre><code>POST /api/v1/chat/stream
-  └─ runAnalysis()
-       ├─ loadMethodology()          → banco (lança exceção se ausente)
-       ├─ getLLMConfig()+getLLMTiers()  → paralelo, de platform_settings
-       ├─ buildMemoryWindow()        → orçamento 32k tokens
-       ├─ buildAnchorContext()       → eventos approved como âncora HITL
-       ├─ generateReportTemplateInstructions()  → seções obrigatórias
-       ├─ PROTOCOLO DE PLANEJAMENTO DE FASE     → todos os vizModes
-       ├─ Orquestrador.run() → streamText(stopWhen: stepCountIs(30))
-       │    ├─ consultar_agente(ESPECIALISTA) → generateText(stepCountIs(8))
-       │    └─ consultar_agente(ATHENA) → veredicto ATS por fase
-       └─ Salva 2 mensagens no banco (1 user + 1 assistant)
+<h3>Metodologias de Planejamento Estratégico e Produção do Conhecimento — Não implementadas 🔲</h3>
+<table>
+<thead>
+<tr>
+<th>Nome Canônico</th>
+<th>Slug canônico</th>
+<th>Orquestrador</th>
+<th>Status</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Grumbach: Planejamento Estratégico</td>
+<td><code>grumbach_plj</code></td>
+<td>OLYMPUS</td>
+<td>🔲 Fases não definidas</td>
+</tr>
+<tr>
+<td>SIEx: Metodologia de Produção do Conhecimento</td>
+<td><code>siex_mpc</code></td>
+<td>OLYMPUS</td>
+<td>🔲 Fases não definidas</td>
+</tr>
+<tr>
+<td>SIPLEx: Sistema de Planejamento Estratégico do Exército</td>
+<td><code>siplex_plj</code></td>
+<td>OLYMPUS</td>
+<td>🔲 Fases não definidas</td>
+</tr>
+<tr>
+<td>SPED: Sistema de Planejamento Estratégico de Defesa</td>
+<td><code>asplan_sped</code></td>
+<td>OLYMPUS</td>
+<td>🔲 Fases não definidas</td>
+</tr>
+</tbody></table>
+<blockquote>
+<p><strong>⚠️ Slugs divergentes</strong> (<code>alta</code>, <code>macroplan</code>, <code>futures</code>, <code>siplex</code>): slugs históricos no banco que diferem dos canônicos. Não afetam o funcionamento (loadMethodology busca por nome E slug). Migração requer UPDATE com preservação de FKs de <code>agent_method_prompts</code>.</p>
+</blockquote>
+<h3>Fluxo de execução (Sprint 21 — Motor único LangGraph)</h3>
+<pre><code>POST /api/v1/chat/stream/graph          ← único endpoint (runAnalysis() eliminado)
+  ├─ loadMethodology()                  → banco (lança exceção se ausente)
+  ├─ getLLMConfig()+getLLMTiers()       → paralelo, de platform_settings
+  └─ getOlympusGraph().stream()         → LangGraph StateGraph
+       ├─ routeFromState()              → determinístico via currentNodeSlug+phaseSlug
+       ├─ scopusNode  → runAgentForPhase(SCOPUS,  phaseSlug)
+       ├─ klioNode    → runAgentForPhase(KLIO,    phaseSlug)   ← pode repetir (fases múltiplas)
+       ├─ pythiaNode  → HITL gate (interrupt se sem eventos aprovados)
+       │               runAgentForPhase(PYTHIA,   phaseSlug)
+       ├─ mnemosyeNode→ runAgentForPhase(MNEMOSYNE,phaseSlug)
+       ├─ integrationNode→runAgentForPhase(THEMIS/KRATOS,phaseSlug)
+       └─ synthesisNode → Agent(HERMES/OLYMPUS).run() com token streaming
+            └─ Salva mensagem final (relatorio_final) no banco
+
+vizMode como configuração do grafo:
+  passos   → interrupt() após cada nó especialista (analista confirma cada fase)
+  etapa    → interrupt() apenas no HITL obrigatório de PYTHIA
+  passagem → sem interrupts (totalmente autônomo)
+  thinking → sem interrupts + extended thinking nos agentes
 </code></pre>
+<p>KRATOS (pg-boss): usa <code>runDirectAgent()</code> de <code>graph/helpers.ts</code> — execução direta sem grafo.</p>
 <hr>
 <h2>PARTE 6 — ATHENA v3 (ICD 203 + EB70-MT-10.401)</h2>
 <p>Auditora pura — <code>toolsConfig: []</code>. Combina ICD 203 (ODNI 2022) + EB70-MT-10.401 (Exército Brasileiro).</p>
@@ -1604,3 +1718,38 @@ swap=2GB
 <hr>
 <p><em>Atualizado em 31/05/2026 — Sprint 21 concluído — Railway deploy em andamento — LangGraph-first</em>
 <em>Para revisão de arquitetura e UI pelo Claude Chat e Design</em></p>
+
+
+</div>
+
+<script>
+  // Gerar TOC dinamicamente
+  const content = document.getElementById('content');
+  const tocList = document.getElementById('toc-list');
+  const headers = content.querySelectorAll('h1,h2,h3');
+  let idx = 0;
+  headers.forEach(h => {
+    if (!h.id) { h.id = 'h' + idx++; }
+    const li = document.createElement('li');
+    const a = document.createElement('a');
+    a.href = '#' + h.id;
+    a.textContent = h.textContent;
+    a.className = 'toc-' + h.tagName.toLowerCase();
+    li.appendChild(a);
+    tocList.appendChild(li);
+  });
+  // Highlight ativo no scroll
+  const tocLinks = tocList.querySelectorAll('a');
+  const observer = new IntersectionObserver(entries => {
+    entries.forEach(e => {
+      if(e.isIntersecting){
+        tocLinks.forEach(l => l.classList.remove('active'));
+        const active = tocList.querySelector('a[href="#'+e.target.id+'"]');
+        if(active) active.classList.add('active');
+      }
+    });
+  }, {rootMargin:'-10% 0px -80% 0px'});
+  headers.forEach(h => observer.observe(h));
+</script>
+</body>
+</html>

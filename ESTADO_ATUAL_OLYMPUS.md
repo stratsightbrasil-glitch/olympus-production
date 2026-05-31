@@ -24,8 +24,7 @@ Olympus/
 │   │       │   ├── router.ts       # routeFromState() + NODE_SLUG_TO_GRAPH_NODE
 │   │       │   └── index.ts        # Reexporta builder, router, helpers, postgresSaver
 │   │       ├── routes/
-│   │       │   ├── chat.ts         # Handlers HTTP/SSE puros — delega para analysis.service.ts
-│   │       │   │                   # < 200 linhas (extraído Sprint 20 T-10)
+│   │       │   ├── chat.ts         # Rota única POST /stream/graph — motor LangGraph (Sprint 21)
 │   │       │   ├── events.ts       # HITL API — CRUD project_events + batch/status (ordem correta no Hono)
 │   │       │   ├── export.ts       # DOCX/PDF/HTML — watermark usa classificacao || 'ACESSO RESTRITO'
 │   │       │   ├── kratos.ts       # API painel KRATOS (com filtro userId — IDOR corrigido Sprint 20)
@@ -40,11 +39,9 @@ Olympus/
 │   │       ├── middleware/
 │   │       │   └── rateLimit.ts    # Rate limiting PostgreSQL sliding window — admins isentos
 │   │       ├── services/
-│   │       │   ├── analysis.service.ts  # Núcleo da análise (extraído de chat.ts — Sprint 20 T-10)
-│   │       │   │   # buildMemoryWindow (MEMORY_WINDOW_MESSAGES=20), loadMethodology (JOIN único),
-│   │       │   │   # createConsultAgentTool, runAnalysis, invalidateMethodologyCache
-│   │       │   │   # Bug B fix: injeta [Fase N/Total] no CONFIRMAR em vizMode=passos
-│   │       │   └── report-compiler.ts  # Strategic Slate Compiler — 10 metodologias, standard/extended
+│   │       │   ├── analysis.service.ts  # Somente cache: loadMethodology, invalidate, status (Sprint 21)
+│   │       │   │   # runAnalysis() ELIMINADO — motor único LangGraph em graph/
+│   │       │   └── report-compiler.ts  # Strategic Slate Compiler — 11 metodologias, standard/extended
 │   │       ├── utils/
 │   │       │   └── audit.ts        # logAudit() — hash-chain SHA-256 (_hash + _previousHash + _createdAt)
 │   │       └── tools/
@@ -129,8 +126,10 @@ Olympus/
 
 | Agente | Metodologias | Observações |
 |--------|--------------|-------------|
-| **HERMES** | MSEF, Godet, GBN, IPEA/FGV, OTAN/AltA, MPO, ASPLAN, ESG, SIPLEx/CEEEx | Orquestrador universal |
-| **OLYMPUS** | Grumbach, SIEX-MPC | Planejamento Estratégico |
+| **HERMES** | MSEF, Godet, Grumbach/Cenários, OTAN/AltA, SIEx/Estimativa, SIPLEx/CEEEx, IPEA/FGV, MPO, ASPLAN/Cenários, GBN, ESG | Orquestrador universal — todas as metodologias implementadas |
+| **OLYMPUS** | Grumbach/Planejamento, SIEx-MPC, SIPLEx/Planejamento, SPED | Planejamento Estratégico — **não implementado ainda** |
+
+> Grumbach/Cenários (slug `grumbach`) usa HERMES. Grumbach/Planejamento Estratégico (slug futuro `grumbach_plj`) usará OLYMPUS quando implementado.
 
 ### 3.2 Especialistas
 
@@ -146,21 +145,36 @@ Olympus/
 
 ---
 
-## 4. METODOLOGIAS (11 no catálogo)
+## 4. METODOLOGIAS — Definições Canônicas
 
-| Slug | Nome | Orquestrador | Fases |
+**Fonte:** `D:\Pessoais\DEV\_Diversos\_contexto\Design\REVISAO_ARQUITETURA\metodologias.txt` (canônico)
+
+### 4.1 Implementadas — Cenários Prospectivos e Estimativas ✅
+
+| Nome Canônico | Slug canônico | Slug no banco | Orquestrador | Fases |
+|---|---|---|---|---|
+| MSEF v3 (8 etapas ENAP) | `msef` | `msef` ✅ | HERMES | 8 |
+| Godet: Escola Estrutural | `godet` | `godet` ✅ | HERMES | 7 |
+| Grumbach: Produção de Cenários | `grumbach` | `grumbach` ✅ | HERMES | 9 |
+| OTAN/AltA | `otan` | `alta` ⚠️ | HERMES | 6 |
+| SIEx: Conhecimento Estimativa EB | `siex` | `siex` ✅ | HERMES | 5 |
+| SIPLEx/CEEEx: Cenários da Força Terrestre | `siplex_ceex` | `siplex` ⚠️ | HERMES | 7 |
+| IPEA/FGV: Cenários Estreitados | `ipea` | `macroplan` ⚠️ | HERMES | 7 |
+| MPO: Estratégia Brasil 2050 | `mpo` | `mpo` ✅ | HERMES | 8 |
+| ASPLAN/MD: Produção de Cenários | `asplan` | `asplan` ✅ | HERMES | 7 |
+| GBN (Global Business Network) | `gbn` | `futures` ⚠️ | HERMES | 8 |
+| ESG: Cenários Prospectivos | `esg` | `esg` ✅ | HERMES | 6 |
+
+### 4.2 Não Implementadas — Planejamento Estratégico e MPC 🔲
+
+| Nome Canônico | Slug canônico | Orquestrador | Status |
 |---|---|---|---|
-| msef | MSEF v3 (8 etapas ENAP) | HERMES | 8 |
-| godet | Godet: Escola Estrutural | HERMES | 7 |
-| grumbach | Grumbach: Produção de Cenários | OLYMPUS | 9 |
-| alta | OTAN/AltA | HERMES | 5 |
-| siex | MPC: Conhecimento Estimativa EB | OLYMPUS | 5 |
-| siplex | SIPLEx/CEEEx: Cenários da Força Terrestre | HERMES | 7 |
-| macroplan | IPEA/FGV: Cenários Estreitados | HERMES | 7 |
-| mpo | MPO: Estratégia Brasil 2050 | HERMES | 8 |
-| asplan | ASPLAN/MD: Planejamento Setorial | HERMES | 7 |
-| futures | GBN (Global Business Network) | HERMES | 8 |
-| esg | ESG: Cenários Prospectivos | HERMES | 6 |
+| Grumbach: Planejamento Estratégico | `grumbach_plj` | OLYMPUS | 🔲 Fases não definidas |
+| SIEx: Metodologia de Produção do Conhecimento | `siex_mpc` | OLYMPUS | 🔲 Fases não definidas |
+| SIPLEx: Sistema de Planejamento Estratégico do Exército | `siplex_plj` | OLYMPUS | 🔲 Fases não definidas |
+| SPED: Sistema de Planejamento Estratégico de Defesa | `asplan_sped` | OLYMPUS | 🔲 Fases não definidas |
+
+> ⚠️ **Slugs divergentes** (`alta`, `siplex`, `macroplan`, `futures`): slugs históricos que diferem dos canônicos. Funcional (loadMethodology busca por nome+slug). Migração pendente preservando FKs.
 
 ---
 
@@ -248,7 +262,7 @@ boss.work('kratos-analysis', { localConcurrency: 1 }) → runKratosJob()
 | artefatos | 5/5 ✅ | MNEMOSYNE 4 narrativas, THEMIS alertas |
 | exportação | 4/4 ✅ | DOCX, PDF, watermark |
 | sat | 7/7 ✅ | 7 ferramentas analíticas |
-| metodologias | 10/10 (script) | MSEF+Godet+Grumbach+IPEA+OTAN+GBN + siplex+mpo+asplan+esg |
+| metodologias | 9/11 ✅ (2 infra) | 11 metodologias incl. SIEx+SIPLEx+ESG — 2 ❌ por restart API durante teste |
 | plano | stress test pendente | [PLANO fase X] no orquestrador |
 | tad | stress test pendente | Segregação + TAD + nexo temporal |
 
@@ -280,10 +294,10 @@ boss.work('kratos-analysis', { localConcurrency: 1 }) → runKratosJob()
 
 | # | Bug | Status | Localização |
 |---|-----|--------|-------------|
-| #2/#3 | Mensagem do especialista duplicada no chat e DOCX | 🔲 Aberto | analysis.service.ts + useChat.ts |
-| D | Páginas vazias no PDF (mensagens `parcial` curtas exportadas) | 🔲 Aberto | export.ts |
-| #6 | `---` repetido (LLM artifact) | 🔲 Aberto | analysis.service.ts pós-processamento |
-| C | Bloco com SCOPUS em erro não habilita export | 🔲 Aberto | REPORT_PATTERNS / messageType |
+| #2/#3 | Conteúdo duplicado (transcrito + resumido) | ✅ Sprint 21 | Instrução "Transcreva verbatim" → "Apresente sem duplicar" |
+| D | Páginas vazias no PDF — mensagens `parcial` curtas | ✅ Sprint 21 | filterAgentMessages threshold 800 chars |
+| #6 | `---` repetido (LLM artifact) | ✅ Sprint 21 | regex `/(\n\s*---\s*){3,}/g` |
+| C | Export bloqueado quando especialista retorna erro | ✅ Sprint 21 | useExport.ts fallback 3 níveis (>300 chars) |
 
 ---
 
