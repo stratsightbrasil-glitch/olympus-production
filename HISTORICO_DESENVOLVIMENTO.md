@@ -365,9 +365,9 @@ services:
 
 ---
 
-## PARTE 14 — SUITE DE TESTES (30/05/2026)
+## PARTE 14 — SUITE DE TESTES (31/05/2026)
 
-**Score total: 42/42 ✅**
+**Score local: 42/42 ✅ · Potencial com LLM real: 65/65**
 
 | Suite | Resultado | Tipo |
 |---|---|---|
@@ -378,7 +378,7 @@ services:
 | artefatos | **5/5 ✅** | LLM (~1040s) |
 | exportação | **4/4 ✅** | LLM |
 | sat | **7/7 ✅** | LLM (~1208s) |
-| metodologias | **6/6 ✅ (845s)** | MSEF, Godet, Grumbach, IPEA, OTAN, GBN |
+| metodologias | **10/10 (script)** | MSEF, Godet, Grumbach, IPEA, OTAN, GBN + siplex, mpo, asplan, esg (Sprint 20) |
 | plano | Para stress test | LLM — [PLANO] no orquestrador |
 | tad | Para stress test | LLM — segregação, TAD, nexo temporal |
 
@@ -408,12 +408,15 @@ services:
 | 17 | 30 Mai | CEEEx/SIPLEx 6 seções, **HERMES_SIPLEX removido**, Protocolo Planejamento de Fase |
 | 18 | 30 Mai | Suites arquitetura/plano/tad, hash-chain SHA-256, tool_register_scenario |
 | 19 | 30 Mai | **Voyage AI → Ollama** (auto-roteamento), Ollama sempre ativo, **Gemini 2.0 removido** |
+| 20 | 30 Mai | 18 tarefas: IDOR 6 rotas, JWT jti+revogação, rate limit PG, JOIN loadMethodology, HNSW, cache UI, AuditModal, AnalysisService, reportLayout UI |
+| Deploy | 30 Mai | **Railway online** — olympus-api + olympus-web. Fixes: railway.toml, nginx SNI, pg_dump PGDG, PORT dinâmica |
+| Pós-deploy | 31 Mai | Bug A (tool loop guard Agent.ts), Bug B (fase no CONFIRMAR), watermark ACESSO RESTRITO, EventsPanel flicker, batch/status order, T-10c pg-boss KRATOS |
 
 ---
 
 ## PARTE 16 — BACKLOG
 
-### ✅ Todos os itens de alta/média prioridade concluídos (Sprints 1–19)
+### ✅ Todos os itens de alta/média prioridade concluídos (Sprints 1–20 + pós-deploy)
 
 | Item | Sprint |
 |---|---|
@@ -427,19 +430,41 @@ services:
 | Strategic Slate Compiler (report-compiler.ts) | 16 |
 | Harmonized Scenario Schema (tool_register_scenario) | 18 |
 | Voyage AI → Ollama nomic-embed-text | 19 |
-| Sliding Window por Tokens (buildMemoryWindow) | Pré-LangGraph |
 | HERMES_SIPLEX removido (anti-padrão) | 17 |
 | Gemini 2.0 Flash removido (descontinuado) | 19 |
+| IDOR corrigido em 6 rotas JWT | 20 |
+| JWT jti + revoked_tokens + logout | 20 |
+| Rate limit PostgreSQL sliding window | 20 |
+| JOIN único loadMethodology | 20 |
+| Índice HNSW pgvector | 20 |
+| Cache invalidation UI + badge | 20 |
+| AuditModal + hash-chain verify | 20 |
+| AnalysisService extraído de chat.ts | 20 |
+| reportLayout Standard/Estendido na UI | 20 |
+| **Deploy Railway** ✅ Online 30 Mai 2026 | 20 |
+| PoC Presencial USB — pacote gerado (401 MB tar) | 20 |
+| **Audit Frontend Modal** ✅ implementado | 20 |
+| **Rate Limiting Redis** → PostgreSQL sliding window | 20 |
+| Bug A — tool loop guard (Agent.ts) | Pós-deploy |
+| Bug B — fase no CONFIRMAR (vizMode=passos) | Pós-deploy |
+| Watermark CONFIDENCIAL → ACESSO RESTRITO | Pós-deploy |
+| pg-boss KRATOS — isolamento de jobs | T-10c |
 
-### 🔲 Pendente — Prioridade Média (pós-deploy)
+### 🔲 Pendente — Bugs confirmados em smoke test (30 Mai 2026)
+
+| # | Bug | Descrição |
+|---|-----|-----------|
+| #2/#3 | **Mensagem duplicada** | HERMES transcreve saída do especialista nos tokens E inclui na síntese → 2 mensagens salvas no banco. Afeta chat e DOCX exportado. |
+| D | **Páginas vazias PDF** | Mensagens `parcial` curtas (~800 chars) do HERMES entre fases exportadas como blocos quase vazios. |
+| #6 | **`---` repetido** | LLM artifact: traço horizontal repetido por dezenas de linhas em alguns outputs. |
+| C | **Bloco sem export visível** | Quando especialista retorna erro, HERMES gera resposta `parcial` — REPORT_PATTERNS não casa. |
+
+### 🔲 Pendente — Funcionalidades
 
 | # | Item | Descrição |
 |---|------|-----------|
-| A | **Deploy Railway** | Todos os arquivos prontos (railway.toml, Dockerfile.api, .env.railway.example). Ação: criar conta Railway → 8 passos do RAILWAY_DEPLOY.md → testar /ping → athena.stratsight.com.br via CNAME. |
-| B | **PoC Presencial USB** | Scripts prontos (build-offline.ps1, docker-compose.offline.yml, instalar.ps1). Ação: rodar build-offline.ps1 → gerar dist-poc\olympus-poc.tar → testar em máquina limpa. |
-| C | **VPN + Dados Proprietários** | Acesso a dados internos do cliente via VPN. Depende de deploy Railway ativo. |
-| D | **Audit Frontend** | Modal de visualização de audit_logs para admins — exportação CSV. Backend GET /audit + /audit/stats já implementados. |
-| E | **Rate Limiting Redis** | Substituir bucket in-memory por Redis sliding window para múltiplas instâncias. Single-instance atual é suficiente até 2º contrato. |
+| A | **VPN + Dados Proprietários** | Acesso a dados internos do cliente via VPN. Railway ativo — desbloqueado, depende de contrato. |
+| B | **PoC USB — teste máquina limpa** | Pacote gerado. Falta validar instalação do zero em máquina sem Docker/Node. |
 
 ### 🔮 Longo Prazo
 
@@ -472,6 +497,12 @@ services:
 12. node_slug no prompt OLYMPUS: NÃO enumerar (confunde Gemini)
 13. Ao trocar embedding provider (Voyage↔Ollama): reindexar todos os embeddings
 14. SIPLEx usa HERMES + agentMethodPrompts/siplex — não criar orquestradores específicos
+15. Tabelas pgboss.*: NÃO adicionar ao schema Drizzle (gerenciadas pelo pg-boss internamente)
+16. Hono route order: PATCH /batch/status DEVE preceder PATCH /:id/status — Hono casa /batch como id='batch'
+17. railway.toml: NÃO incluir dockerfilePath/healthcheckPath na raiz — afeta TODOS os serviços
+18. nginx Railway: proxy_ssl_server_name on (SNI para HTTPS upstream), porta via $PORT (não hardcoded 80)
+19. pg_dump Railway usa PostgreSQL 18: binário real em /usr/lib/postgresql/18/bin/pg_dump (PGDG apt)
+20. Admin isento de rate limit de análise — MSEF em passos usa 8-10 chamadas por sessão
 ```
 
 ### Template canônico para novas ferramentas
@@ -587,13 +618,13 @@ Se Docker travar com `input/output error`: `wsl --shutdown` + *Clean/Purge data*
 | Context bloat em análises longas | ✅ **Resolvido (Sprint Pré-LangGraph)** | `buildMemoryWindow()` com orçamento 32k tokens, `estimateTokens()`, suporte multimodal |
 | Dependência Voyage AI (RAG) | ✅ **Resolvido (Sprint 19)** | Ollama nomic-embed-text como padrão. Roteamento automático. Air-gapped. |
 | Esgotamento limite Tavily gratuito | ⚠️ Monitorar | Plano free: 1.000 req/mês. Migrar para Tavily Starter (~USD 29/mês) após primeiro contrato. Brave Search como fallback. |
-| Race condition DB→API no Railway (cold start) | ⚠️ Testar ao deployar | Retry 10×3s funciona localmente. Configurar health check no Railway e testar startup. |
+| Race condition DB→API no Railway (cold start) | ✅ **Resolvido** | Retry 10×3s. Health check `/ping` configurado no dashboard Railway. |
 
 ### 19.2 Riscos Operacionais e Estratégicos
 
 | Risco | Contexto | Mitigação |
 |-------|----------|-----------|
-| Deploy ausente bloqueia KRATOS | Cron jobs dependem de servidor 24/7. Monitoramento para quando o computador é desligado. | Deploy Railway é a ação mais crítica. Sem isso, produto de monitoramento recorrente não pode ser ofertado. |
+| ~~Deploy ausente bloqueia KRATOS~~ | ✅ **Railway online desde 30 Mai 2026** | KRATOS com pg-boss (T-10c) — jobs enfileirados em PostgreSQL, retry automático. |
 | Ausência de PoC presencial | Ambiente governamental sem acesso externo é inviável com Docker de 3 contêineres. | `docker save` → USB + script Windows. Fallback: server.js legado como modo standalone. |
 | Complexidade operacional | Stack evoluiu de 2 arquivos para monorepo + 4 pacotes + Docker + pgvector + múltiplas APIs. Operação solo tem limite. | HISTORICO_DESENVOLVIMENTO.md é o principal ativo operacional. Contratar CIO técnico a partir do segundo contrato. |
 | Dependências externas não orçadas | INLABS + ITU DataHub adicionados sem revisão de custos. Risco de surpresas ao escalar. | Revisar modelo de custos a cada sprint (ver Parte 20). |
@@ -623,7 +654,7 @@ Se Docker travar com `input/output error`: `wsl --shutdown` + *Clean/Purge data*
 | Anthropic Claude API | Pay-per-use | ~R$ 0 (teste) | ~R$ 400 (2 clientes) | ✅ Opcional |
 | Tavily Search API | Free (1k req) | R$ 0 | ~R$ 150 (Starter) | ⚠️ Ampliar após 1º contrato |
 | ~~Voyage AI (RAG embeddings)~~ | ~~Free tier~~ | ~~R$ 0~~ | ~~R$ 50~~ | ✅ **Substituído por Ollama (R$0)** |
-| Railway (deploy 24/7 + PostgreSQL) | — | R$ 30 (a contratar) | ~R$ 80 (Pro) | 🔲 Ação imediata |
+| Railway (deploy 24/7 + PostgreSQL) | Hobby ativo | ~R$ 70/mês | ~R$ 120 (Pro) | ✅ **Online desde 30 Mai 2026** |
 | Google Workspace | Business Starter | R$ 35 | R$ 35 | ✅ Planejado |
 | Contador terceirizado | Mensalidade | R$ 500 | R$ 500 | ✅ Planejado |
 | Demais (Notion, Canva, n8n) | Free/Pro | R$ 93 | R$ 93 | ✅ Planejado |
@@ -642,19 +673,22 @@ Se Docker travar com `input/output error`: `wsl --shutdown` + *Clean/Purge data*
 
 ### 22.2 Débito técnico conhecido
 
-- **export.ts — mapeamentos duplicados:** `PHASE_LABELS`/`PHASE_COLORS` em `buildHtml()` e `DOCX_PHASE_LABELS` em `buildDocx()` devem ser mantidos em sincronia manualmente. Candidato a unificação.
-- **parseScenarioProbabilities() — regex frágil:** ainda em uso para análises antigas. `tool_register_scenario` (Sprint 18) é o substituto para novas análises, mas a regex permanece para retrocompatibilidade.
-- **HERMES_SIPLEX no banco:** agente inativo, não recriado pelo seed. Não causa problema operacional. Pode ser apagado manualmente se necessário.
+- **export.ts — mapeamentos de fase:** usa `_getPhaseMap()` com TTL 5 min — fonte única via banco. ✅ Resolvido Sprint 20.
+- **parseScenarioProbabilities() — regex frágil:** ainda em uso para análises antigas. `tool_register_scenario` é o substituto para novas análises.
+- **HERMES_SIPLEX no banco:** deletado via seed.ts a partir do Sprint 20. Não recriado.
+- **Mensagem duplicada (Bug #2/#3):** HERMES transcreve especialista nos tokens SSE + inclui na síntese → 2 mensagens salvas. Aberto.
+- **Páginas vazias PDF (Bug D):** mensagens `parcial` curtas exportadas como blocos quase vazios. Aberto.
 
 ### 22.3 UI/UX — itens pendentes de design
 
-- **Modo `passos` supervisionado:** o orquestrador apresenta [PLANO DE FASE] e aguarda confirmação. A UI exibe inline na conversa, sem painel visual dedicado para o estado de "aguardando aprovação".
-- **Seletor de `reportLayout`:** modo `extended` pronto no backend, sem controle na UI.
+- **Modo `passos` supervisionado:** orquestrador apresenta [PLANO DE FASE] e aguarda confirmação. UI exibe inline, sem painel dedicado para estado de espera.
+- **Seletor de `reportLayout`:** ✅ Toggle Standard/Estendido implementado no CommandBar (Sprint 20). Estado em localStorage por projeto.
 - **vizMode não comunicado ao usuário:** diferença entre `etapa` (autônomo), `passos` (HITL), `passagem` (contínuo) e `thinking` não é clara na interface.
-- **EventsPanel (HITL):** funcional sem theming consistente com o restante da UI.
-- **SIPLEx/CEEEx:** configurada com HERMES + agentMethodPrompts desde Sprint 17, não testada end-to-end após a migração.
+- **EventsPanel (HITL):** funcional, flicker corrigido (Sprint 20). Theming ainda inconsistente com o restante da UI.
+- **SIPLEx/CEEEx:** agentMethodPrompts migrado Sprint 17. Testado end-to-end com HERMES — funcional.
+- **CONFIRMAR contextualizado:** a partir do Sprint pós-deploy, CONFIRMAR injeta `[Fase N/Total]` automaticamente no payload. HERMES orientado sem perder contexto em análises longas.
 
 ---
 
-*Gerado em 30/05/2026 — Sprint 19 concluído — 42/42 testes ✅*
+*Atualizado em 31/05/2026 — Sprint 20 + pós-deploy concluídos — Railway online — 42/42 testes ✅*
 *Para revisão de arquitetura e UI pelo Claude Chat e Design*
