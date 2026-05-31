@@ -54,6 +54,14 @@
   /* Transitions */
   --t-fast: .12s ease;
   --t-mid:  .2s ease;
+
+  /* Status semânticos */
+  --status-waiting: #B8913A;
+  --status-waiting-bg: rgba(184,145,58,.10);
+  --status-waiting-border: rgba(184,145,58,.28);
+  --status-running: #3D7A50;
+  --status-done:    #5A9E6F;
+  --status-error:   #C62828;
 }
 
 /* Reset mínimo — coexiste com Tailwind preflight */

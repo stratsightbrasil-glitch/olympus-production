@@ -63,10 +63,21 @@ const escHtml = (s: string) =>
   (s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
            .replace(/"/g,'&quot;').replace(/'/g,'&#x27;');
 
-/** Keep only real agent output messages (filters system commands). */
+// Bug D: short parcial messages (~800 chars) are intermediate HERMES transitions
+// between specialist phases — they produce near-empty pages when exported.
+const MIN_PARCIAL_CHARS = 800;
+
+/** Keep only real agent output messages (filters system commands and thin parcial messages). */
 function filterAgentMessages(msgs: any[]): any[] {
-  return msgs.filter(m =>
-    m?.role === 'assistant' && m.content?.trim() && !m.content.startsWith('⚙️ Comando'));
+  return msgs.filter(m => {
+    if (m?.role !== 'assistant' || !m.content?.trim()) return false;
+    if (m.content.startsWith('⚙️ Comando')) return false;
+    if (m.messageType === 'parcial' && m.content.length < MIN_PARCIAL_CHARS) {
+      console.log(`[export] skipping short parcial (${m.content.length} chars, id=${m.id ?? 'n/a'})`);
+      return false;
+    }
+    return true;
+  });
 }
 
 /** Extract the agent name from the first 300 chars of the message content. */

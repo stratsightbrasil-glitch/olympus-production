@@ -2,7 +2,7 @@
 **StratSight Brasil · Strategic Foresight · IA Agêntica**
 
 <!-- AUTO:versao:START -->
-**Versão:** `4.0.0` · **Atualizado:** 30 de maio de 2026 · Gerado automaticamente
+**Versão:** `4.0.0` · **Atualizado:** 31 de maio de 2026 · Gerado automaticamente
 
 | Dependência | Versão |
 |-------------|--------|
@@ -18,7 +18,7 @@
 | Método | Path | Auth | Função | Arquivo |
 |--------|------|------|--------|---------|
 | GET    | `/api/v1/` | Público | Query params: userId, action, resourceType, from (ISO date), to (ISO date), limit (default 100), offset (default 0) | audit.ts |
-| POST   | `/api/v1/` | Público | ── Rota síncrona (compatibilidade retroativa) ──────────────────────────────── | chat.ts |
+| POST   | `/api/v1/` | Público | ── POST /events — criação manual pelo analista (complementa tool_register_event) ─ | events.ts |
 | DELETE | `/api/v1/:id` | Público | ── DELETE /events/:id ───────────────────────────────────────────────────────── | events.ts |
 | GET    | `/api/v1/:id` | Público | Lista/busca :id | sessions.ts |
 | PATCH  | `/api/v1/:id` | Público | ── PATCH /events/:id — atualização geral (sourceEvaluation, name, description) ─ | events.ts |
@@ -62,8 +62,8 @@
 | POST   | `/api/v1/register` | Público | Cria register | auth.ts |
 | GET    | `/api/v1/setup-status` | Público | Lista/busca setup-status | auth.ts |
 | GET    | `/api/v1/stats` | Público | GET /api/v1/audit/stats — resumo por ação (admin only) | audit.ts |
-| POST   | `/api/v1/stream` | Público | Cria stream | chat.ts |
-| POST   | `/api/v1/stream/graph` | Público | ── Rota Graph SSE — LangGraph v2.0 ───────────────────────────────────────── | chat.ts |
+| POST   | `/api/v1/stream` | Público | Mantido para compatibilidade com clientes legados até próximo deploy. | chat.ts |
+| POST   | `/api/v1/stream/graph` | Público | ── Rota SSE — motor LangGraph (único caminho de análise) ──────────────────── | chat.ts |
 | GET    | `/api/v1/techniques` | Público | Endpoint para listar técnicas SAT disponíveis | engine.ts |
 | GET    | `/api/v1/verify` | Público | Retorna { valid: true } se a cadeia está íntegra; firstInvalidId se adulterada. | audit.ts |
 <!-- AUTO:rotas:END -->
@@ -128,17 +128,17 @@
 <!-- AUTO:metodologias:START -->
 | Metodologia | Orquestrador | Fases | Categoria | Agentes |
 |-------------|-------------|-------|-----------|---------|
-| SIPLEx/CEEEx: Cenários da Força Terrestre | HERMES | 8 | Planejamento Estratégico |  |
-| Grumbach: Produção de Cenários | HERMES | 9 | Cenários Prospectivos |  |
 | Godet: Escola Estrutural | HERMES | 7 | Cenários Prospectivos |  |
-| MPC: Conhecimento Estimativa EB | HERMES | 6 | Produção do Conhecimento |  |
+| SIEx: Conhecimento Estimativa EB | HERMES | 6 | Produção do Conhecimento |  |
+| SIPLEx/CEEEx: Cenários da Força Terrestre | HERMES | 7 | Planejamento Estratégico |  |
+| Grumbach: Produção de Cenários | HERMES | 9 | Cenários Prospectivos |  |
 | ASPLAN/MD: Planejamento Setorial de Defesa | HERMES | 7 | Planejamento Estratégico |  |
 | MSEF v3 (8 etapas ENAP) | HERMES | 8 | Cenários Prospectivos |  |
-| OTAN/AltA | HERMES | 5 | Cenários Prospectivos |  |
-| IPEA/FGV: Cenários Estreitados de Desenvolvimento | HERMES | 7 | Cenários Prospectivos |  |
-| MPO: Estratégia Brasil 2050 | HERMES | 8 | Planejamento Estratégico |  |
-| ESG: Cenários Prospectivos | HERMES | 6 | Cenários Prospectivos |  |
 | GBN (Global Business Network - Peter Schwartz) | HERMES | 8 | Cenários Prospectivos |  |
+| MPO: Estratégia Brasil 2050 | HERMES | 8 | Planejamento Estratégico |  |
+| OTAN/AltA | HERMES | 6 | Cenários Prospectivos |  |
+| ESG: Cenários Prospectivos | HERMES | 6 | Cenários Prospectivos |  |
+| IPEA/FGV: Cenários Estreitados de Desenvolvimento | HERMES | 7 | Cenários Prospectivos |  |
 <!-- AUTO:metodologias:END -->
 
 ---
@@ -148,11 +148,11 @@
 <!-- AUTO:tecnicas:START -->
 | # | Nome | Descrição |
 |---|------|-----------|
-| 1 | Advocacia do Diabo | Um analista assume o papel de crítico e constrói o melhor argumento possível con |
-| 2 | Análise Pré-Mortem | Simula mentalmente o fracasso de um plano ou análise e trabalha retrospectivamen |
-| 3 | Análise E-Se | Assume que um evento (positivo ou negativo) já ocorreu e explora como poderia te |
-| 4 | Análise SWOT | Avalia forças, fraquezas, oportunidades e ameaças de um projeto, decisão ou estr |
-| 5 | Cinco Porquês | Identifica a causa-raiz de um problema perguntando "por quê?" cinco vezes, quebr |
+| 1 | Análise Pré-Mortem | Simula mentalmente o fracasso de um plano ou análise e trabalha retrospectivamen |
+| 2 | Análise E-Se | Assume que um evento (positivo ou negativo) já ocorreu e explora como poderia te |
+| 3 | Análise SWOT | Avalia forças, fraquezas, oportunidades e ameaças de um projeto, decisão ou estr |
+| 4 | Cinco Porquês | Identifica a causa-raiz de um problema perguntando "por quê?" cinco vezes, quebr |
+| 5 | Advocacia do Diabo | Um analista assume o papel de crítico e constrói o melhor argumento possível con |
 | 6 | Verificação de Qualidade da Informação | Avalia a completude, precisão, credibilidade e confiabilidade das fontes de info |
 | 7 | PMI — Prós, Contras e Pontos Interessantes | Técnica rápida que avalia os aspectos positivos, negativos e interessantes de um |
 | 8 | Adversário Substituto | Modela o comportamento de atores externos (adversários, competidores, neutros) r |

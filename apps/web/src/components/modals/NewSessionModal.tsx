@@ -21,12 +21,13 @@ const ACCEPTED_TYPES = '.txt,.md,.csv,.json,.rtf,.pdf,.doc,.docx,.xlsx,.xls,.png
 
 const EMPTY_SCOPE: ScopeForm = { tema: '', horizonte: '', elaborador: '', cliente: '', questaoEstrategica: '', mudancaIdentificada: '', instrucoes: '' };
 
+// Sprint 21 — motor LangGraph único: os 4 modos diferem pelo nível de supervisão
+// do analista, não pelo motor (todos usam /stream/graph internamente).
 const VIZ_MODES = [
-  { id: 'thinking', label: '🧠 Raciocínio Estendido', desc: 'Exibe o raciocínio interno antes da resposta' },
-  { id: 'passos',   label: '👣 Passo a Passo',        desc: 'Avança com uma pergunta/tarefa por vez' },
-  { id: 'etapa',    label: '📋 Etapa Completa',        desc: 'Gera a etapa inteira de uma vez (Padrão)' },
-  { id: 'passagem', label: '⚡ Processo Completo',     desc: 'Conduz o método de forma autônoma' },
-  { id: 'grafo',    label: '🔬 Motor LangGraph',       desc: 'Grafo de estado com HITL nativo — PYTHIA aguarda aprovação de eventos antes de modelar' },
+  { id: 'passos',   label: '👣 Passo a Passo',        desc: 'Pausa após cada fase — analista revisa e confirma antes de avançar' },
+  { id: 'etapa',    label: '📋 Etapa Completa',        desc: 'Cada especialista entrega sua fase completa (Padrão). PYTHIA aguarda aprovação de eventos.' },
+  { id: 'passagem', label: '⚡ Processo Completo',     desc: 'Todas as fases encadeadas de forma autônoma, sem interrupções' },
+  { id: 'thinking', label: '🧠 Raciocínio Estendido',  desc: 'Raciocínio profundo antes de cada resposta — maior profundidade analítica' },
 ];
 
 export function NewSessionModal({ onClose, onStart, cenariosMethodologies, teams, token, defaultMetodologia, defaultVizMode }: Props) {

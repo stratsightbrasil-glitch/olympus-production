@@ -27,12 +27,17 @@ async function apiPost(path: string, body: unknown, jwt?: string) {
   return { status: res.status, body: await res.json().catch(() => ({})) };
 }
 
-async function getOrCreateAdmin() {
-  // Verificar se já existe admin
-  const { body: setupStatus } = await apiPost("/api/v1/auth/setup-status", {});
-  const hasAdmin = (setupStatus as { hasAdmin?: boolean }).hasAdmin;
+async function apiGet(path: string) {
+  const res = await fetch(`${API}${path}`);
+  return { status: res.status, body: await res.json().catch(() => ({})) };
+}
 
-  if (!hasAdmin) {
+async function getOrCreateAdmin() {
+  // Verificar se já existe algum usuário (GET /setup-status → { hasUsers })
+  const { body: setupStatus } = await apiGet("/api/v1/auth/setup-status");
+  const hasUsers = (setupStatus as { hasUsers?: boolean }).hasUsers;
+
+  if (!hasUsers) {
     // Criar primeiro admin via register
     const { status, body } = await apiPost("/api/v1/auth/register", {
       name: "Admin OLYMPUS Testes",

@@ -47,7 +47,20 @@ async function runNextPhaseNode(
   }
   const router    = getNodeRouter(state.phases);
   const agentName = router.resolve(nextSlug);
-  return runAgentForPhase(state, nextSlug, agentName, config);
+  const result    = await runAgentForPhase(state, nextSlug, agentName, config);
+
+  // Modo Passo a Passo: pausa após cada fase para o analista revisar antes de avançar
+  if (state.vizMode === 'passos' && process.env.TEST_MODE !== 'true') {
+    interrupt({
+      type:      'phase_complete',
+      agent:     agentName,
+      phaseSlug: nextSlug,
+      message:   `Fase '${nextSlug}' (${agentName}) concluída. Confirme para prosseguir | Oriente com ajustes`,
+      output:    result.lastOutput,
+    });
+  }
+
+  return result;
 }
 
 // ── Nós especialistas ─────────────────────────────────────────────────────────
@@ -137,18 +150,24 @@ export async function synthesisNode(
   const onStep  = config?.configurable?.onStep  as ((msg: string) => void) | undefined;
   const onToken = config?.configurable?.onToken as ((delta: string) => void) | undefined;
 
-  // Descobre o orquestrador da metodologia (type='orchestrator' no banco)
-  const agentNames: string[] = [
-    ...state.phases.map((p: any) => p.agentRole as string).filter(Boolean),
-    "HERMES", "OLYMPUS", // fallbacks
-  ];
-  const uniqueNames = [...new Set(agentNames)];
+  // Descobre o orquestrador da metodologia.
+  // Prioridade: (1) agentMethodPrompts tem entrada para HERMES → HERMES;
+  //             (2) agentMethodPrompts tem entrada para OLYMPUS → OLYMPUS;
+  //             (3) fallback para HERMES (universal para metodologias de cenários).
+  // Nota: nunca usar agentRole das fases para descobrir o orquestrador — fases
+  // listam apenas especialistas; HERMES como agentRole indica erro de seed.
+  const preferHermes = !!state.agentMethodPrompts?.["HERMES"];
+  const preferOlympus = !preferHermes && !!state.agentMethodPrompts?.["OLYMPUS"];
+  const orchestratorCandidates = preferOlympus ? ["OLYMPUS", "HERMES"] : ["HERMES", "OLYMPUS"];
 
   const dbAgents = await db.query.agents.findMany({
-    where: inArray(agentsTable.name, uniqueNames),
+    where: inArray(agentsTable.name, orchestratorCandidates),
   });
-  const orchestratorRow = dbAgents.find(a => a.type === "orchestrator")
-                        ?? dbAgents.find(a => a.name === "HERMES");
+  const orchestratorRow =
+    orchestratorCandidates
+      .map(name => dbAgents.find(a => a.name === name))
+      .find(Boolean)
+    ?? dbAgents.find(a => a.type === "orchestrator");
 
   if (!orchestratorRow) {
     throw new Error("[Graph] synthesisNode: nenhum agente orquestrador encontrado.");

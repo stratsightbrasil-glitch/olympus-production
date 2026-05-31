@@ -69,15 +69,38 @@ export function useExport(token: string | null, projeto: Projeto, messages: Mess
     if (loading || messages.length === 0) return;
 
     if (tipo === 'padrao') {
+      // Nível 1: mensagem marcada explicitamente como relatório final
       let targetMsg = messages.find(m => m.messageType === 'relatorio_final');
+
+      // Nível 2: mensagem longa (análise completa típica)
       if (!targetMsg) {
-        const candidates = messages.filter(m => m.role === 'assistant' && typeof m.content === 'string' && m.content.length > 1500);
+        const candidates = messages.filter(m =>
+          m.role === 'assistant' && typeof m.content === 'string' && m.content.length > 1500
+        );
         if (candidates.length > 0)
           targetMsg = candidates.reduce((a, b) =>
             (typeof b.content === 'string' ? b.content.length : 0) > (typeof a.content === 'string' ? a.content.length : 0) ? b : a
           );
       }
-      if (!targetMsg) return alert('Relatório Final Padrão não encontrado.\n\nCertifique-se de que o orquestrador concluiu todas as etapas e gerou o relatório consolidado.');
+
+      // Nível 3 (Bug C): análise parcial com conteúdo substantivo — cobre o caso onde o
+      // especialista retornou erro mas o orquestrador ainda produziu conteúdo exportável.
+      if (!targetMsg) {
+        const candidates = messages.filter(m =>
+          m.role === 'assistant' &&
+          typeof m.content === 'string' &&
+          m.content.length > 300 &&
+          !m.content.includes('Confirme para prosseguir') &&
+          !m.content.includes('[PLANO DE FASE') &&
+          !m.content.includes('[PLANO] Fase')
+        );
+        if (candidates.length > 0)
+          targetMsg = candidates.reduce((a, b) =>
+            (typeof b.content === 'string' ? b.content.length : 0) > (typeof a.content === 'string' ? a.content.length : 0) ? b : a
+          );
+      }
+
+      if (!targetMsg) return alert('Nenhum conteúdo disponível para exportar.\n\nInicie uma análise antes de exportar.');
       await exportSinglePdf(typeof targetMsg.content === 'string' ? targetMsg.content : '');
 
     } else {

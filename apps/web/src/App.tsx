@@ -8,6 +8,8 @@ import { InputZone } from './components/chat/InputZone';
 import { RightPanel } from './components/layout/RightPanel';
 import { KratosPanel } from './components/layout/KratosPanel';
 import { EventsPanel } from './components/layout/EventsPanel';
+import { VizStatusBar } from './components/layout/VizStatusBar';
+import { HitlDecisionCard } from './components/chat/HitlDecisionCard';
 import { LoginPage } from './components/auth/LoginPage';
 import { NewSessionModal } from './components/modals/NewSessionModal';
 import { ProjectSettingsModal } from './components/modals/ProjectSettingsModal';
@@ -163,6 +165,18 @@ function App() {
     return messageCount > 0 ? 1 : 0;
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [messageCount, currentMethodologySteps]);
+
+  // Detecta quando o orquestrador aguarda confirmação do usuário (vizMode=passos)
+  const isWaiting = useMemo(() => {
+    if (vizMode !== 'passos' || chat.loading) return false;
+    for (let i = chat.messages.length - 1; i >= 0; i--) {
+      if (chat.messages[i].role === 'assistant') {
+        const c = typeof chat.messages[i].content === 'string' ? chat.messages[i].content as string : '';
+        return c.includes('Confirme para prosseguir') || c.includes('Oriente com ajustes');
+      }
+    }
+    return false;
+  }, [vizMode, chat.loading, chat.messages]);
 
   // ── Helpers ──────────────────────────────────────────────────────────────
   const getAgentInfo = (text: string) => {
@@ -355,6 +369,17 @@ function App() {
           onReportLayoutChange={handleReportLayoutChange}
         />
 
+        {projectState.sessionId && mainView === 'chat' && (
+          <VizStatusBar
+            vizMode={vizMode}
+            isWaiting={isWaiting}
+            activeAgent={chat.progressAgent}
+            currentStep={currentStep}
+            totalSteps={currentMethodologySteps.length}
+            methodologyName={projectState.projeto.metodologia || 'MSEF'}
+          />
+        )}
+
         <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
 
           {mainView === 'kratos' && projectState.sessionId && (
@@ -445,6 +470,13 @@ function App() {
             </>
           )}
         </div>
+
+        {mainView === 'chat' && isWaiting && (
+          <HitlDecisionCard
+            onConfirm={() => { chat.sendMessage('CONFIRMAR', [], undefined); setInput(''); }}
+            onRedirect={(instruction) => { chat.sendMessage(instruction, [], undefined); setInput(''); }}
+          />
+        )}
 
         {mainView === 'chat' && (
           <InputZone

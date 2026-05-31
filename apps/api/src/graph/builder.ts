@@ -127,6 +127,7 @@ export function graphConfig(
   callbacks?: {
     onStep?:  (msg: string) => void;
     onToken?: (delta: string) => void;
+    onAgent?: (name: string) => void;
   },
 ) {
   return {
@@ -134,6 +135,7 @@ export function graphConfig(
       thread_id: projectId,
       onStep:    callbacks?.onStep,
       onToken:   callbacks?.onToken,
+      onAgent:   callbacks?.onAgent,
     },
   };
 }

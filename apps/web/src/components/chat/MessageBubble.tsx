@@ -64,20 +64,20 @@ export const MessageBubble = memo(function MessageBubble({
   // Memoizado por conteúdo: re-processa apenas quando o texto muda (streaming ou edição).
   const formattedHtml = useMemo(() => fmt(content), [content]);
 
-  // Domain renderer — Matriz 2×2 (PYTHIA)
+  // Domain renderers — não filtram por agentName porque todos os outputs chegam
+  // via HERMES/OLYMPUS. Os parsers têm portões de detecção por conteúdo internos.
   const matriz2x2Data = useMemo(() =>
-    !isUser && DOMAIN_RENDERERS_ENABLED && agentName === 'PYTHIA' && !isStreaming
+    !isUser && DOMAIN_RENDERERS_ENABLED && !isStreaming
       ? parseMatriz2x2(content)
       : null,
-    [content, isUser, agentName, isStreaming]
+    [content, isUser, isStreaming]
   );
 
-  // Domain renderer — PESTEL Scatter (KLIO)
   const pestelData = useMemo(() =>
-    !isUser && DOMAIN_RENDERERS_ENABLED && agentName === 'KLIO' && !isStreaming
+    !isUser && DOMAIN_RENDERERS_ENABLED && !isStreaming
       ? parsePestel(content)
       : null,
-    [content, isUser, agentName, isStreaming]
+    [content, isUser, isStreaming]
   );
 
   if (isUser) {

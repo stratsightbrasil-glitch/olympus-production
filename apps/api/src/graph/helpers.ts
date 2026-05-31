@@ -273,7 +273,9 @@ export async function runAgentForPhase(
   agentName: string,
   config: RunnableConfig,
 ): Promise<Partial<OlympusState>> {
-  const onStep = config?.configurable?.onStep as ((msg: string) => void) | undefined;
+  const onStep  = config?.configurable?.onStep  as ((msg: string) => void) | undefined;
+  const onAgent = config?.configurable?.onAgent as ((name: string) => void) | undefined;
+  onAgent?.(agentName);  // notifica o cliente qual agente está ativo
   // onToken is NOT extracted here — specialist agents never stream tokens.
   // Token streaming is exclusively for synthesisNode (see nodes.ts).
 
@@ -367,6 +369,68 @@ export async function runAgentForPhase(
     currentNodeSlug: phaseSlug,  // stores phaseSlug (unique) — not nodeSlug (can repeat)
     messageType:     "parcial",
   };
+}
+
+// ── Execução direta de agente único (KRATOS, monitoramento, casos especiais) ──
+
+/**
+ * Executa um único agente especialista diretamente, sem o grafo completo.
+ * Usado pelo KRATOS (monitoramento autônomo via pg-boss) — não é uma análise
+ * multi-fase e não precisa do roteamento LangGraph.
+ *
+ * Persiste entrada e saída no banco. Retorna o texto gerado.
+ */
+export async function runDirectAgent(opts: {
+  agentName:   string;
+  input:       string;
+  projectId:   string;
+  projectName: string;
+  metodologia: string;
+  llmConfig:   { provider: string; model: string };
+  llmTiers:    Record<string, string>;
+  onStatus?:   (text: string) => void;
+  onAgent?:    (name: string) => void;
+}): Promise<string> {
+  const { agentName, input, projectId, llmConfig, llmTiers, onStatus, onAgent } = opts;
+
+  onStatus?.(`Carregando agente ${agentName}...`);
+
+  const dbAgent = await db.query.agents.findFirst({
+    where: eq(agentsTable.name, agentName),
+  });
+  if (!dbAgent) throw new Error(`Agente '${agentName}' não encontrado.`);
+
+  onAgent?.(agentName);
+
+  // Salva mensagem do usuário
+  await db.insert(messages).values({ projectId, role: 'user', content: input });
+
+  const tools = buildToolsForAgent(dbAgent, projectId);
+  const [memory, anchorCtx] = await Promise.all([
+    loadMemoryWindow(projectId),
+    buildAnchorCtx(projectId, 'ONLINE'),
+  ]);
+
+  const agentCtx: AgentContext = {
+    projectId,
+    methodology: opts.metodologia,
+    memory,
+    llmConfig,
+    llmTiers,
+    phases:             [],
+    agentMethodPrompts: {},
+    connectivityMode:   'ONLINE',
+    anchorContext:      anchorCtx || undefined,
+    onStep: (msg) => onStatus?.(msg),
+  };
+
+  const agent = new Agent(dbAgent.name, dbAgent.role, dbAgent.systemPrompt, tools, dbAgent.modelOverride ?? undefined);
+  const output = await agent.run(input, agentCtx, 'etapa');
+
+  await db.insert(messages).values({ projectId, role: 'assistant', content: output, agentName, messageType: 'monitoramento' });
+
+  onStatus?.(`${agentName} concluído.`);
+  return output;
 }
 
 // ── Helpers de roteamento (usados por nodes.ts e router.ts) ──────────────────

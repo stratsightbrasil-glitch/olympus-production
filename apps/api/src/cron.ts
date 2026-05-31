@@ -5,7 +5,8 @@ import { db, projects, messages, revokedTokens, rateLimitLogs } from '@olympus/d
 import { eq, and, isNull, asc, lt } from 'drizzle-orm';
 import { sql } from 'drizzle-orm';
 import { sendEmail } from './mailer';
-import { runAnalysis } from './routes/chat';
+import { runDirectAgent } from './graph/helpers';
+import { getLLMConfig, getLLMTiers } from './routes/settings';
 
 // ── pg-boss — fila KRATOS com isolamento por PostgreSQL ──────────────────────
 // Substitui KratosOrchestrator in-memory (T-10c Sprint 20).
@@ -56,28 +57,22 @@ async function runKratosJob(job: Job<KratosJobData>): Promise<void> {
   console.log(`[KRATOS pg-boss] 🤖 Iniciando job ${job.id} — projeto: ${projectName}`);
 
   try {
-    const msgs = await db.query.messages.findMany({
-      where: eq(messages.projectId, projectId),
-      orderBy: [asc(messages.createdAt)],
-      limit: 100,
-    });
-
-    const formattedMsgs = msgs.map(m => ({ role: m.role, content: m.content }));
+    // runDirectAgent carrega o histórico de memória internamente
     const systemCommand = `COMANDO DO SISTEMA EM MODO AUTÔNOMO (CRON): Acione o agente KRATOS para o projeto de nome oficial "${projectName}". \nREGRAS ESTRITAS DE OPERAÇÃO MÁQUINA:\n1. Você está operando em background (sem interação humana). NUNCA converse, peça permissão ou ofereça opções (A, B, C).\n2. Se houver falha na ferramenta de busca, NÃO relate o erro técnico; proceda imediatamente com a análise baseada nos últimos dados conhecidos do histórico.\n3. Gere EXCLUSIVAMENTE o Relatório de Acompanhamento padronizado (Dashboard, Síntese de Mudanças, Sinais Fracos).\n4. IMPORTANTE: O usuário pode ter alterado o nome, fatores, eventos e indicadores ao longo da análise. Baseie-se SEMPRE nas decisões MAIS RECENTES do histórico e use o título atualizado ("${projectName}").\nInicie a geração do relatório agora.`;
-    formattedMsgs.push({ role: 'user', content: systemCommand });
 
     const cooldown = await getKratosCooldown();
-    const systemPayload = { id: 'system', name: 'Sistema Automático', role: 'admin' };
-    const result = await runAnalysis(
-      { projectId, projectName, metodologia, vizMode: 'etapa', messages: formattedMsgs },
-      systemPayload,
-      {
-        onStatus: (t) => console.log(`[KRATOS pg-boss] Status: ${t}`),
-        onAgent:  (n) => console.log(`[KRATOS pg-boss] Agente: ${n}`),
-      },
-    );
-
-    const lastMessage = result.responseText || 'Análise concluída sem detalhes legíveis.';
+    const [llmConfig, llmTiers] = await Promise.all([getLLMConfig(), getLLMTiers()]);
+    const lastMessage = await runDirectAgent({
+      agentName:   'KRATOS',
+      input:       systemCommand,
+      projectId,
+      projectName,
+      metodologia,
+      llmConfig,
+      llmTiers,
+      onStatus: (t) => console.log(`[KRATOS pg-boss] Status: ${t}`),
+      onAgent:  (n) => console.log(`[KRATOS pg-boss] Agente: ${n}`),
+    });
     const projeto = await db.query.projects.findFirst({ where: eq(projects.id, projectId) });
     const emailsStr = projeto?.alertEmails?.trim() || process.env.ALERT_EMAIL || process.env.SMTP_USER || '';
     const destinatarios = emailsStr.split(',').map((e: string) => e.trim()).filter(Boolean);
@@ -151,10 +146,11 @@ export async function initKratosQueue(): Promise<void> {
   }
   try {
     boss = new PgBoss({ connectionString: dbUrl });
-    // teamSize: 1 = processa 1 job por vez (sequencial) — sem concorrência de conexões
-    // localConcurrency: 1 → apenas 1 job KRATOS executado por vez nesta instância
-    await boss.work('kratos-analysis', { localConcurrency: 1 }, runKratosJob as any);
+    // Captura erros não tratados do pg-boss (ex: reconexão) para não crashar o processo
+    boss.on('error', (err: any) => console.error('[pg-boss] Erro interno:', err?.message ?? err));
+    // start() DEVE preceder work() — pg-boss precisa da conexão antes de registrar workers
     await boss.start();
+    await boss.work('kratos-analysis', { localConcurrency: 1 }, runKratosJob as any);
     console.log('[pg-boss] ✅ Fila KRATOS inicializada (teamSize=1, histórico em pgboss.job)');
   } catch (err: any) {
     console.error('[pg-boss] Erro ao inicializar:', err.message);

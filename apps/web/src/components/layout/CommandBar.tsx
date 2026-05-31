@@ -513,13 +513,18 @@ export function CommandBar({
             : isWarm ? 'Prompt atual' : `Cache ${ageMin}m atrás`;
           return (
             <div style={{ display: 'flex', alignItems: 'center', gap: 5, flexShrink: 0 }}>
-              <div style={{
-                display: 'flex', alignItems: 'center', gap: 5,
-                background: 'rgba(255,255,255,.05)', border: `1px solid ${badgeColor}44`,
-                borderRadius: 5, padding: '4px 9px',
-                fontSize: 10, color: badgeColor, whiteSpace: 'nowrap' as const,
-              }} title={`Entradas em cache: ${cacheStatus.entries}`}>
-                <div style={{ width: 5, height: 5, borderRadius: '50%', background: badgeColor, flexShrink: 0 }} />
+              <div
+                role="status"
+                aria-label={`Cache de metodologias: ${label}. Entradas: ${cacheStatus.entries}`}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 5,
+                  background: 'rgba(255,255,255,.05)', border: `1px solid ${badgeColor}44`,
+                  borderRadius: 5, padding: '4px 9px',
+                  fontSize: 10, color: badgeColor, whiteSpace: 'nowrap' as const,
+                }}
+                title={`Entradas em cache: ${cacheStatus.entries}`}
+              >
+                <div aria-hidden="true" style={{ width: 5, height: 5, borderRadius: '50%', background: badgeColor, flexShrink: 0 }} />
                 {label}
               </div>
               {onInvalidateCache && (

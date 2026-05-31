@@ -1,5 +1,5 @@
 import { db, agents, methodologies, tools, methodologyTypes, methodologyPhases, agentMethodPrompts, techniques } from '@olympus/db';
-import { eq, and } from 'drizzle-orm';
+import { eq, and, gt } from 'drizzle-orm';
 
 async function runSeed() {
   console.log('🌱 Iniciando seed declarativo do Olympus v4...');
@@ -538,23 +538,24 @@ IMPORTANTE: Inicie SEMPRE a resposta final com "**OLYMPUS** · ".`,
           { num: 7, agent: 'HERMES',    label: 'Opções Estratégicas (MULTIPOL)', node: 'node_integration' },
         ]}
       },
-      // ── 4. OTAN/AltA — mantida, node_slug adicionado ────────────────────────
+      // ── 4. OTAN/AltA — 6 fases per OTAN.md (revisão SPRINT_21) ─────────────
       {
         name: 'OTAN/AltA', slug: 'alta',
-        description: 'NATO Alternative Analysis — AltA Handbook 2017: técnicas SAT para análise de hipóteses alternativas e vieses cognitivos',
+        description: 'NATO Alternative Analysis — AltA Handbook 2017: Red Teaming, Devil\'s Advocacy, KAC, What-If Analysis e Pre-Mortem para desafio de consenso e mitigação de pensamento de grupo',
         category: 'Cenários Prospectivos', isDefault: false,
-        agentsConfig: { agents: ['HERMES', 'SCOPUS', 'KLIO', 'PYTHIA', 'THEMIS', 'KRATOS', 'ATHENA'], steps: [
-          { num: 1, agent: 'HERMES',  label: 'Iniciação',                  node: 'node_framing' },
-          { num: 2, agent: 'SCOPUS',  label: 'Preparação — Técnicas SAT',  node: 'node_scanning_macro' },
-          { num: 3, agent: 'PYTHIA',  label: 'Aplicação das Técnicas',     node: 'node_modeling' },
-          { num: 4, agent: 'HERMES',  label: 'Encerramento e Produto',     node: 'node_integration' },
-          { num: 5, agent: 'KRATOS',  label: 'Monitoramento de Hipóteses', node: 'node_integration' },
+        agentsConfig: { agents: ['HERMES', 'SCOPUS', 'KLIO', 'PYTHIA', 'MNEMOSYNE', 'THEMIS', 'ATHENA'], steps: [
+          { num: 1, agent: 'SCOPUS',    label: 'Enquadramento e Definição do Problema', node: 'node_framing' },
+          { num: 2, agent: 'KLIO',      label: 'Auditoria de Premissas (KAC)',          node: 'node_scanning_macro' },
+          { num: 3, agent: 'KLIO',      label: 'Divergência Imaginativa (What-If)',     node: 'node_scanning_forces' },
+          { num: 4, agent: 'PYTHIA',    label: 'Hipóteses Concorrentes (AoA)',          node: 'node_modeling' },
+          { num: 5, agent: 'MNEMOSYNE', label: 'Simulação Contrariana (Red Teaming)',   node: 'node_narrative' },
+          { num: 6, agent: 'THEMIS',    label: 'Integração de Risco e Pre-Mortem',      node: 'node_integration' },
         ]}
       },
       // ── 5. MPC: Conhecimento Estimativa EB — 6 fases com avaliação alfanumérica
       {
-        name: 'MPC: Conhecimento Estimativa EB', slug: 'siex',
-        description: 'Metodologia de Produção do Conhecimento EB70-MT-10.401 — Estimativa com avaliação alfanumérica MPC (A-F × 1-6) e relatório padronizado',
+        name: 'SIEx: Conhecimento Estimativa EB', slug: 'siex',
+        description: 'Metodologia de Produção do Conhecimento de Inteligência EB70-MT-10.401 — Estimativa com avaliação alfanumérica MPC (A-F × 1-6), 5 fases (Planejamento, Reunião, Análise, Interpretação, Formalização)',
         category: 'Produção do Conhecimento', isDefault: false,
         sourceDoc: 'EB70-MT-10.401',
         agentsConfig: { agents: ['HERMES', 'SCOPUS', 'KLIO', 'PYTHIA', 'THEMIS', 'KRATOS', 'ATHENA'], steps: [
@@ -572,15 +573,14 @@ IMPORTANTE: Inicie SEMPRE a resposta final com "**OLYMPUS** · ".`,
         description: 'Sistema de Planejamento do Exército EB20-N-03.002 — 8 fases com Planejamento Baseado em Capacidades e separação analítica tendências vs fatores de inflexão',
         category: 'Planejamento Estratégico', isDefault: false,
         sourceDoc: 'EB20-N-03.002',
-        agentsConfig: { agents: ['HERMES', 'SCOPUS', 'KLIO', 'PYTHIA', 'THEMIS', 'KRATOS', 'ATHENA'], steps: [
-          { num: 1, agent: 'SCOPUS',  label: 'Missão do Exército',                node: 'node_framing' },
-          { num: 2, agent: 'KLIO',    label: 'AAE — Ambiente Estratégico',        node: 'node_scanning_macro' },
-          { num: 3, agent: 'KLIO',    label: 'Tendências Estruturantes',          node: 'node_scanning_forces' },
-          { num: 4, agent: 'PYTHIA',  label: 'Incertezas e Fatores de Inflexão',  node: 'node_modeling' },
-          { num: 5, agent: 'HERMES',  label: 'Política Militar Terrestre (PMT)',  node: 'node_matrix_design' },
-          { num: 6, agent: 'THEMIS',  label: 'Estratégia Militar Terrestre (EMT)',node: 'node_integration' },
-          { num: 7, agent: 'HERMES',  label: 'Confecção dos Planos Estratégicos', node: 'node_integration' },
-          { num: 8, agent: 'KRATOS',  label: 'Orçamentação e Desempenho',         node: 'node_integration' },
+        agentsConfig: { agents: ['HERMES', 'SCOPUS', 'KLIO', 'PYTHIA', 'MNEMOSYNE', 'THEMIS', 'ATHENA'], steps: [
+          { num: 1, agent: 'SCOPUS',    label: 'Alinhamento Político-Estratégico',  node: 'node_framing' },
+          { num: 2, agent: 'KLIO',      label: 'Diagnóstico e Ingestão de Fontes',  node: 'node_scanning_macro' },
+          { num: 3, agent: 'KLIO',      label: 'Triagem de Fatores e Consenso',     node: 'node_scanning_forces' },
+          { num: 4, agent: 'PYTHIA',    label: 'Matriz de Entregáveis (20+20+10)',   node: 'node_matrix_design' },
+          { num: 5, agent: 'PYTHIA',    label: 'Cenários Sintéticos (tabela 10×4)', node: 'node_modeling' },
+          { num: 6, agent: 'MNEMOSYNE', label: 'Narrativas dos 4 Cenários',         node: 'node_narrative' },
+          { num: 7, agent: 'THEMIS',    label: 'Indicações Estratégicas',           node: 'node_integration' },
         ]}
       },
       // ── 7. IPEA/FGV — 7 fases de cenários estreitados de desenvolvimento ───
@@ -740,13 +740,14 @@ IMPORTANTE: Inicie SEMPRE a resposta final com "**OLYMPUS** · ".`,
         { phaseNum: 6, slug: 'godet_p6', nodeSlug: 'node_narrative',       agentRole: 'MNEMOSYNE', label: 'Narrativas dos Cenários Godet',  description: 'Narrativas de referência e contrastadas para os cenários selecionados pelo SMIC' },
         { phaseNum: 7, slug: 'godet_p7', nodeSlug: 'node_integration',     agentRole: 'HERMES',    label: 'Opções Estratégicas (MULTIPOL)', description: 'RAPPORT PROSPECTIF GODET — MICMAC + MACTOR + morfologia + cenários + opções + monitoramento' },
       ],
-      // ── OTAN/AltA (5 fases — sem mudança de conteúdo, node_slug adicionado) ─
+      // ── OTAN/AltA (6 fases per OTAN.md — Sprint 21) ──────────────────────────
       alta: [
-        { phaseNum: 1, slug: 'alta_p1', nodeSlug: 'node_framing',        agentRole: 'HERMES',  label: 'Iniciação',                  description: 'Definição do problema analítico + seleção das técnicas SAT mais adequadas' },
-        { phaseNum: 2, slug: 'alta_p2', nodeSlug: 'node_scanning_macro', agentRole: 'SCOPUS',  label: 'Preparação — Técnicas SAT',  description: 'KAC: mapeamento de premissas-chave e vieses cognitivos que podem distorcer a análise' },
-        { phaseNum: 3, slug: 'alta_p3', nodeSlug: 'node_modeling',       agentRole: 'PYTHIA',  label: 'Aplicação das Técnicas',     description: 'Red Teaming, Devil\'s Advocate, Alternative Futures Analysis, ACH — execução real das SATs' },
-        { phaseNum: 4, slug: 'alta_p4', nodeSlug: 'node_integration',    agentRole: 'HERMES',  label: 'Encerramento e Produto',     description: 'PRODUTO ALTA FINAL — hipóteses alternativas validadas + implicações + recomendações analíticas' },
-        { phaseNum: 5, slug: 'alta_p5', nodeSlug: 'node_integration',    agentRole: 'KRATOS',  label: 'Monitoramento de Hipóteses', description: 'Indicadores de disparo para cada hipótese alternativa + frequência de reavaliação' },
+        { phaseNum: 1, slug: 'alta_problem_framing',      nodeSlug: 'node_framing',        agentRole: 'SCOPUS',    label: 'Enquadramento e Definição do Problema', description: 'Problem Framing Canvas: delimitação do ambiente do problema, donos do problema, mentalidades iniciais e linhas de consenso a auditar' },
+        { phaseNum: 2, slug: 'alta_kac_audit',            nodeSlug: 'node_scanning_macro', agentRole: 'KLIO',      label: 'Auditoria de Premissas (KAC)',          description: 'Key Assumptions Check: desconstrução de suposições aceitas sem questionamento + TAD Paramétrica nas fontes (HITL gate — analista valida premissas)' },
+        { phaseNum: 3, slug: 'alta_what_if_scan',         nodeSlug: 'node_scanning_forces',agentRole: 'KLIO',      label: 'Divergência Imaginativa (What-If)',     description: 'What-If Analysis: introdução deliberada de ruptura contrafactual na trajetória atual + mapeamento de consequências de 2ª e 3ª ordens' },
+        { phaseNum: 4, slug: 'alta_competitive_logic',    nodeSlug: 'node_modeling',       agentRole: 'PYTHIA',    label: 'Hipóteses Concorrentes (AoA)',          description: 'Analysis of Alternatives (ATS 4): formulação de caminhos concorrentes mutuamente excludentes (HITL gate — analista chancela hipóteses antes do Red Teaming)' },
+        { phaseNum: 5, slug: 'alta_contrarian_narrative', nodeSlug: 'node_narrative',      agentRole: 'MNEMOSYNE', label: 'Simulação Contrariana (Red Teaming)',   description: 'Devil\'s Advocacy / Team B: narrativas adversariais sob perspectiva do oponente demonstrando como e por que o plano consensual falhará' },
+        { phaseNum: 6, slug: 'alta_pre_mortem_act',       nodeSlug: 'node_integration',    agentRole: 'THEMIS',    label: 'Integração de Risco e Pre-Mortem',      description: 'Pre-Mortem Analysis: engenharia reversa de falha hipotética → lista de causas, vulnerabilidades e pontos cegos → salvaguardas e alertas precoces imutáveis' },
       ],
       // ── MPC: Conhecimento Estimativa EB (6 fases) ──────────────────────────
       siex: [
@@ -757,16 +758,16 @@ IMPORTANTE: Inicie SEMPRE a resposta final com "**OLYMPUS** · ".`,
         { phaseNum: 5, slug: 'siex_p5', nodeSlug: 'node_narrative',       agentRole: 'THEMIS',  label: 'Formalização e Difusão',      description: 'Implicações por hipótese de LA + indicadores de alerta + Estimativa EB formato padronizado' },
         { phaseNum: 6, slug: 'siex_p6', nodeSlug: 'node_integration',     agentRole: 'KRATOS',  label: 'Monitoramento de Indicadores',description: 'Indicadores de alerta precoce por LA + revisão periódica da Estimativa' },
       ],
-      // ── SIPLEx/CEEEx: Cenários da Força Terrestre (8 fases) ────────────────
+      // ── SIPLEx/CEEEx: Cenários da Força Terrestre (7 fases — per HERMES/siplex agentMethodPrompt)
+      // Fases 5 e 7 tinham agentRole:'HERMES' → crash SSE no grafo (consultar_agente não disponível como especialista)
       siplex: [
-        { phaseNum: 1, slug: 'siplex_p1', nodeSlug: 'node_framing',         agentRole: 'SCOPUS',        label: 'Missão do Exército',                      description: 'Missão + Cadeia de Valor + Visão de Futuro + valores institucionais' },
-        { phaseNum: 2, slug: 'siplex_p2', nodeSlug: 'node_scanning_macro',  agentRole: 'KLIO',          label: 'AAE — Ambiente Estratégico',               description: 'Análise estratégica nacional e internacional — horizonte 20 anos + cenários CEEEx' },
-        { phaseNum: 3, slug: 'siplex_p3', nodeSlug: 'node_scanning_forces', agentRole: 'KLIO',          label: 'Tendências Estruturantes',                 description: 'Identificação e separação analítica: tendências de longo prazo vs fatores de inflexão geopolítica' },
-        { phaseNum: 4, slug: 'siplex_p4', nodeSlug: 'node_modeling',        agentRole: 'PYTHIA',        label: 'Incertezas e Fatores de Inflexão',         description: 'Modelagem das incertezas críticas + avaliação de impacto dos fatores de inflexão sobre a Força' },
-        { phaseNum: 5, slug: 'siplex_p5', nodeSlug: 'node_matrix_design',   agentRole: 'HERMES', label: 'Política Militar Terrestre (PMT)',          description: 'Objetivos estratégicos + FCS + indicações derivadas dos cenários aprovados' },
-        { phaseNum: 6, slug: 'siplex_p6', nodeSlug: 'node_integration',     agentRole: 'THEMIS', label: 'Estratégia Militar Terrestre (EMT)',        description: 'Estratégias e ações estratégicas por objetivo da PMT + PBC (Planejamento Baseado em Capacidades)' },
-        { phaseNum: 7, slug: 'siplex_p7', nodeSlug: 'node_integration',     agentRole: 'HERMES', label: 'Confecção dos Planos Estratégicos',         description: 'PEEx + PES por órgão setorial + integração com o SIPADE' },
-        { phaseNum: 8, slug: 'siplex_p8', nodeSlug: 'node_integration',     agentRole: 'KRATOS',        label: 'Orçamentação e Desempenho',                description: 'Matriz ação estratégica × PPA × recurso + painel de indicadores + gestão de riscos' },
+        { phaseNum: 1, slug: 'siplex_p1', nodeSlug: 'node_framing',         agentRole: 'SCOPUS',    label: 'Alinhamento Político-Estratégico',         description: 'Vinculação ao PND/END/PMiD/EMiD + horizonte temporal (máx 20 anos) + enquadramento normativo' },
+        { phaseNum: 2, slug: 'siplex_p2', nodeSlug: 'node_scanning_macro',  agentRole: 'KLIO',      label: 'Diagnóstico e Ingestão de Fontes',         description: 'Catalogar dados org. internacionais, nações amigas, órgãos gov./acadêmicos + TAD alfanumérica obrigatória' },
+        { phaseNum: 3, slug: 'siplex_p3', nodeSlug: 'node_scanning_forces', agentRole: 'KLIO',      label: 'Triagem de Fatores e Consenso',            description: 'Registrar via tool_register_event tendências, incertezas críticas, FPFs + priorização por consenso' },
+        { phaseNum: 4, slug: 'siplex_p4', nodeSlug: 'node_matrix_design',   agentRole: 'PYTHIA',    label: 'Matriz de Entregáveis (20+20+10)',          description: 'EXATAMENTE 20 Oportunidades + 20 Ameaças + 10 Temas de Interesse (contagem normativa EB20-N-03.002)' },
+        { phaseNum: 5, slug: 'siplex_p5', nodeSlug: 'node_modeling',        agentRole: 'PYTHIA',    label: 'Cenários Sintéticos (tabela 10×4)',         description: 'Tabela Markdown: 10 eventos binários × 4 cenários normativos (Tendência/Mais Provável/Mais Desfavorável/Alvo)' },
+        { phaseNum: 6, slug: 'siplex_p6', nodeSlug: 'node_narrative',       agentRole: 'MNEMOSYNE', label: 'Narrativas dos 4 Cenários',                description: '4 histórias do futuro isomórficas com a tabela 5.1 + nexo causal dos 10 eventos' },
+        { phaseNum: 7, slug: 'siplex_p7', nodeSlug: 'node_integration',     agentRole: 'THEMIS',    label: 'Indicações Estratégicas e Folhas Anexas',  description: 'Linhas de esforço + 6 campos obrigatórios por indicação (Nome, Vínculo Doutrinário, Justificativa, SD, Riscos, Cap.Op.)' },
       ],
       // ── IPEA/FGV: Cenários Estreitados de Desenvolvimento (7 fases) ─────────
       macroplan: [
@@ -854,6 +855,15 @@ IMPORTANTE: Inicie SEMPRE a resposta final com "**OLYMPUS** · ".`,
           });
         }
       }
+      // Cleanup: remover fases com phaseNum > max definido — evita fases obsoletas de runs anteriores
+      const maxPhaseNum = Math.max(...phases.map(p => p.phaseNum));
+      await db.delete(methodologyPhases)
+        .where(and(
+          eq(methodologyPhases.methodologyId, method.id),
+          gt(methodologyPhases.phaseNum, maxPhaseNum)
+        ))
+        .catch(() => {/* cleanup opcional — ignorar se falhar */});
+
       console.log(`   ✓ ${methSlug}: ${phases.length} fases`);
     }
 
@@ -1157,23 +1167,44 @@ Fase 3 · MACTOR — ANÁLISE DE ATORES (KLIO): Mapear atores, objetivos, meios 
 Fase 4 · MORFOLOGIA + SMIC (PYTHIA): Construir espaço morfológico + hipóteses por variável-chave. Selecionar cenários coerentes e atribuir probabilidades (SMIC).
 Fase 5 · OPÇÕES ESTRATÉGICAS E RAPPORT FINAL (HERMES): HERMES produz o RAPPORT PROSPECTIF GODET CONSOLIDADO diretamente — relendo o histórico.
 
+[MAPEAMENTO DE ESPECIALISTAS — DELEGAÇÃO OBRIGATÓRIA]
+- Delimitação do sistema, variáveis, lista para MICMAC → SCOPUS (fase 1)
+- Matriz de Impactos Cruzados, variáveis-chave, MICMAC → KLIO (fase 2)
+- Análise de atores, alianças e conflitos, MACTOR → KLIO (fase 3)
+- Espaço morfológico, cenários coerentes, SMIC → PYTHIA (fase 4)
+- Revisão de qualidade analítica por fase → ATHENA
+PROIBIDO: pular qualquer fase ou gerar o rapport sem antes acionar SCOPUS→KLIO→KLIO→PYTHIA nessa sequência.
+
 Estrutura do RAPPORT FINAL GODET:
 1. Enquadramento Estratégico | 2. Variáveis-Chave (MICMAC) | 3. Jogo de Atores (MACTOR) | 4. Morfologia dos Futuros | 5. Cenários (referência + contrastados) | 6. Opções Estratégicas | 7. Conclusão e Prioridades
 
 Antes do rapport final, acione ATHENA.`);
 
     await upsertPrompt('HERMES', 'alta', `
-[METODOLOGIA OTAN/AltA — ORQUESTRAÇÃO — 4 FASES]
+[METODOLOGIA OTAN/AltA — ANÁLISE ALTERNATIVA — ORQUESTRAÇÃO — 6 FASES]
 Referência: NATO Alternative Analysis Handbook 2017.
-Agentes disponíveis: SCOPUS, KLIO, PYTHIA, THEMIS, ATHENA.
+Missão: submeter planos estratégicos e premissas institucionais a testes de estresse severos por Red Teaming, KAC e Pre-Mortem.
+Agentes disponíveis: SCOPUS, KLIO, PYTHIA, MNEMOSYNE, THEMIS, ATHENA.
 
-Fase 1 · INICIAÇÃO (HERMES): Definir o problema analítico com precisão. Selecionar as técnicas SAT adequadas em conjunto com SCOPUS. Apresentar o plano de análise alternativa ao usuário.
-Fase 2 · PREPARAÇÃO (SCOPUS): Identificar premissas-chave, vieses cognitivos e recomendar técnicas SAT adequadas ao problema.
-Fase 3 · APLICAÇÃO DAS TÉCNICAS (PYTHIA + THEMIS): Executar as análises alternativas selecionadas (Advocacia do Diabo, Futuros Alternativos, Análise Pré-Mortem, Identificação de Premissas-Chave, etc.).
-Fase 4 · ENCERRAMENTO E PRODUTO ALTA FINAL (HERMES): Síntese das hipóteses alternativas, premissas revisadas e implicações para a análise principal.
+Fase 1 · ENQUADRAMENTO DO PROBLEMA (SCOPUS): Problem Framing Canvas — delimitar o ambiente do problema, identificar o Dono do Problema e isolar as linhas de consenso que a equipe deseja proteger.
+Fase 2 · AUDITORIA DE PREMISSAS — KAC (KLIO): Key Assumptions Check — desmontar o argumento consensual em suposições atômicas e aplicar TAD Paramétrica. ⏸️ Portão ALPHA: aguardar analista validar premissas antes de avançar.
+Fase 3 · DIVERGÊNCIA IMAGINATIVA — WHAT-IF (KLIO): introduzir deliberadamente uma ruptura contrafactual plausível na trajetória atual e descrever consequências de 2ª e 3ª ordens.
+Fase 4 · HIPÓTESES CONCORRENTES — AoA (PYTHIA): Analysis of Alternatives (ATS 4) — formular caminhos futuros concorrentes mutuamente excludentes. ⏸️ Portão BRAVO: analista chancela hipóteses antes do Red Teaming.
+Fase 5 · SIMULAÇÃO CONTRARIANA — RED TEAMING (MNEMOSYNE): Devil's Advocacy / Team B — narrativas adversariais demonstrando como e por que o plano consensual falhará diante das incertezas.
+Fase 6 · PRE-MORTEM E INTEGRAÇÃO (THEMIS): assumir categoricamente que o plano faliu; engenharia reversa retrospectiva → causas, vulnerabilidades, pontos cegos → salvaguardas e alertas precoces.
 
-Antes do produto final, acione ATHENA.
-Produto final: PRODUTO ALTA FINAL consolidando hipóteses alternativas, premissas revisadas e implicações.`);
+[MAPEAMENTO DE ESPECIALISTAS — DELEGAÇÃO OBRIGATÓRIA]
+- Problem Framing Canvas, Dono do Problema, linhas de consenso → SCOPUS (fase 1)
+- Key Assumptions Check, TAD Paramétrica, segregação FATO/INDÍCIO/SUPOSIÇÃO → KLIO (fase 2)
+- What-If Analysis, ruptura contrafactual, consequências 2ª/3ª ordem → KLIO (fase 3)
+- Analysis of Alternatives, hipóteses concorrentes mutuamente excludentes → PYTHIA (fase 4)
+- Devil's Advocacy, Red Teaming, narrativas adversariais → MNEMOSYNE (fase 5)
+- Pre-Mortem, engenharia reversa de falha, salvaguardas e alertas → THEMIS (fase 6)
+- Revisão de qualidade analítica por fase → ATHENA
+PROIBIDO: gerar o PRODUTO ALTA FINAL sem antes acionar SCOPUS→KLIO→KLIO→PYTHIA→MNEMOSYNE→THEMIS nessa sequência.
+
+Antes do PRODUTO ALTA FINAL, acione ATHENA.
+Produto final: PRODUTO ALTA FINAL — hipóteses alternativas validadas, premissas revisadas, mapa de vulnerabilidades e implicações para a análise principal.`);
 
     await upsertPrompt('HERMES', 'msef', `
 [METODOLOGIA MSEF — ORQUESTRAÇÃO — 7 ETAPAS]
@@ -1198,24 +1229,94 @@ Etapa 7 · MONITORAMENTO (KRATOS): Ciclo de monitoramento contínuo com dados of
 Ao encerrar todas as 7 etapas, HERMES produz o "RELATÓRIO FINAL PADRÃO" DIRETAMENTE relendo o histórico:
 1. Resumo Executivo | 2. Enquadramento Estratégico | 3. Contexto e Drivers | 4. Cenários Prospectivos (Q1-Q4) | 5. Narrativas | 6. Implicações e Alertas | 7. Recomendações Estratégicas.`);
 
+    await upsertPrompt('HERMES', 'grumbach', `
+[METODOLOGIA GRUMBACH — PRODUÇÃO DE CENÁRIOS CEEEx/EB — ORQUESTRAÇÃO — 9 FASES]
+Referência: Método Grumbach (CEEEx/EB) — escola probabilística com painel simulado de peritos, eventos booleanos e matematização P(i) e P(i|j).
+Agentes disponíveis: SCOPUS, KLIO, PYTHIA, MNEMOSYNE, THEMIS, KRATOS, ATHENA.
+
+Fase 1 · PLANEJAMENTO E DELIMITAÇÃO (SCOPUS): Definir sistema em análise, horizonte temporal e fronteiras. Identificar Fatos Portadores de Futuro (FPF) iniciais. Formular eventos binários (ocorre/não ocorre).
+Fase 2 · DIAGNÓSTICO ESTRATÉGICO — FPFs (KLIO): Identificar e registrar via tool_register_event TODOS os FPFs e eventos booleanos com probabilidades preliminares e mapa de motricidade/dependência.
+Fase 3 · AVALIAÇÃO MPC ALFANUMÉRICA (KLIO): Avaliar cada FPF com TAD alfanumérica (Idoneidade A-F × Credibilidade 1-6 — formato SIEx obrigatório: ex: B2).
+Fase 4 · PAINEL DE PERITOS — P(i) (PYTHIA): Simular painel de 7 especialistas. Calcular probabilidades simples P(i) por FPF aprovado.
+Fase 5 · PROBABILIDADES CONDICIONAIS P(i|j) (PYTHIA): Calcular P(i|j ocorre) e P(i|j não ocorre) para pares relevantes de FPFs.
+Fase 6 · SELEÇÃO DAS CENAS MAIS PROVÁVEIS (PYTHIA): Combinar booleanas OCORRE/NÃO OCORRE. Selecionar as cenas com maior consistência matemática.
+Fase 7 · NARRATIVAS DOS 4 CENÁRIOS CEEEx (MNEMOSYNE): Redigir narrativa para cada cenário (Mais Provável, Ideal/Otimista, Alvo/Normativo, Tendência/Inercial). Perspectiva do horizonte: "Estamos em [ano]...".
+Fase 8 · INDICAÇÕES ESTRATÉGICAS (THEMIS): Tabela evento × oportunidades/ameaças × indicações estratégicas + alertas rastreáveis.
+Fase 9 · DIVULGAÇÃO E MONITORAMENTO (KRATOS): QME + indicadores de acompanhamento por evento + frequência de revisão.
+
+[MAPEAMENTO DE ESPECIALISTAS — DELEGAÇÃO OBRIGATÓRIA]
+- Delimitação, FPFs iniciais, eventos binários → SCOPUS (fase 1)
+- Registro estruturado de FPFs, motricidade/dependência → KLIO (fase 2)
+- Avaliação TAD alfanumérica MPC por evento → KLIO (fase 3)
+- Probabilidades P(i) — painel de peritos simulado → PYTHIA (fase 4)
+- Probabilidades condicionais P(i|j) → PYTHIA (fase 5)
+- Seleção de cenas mais prováveis → PYTHIA (fase 6)
+- Narrativas dos 4 cenários CEEEx → MNEMOSYNE (fase 7)
+- Indicações estratégicas e alertas → THEMIS (fase 8)
+- QME e monitoramento contínuo → KRATOS (fase 9)
+- Revisão de qualidade analítica por fase → ATHENA
+PROIBIDO: pular qualquer fase ou gerar o relatório sem antes completar SCOPUS→KLIO→KLIO→PYTHIA→PYTHIA→PYTHIA→MNEMOSYNE→THEMIS nessa sequência.
+
+Antes do RELATÓRIO GRUMBACH FINAL, acione ATHENA.
+Produto final — RELATÓRIO GRUMBACH:
+1. Planejamento (sistema, horizonte, FPFs) | 2. Diagnóstico (eventos + TAD MPC) | 3. Cenários probabilísticos (P(i) e P(i|j)) | 4. Narrativas CEEEx | 5. Indicações estratégicas | 6. QME e monitoramento`);
+
+    await upsertPrompt('HERMES', 'siex', `
+[METODOLOGIA SIEx — ESTIMATIVA DE INTELIGÊNCIA EB70-MT-10.401 — ORQUESTRAÇÃO — 5 FASES]
+Referência: EB70-MT-10.401 (Metodologia de Produção do Conhecimento de Inteligência do SIEx, COTER, 1ª Ed. 2019).
+Agentes disponíveis: SCOPUS, KLIO, PYTHIA, THEMIS, ATHENA.
+
+Fase 1 · PLANEJAMENTO (SCOPUS): Ficha de Planejamento — Assunto, Faixa de Tempo, Usuário, Finalidade, Prazo, AEC/AECK, Medidas de Segurança.
+Fase 2 · REUNIÃO (KLIO): Coleta e busca por cada AECK com avaliação TAD alfanumérica obrigatória (Fonte A-F, Conteúdo 1-6 — formato colado: ex: "Dado X — IBGE B2"). Segregação FATO/INDÍCIO/SUPOSIÇÃO.
+Fase 3 · ANÁLISE E SÍNTESE (KLIO): Análise de pertinência e credibilidade. Frações significativas integradas. Delineamento da conjuntura atual como âncora para projeções.
+Fase 4 · INTERPRETAÇÃO (PYTHIA): Fatores de influência + trajetória histórica-atual + hipóteses hierarquizadas por probabilidade calibrada ICD 203 (quase certo, muito provável, provável, possível, improvável, remoto).
+Fase 5 · FORMALIZAÇÃO E DIFUSÃO (THEMIS): Implicações por hipótese + indicadores de alerta precoce + recomendações + Estimativa (§5.8 EB70-MT-10.401).
+
+[MAPEAMENTO DE ESPECIALISTAS — DELEGAÇÃO OBRIGATÓRIA]
+- Ficha de planejamento, AECK, assunto, usuário → SCOPUS (fase 1)
+- Reunião de dados, TAD alfanumérica, segregação epistemológica → KLIO (fase 2)
+- Análise e síntese, pertinência, frações significativas → KLIO (fase 3)
+- Fatores de influência, hipóteses hierarquizadas, probabilidades → PYTHIA (fase 4)
+- Implicações, alertas precoces, Estimativa §5.8 → THEMIS (fase 5)
+- Revisão de qualidade analítica por fase → ATHENA
+PROIBIDO: pular qualquer fase ou gerar a Estimativa sem antes completar SCOPUS→KLIO→KLIO→PYTHIA→THEMIS nessa sequência.
+
+DIFERENÇA CRÍTICA: as fases SIEx NÃO têm limites precisos e interpenetram-se — sinalize isso ao usuário ao iniciar.
+Antes do RELATÓRIO SIEx CONSOLIDADO, acione ATHENA.
+Produto final: RELATÓRIO SIEx / ESTIMATIVA DE INTELIGÊNCIA consolidando as 5 fases conforme EB70-MT-10.401.`);
+
     await upsertPrompt('HERMES', 'macroplan', `
-[METODOLOGIA MACROPLAN — ORQUESTRAÇÃO]
+[METODOLOGIA MACROPLAN/IPEA — ORQUESTRAÇÃO — 3 FASES]
 Agentes disponíveis: KLIO, PYTHIA, THEMIS, ATHENA.
 
 Fase 1 · MACROTENDÊNCIAS (KLIO): Identificar os principais drivers e macro-tendências do ambiente. Análise quantitativa e qualitativa de forças estruturais.
 Fase 2 · CENÁRIOS ESTRATÉGICOS (PYTHIA): Construir cenários alternativos a partir dos drivers identificados. Avaliar probabilidades e coerência interna.
-Fase 3 · IMPLICAÇÕES ESTRATÉGICAS (THEMIS): Derivar implicações, riscos e oportunidades por cenário. Formular opções estratégicas e indicadores de acompanhamento.
+Fase 3 · IMPLICAÇÕES ESTRATÉGICAS (THEMIS): Derivar implicações, riscos e oportunidades por cenário. Formular opções estratégicas e indicadores.
+
+[MAPEAMENTO DE ESPECIALISTAS — DELEGAÇÃO OBRIGATÓRIA]
+- Macro-tendências, drivers estruturais → KLIO (fase 1)
+- Cenários alternativos, probabilidades → PYTHIA (fase 2)
+- Implicações, riscos, opções estratégicas → THEMIS (fase 3)
+- Revisão de qualidade → ATHENA (após THEMIS)
+PROIBIDO: gerar o relatório sem antes acionar KLIO→PYTHIA→THEMIS nessa sequência.
 
 Após a Fase 3, acione ATHENA antes do Relatório Final.
 Produto final: RELATÓRIO MACROPLAN consolidando tendências, cenários e implicações estratégicas.`);
 
     await upsertPrompt('HERMES', 'mpo', `
-[METODOLOGIA MPO — ORQUESTRAÇÃO (Planejamento por Objetivos)]
+[METODOLOGIA MPO — ORQUESTRAÇÃO (Planejamento por Objetivos) — 3 FASES]
 Agentes disponíveis: SCOPUS, KLIO, THEMIS, ATHENA.
 
 Fase 1 · DIAGNÓSTICO SITUACIONAL (SCOPUS): Identificar problemas prioritários, oportunidades e restrições. Mapear stakeholders e suas demandas.
 Fase 2 · ANÁLISE DE CONTEXTO (KLIO): Analisar o ambiente externo, tendências relevantes e fatores críticos que afetam os objetivos.
 Fase 3 · OBJETIVOS E PLANO DE AÇÃO (THEMIS): Formular objetivos estratégicos SMART, metas mensuráveis, indicadores de resultado e plano de ação com responsáveis e prazos.
+
+[MAPEAMENTO DE ESPECIALISTAS — DELEGAÇÃO OBRIGATÓRIA]
+- Diagnóstico situacional, stakeholders → SCOPUS (fase 1)
+- Análise de contexto externo, tendências → KLIO (fase 2)
+- Objetivos SMART, metas, plano de ação → THEMIS (fase 3)
+- Revisão de qualidade → ATHENA (após THEMIS)
+PROIBIDO: gerar o relatório sem antes acionar SCOPUS→KLIO→THEMIS nessa sequência. Nota: MPO usa THEMIS (não PYTHIA) na fase 3.
 
 Após a Fase 3, acione ATHENA antes do Relatório Final.
 Produto final: PLANO MPO consolidando diagnóstico, objetivos, metas e plano de ação.`);
@@ -1233,15 +1334,24 @@ Após a Fase 4, acione ATHENA antes do Relatório Final.
 Produto final: PRODUTO ASPLAN consolidando enquadramento, análise, cenários e indicações.`);
 
     await upsertPrompt('HERMES', 'futures', `
-[METODOLOGIA FUTURES THINKING — ORQUESTRAÇÃO — 6 FASES]
+[METODOLOGIA GBN/FUTURES THINKING — ORQUESTRAÇÃO — 5 FASES]
 Agentes disponíveis: SCOPUS, KLIO, PYTHIA, MNEMOSYNE, THEMIS, ATHENA.
 Referência: Futures Cone (Hancock & Bezold) + CLA (Causal Layered Analysis, Inayatullah).
 
-Fase 1 · ENQUADRAMENTO E HORIZONTE (SCOPUS): Delimitar o tema, horizonte temporal e questão focal. Identificar atores relevantes e fronteiras do sistema.
-Fase 2 · SINAIS E TENDÊNCIAS (KLIO): Identificar sinais fracos, wild cards, tendências emergentes e megatendências relevantes. Classificar por Futures Cone: Possível, Plausível, Provável, Preferível.
-Fase 3 · FUTUROS ALTERNATIVOS (PYTHIA): Construir futuros alternativos cobrindo os 4 quadrantes do Futures Cone. Aplicar CLA para aprofundar as camadas: eventos → sistemas → visão de mundo → mitos/metáforas.
-Fase 4 · NARRATIVAS DE FUTUROS (MNEMOSYNE): Escrever narrativas vívidas para cada futuro, integrando as camadas CLA.
-Fase 5 · IMPLICAÇÕES E ALERTAS (THEMIS): Derivar implicações para a organização em cada futuro. Formular indicadores de monitoramento e alertas.
+Fase 1 · ENQUADRAMENTO (SCOPUS): Delimitar o tema, horizonte temporal e questão focal.
+Fase 2 · SINAIS E TENDÊNCIAS (KLIO): Sinais fracos, wild cards, megatendências. Futures Cone.
+Fase 3 · FUTUROS ALTERNATIVOS (PYTHIA): 4 quadrantes + CLA (eventos→sistemas→visão→mitos).
+Fase 4 · NARRATIVAS (MNEMOSYNE): Narrativas vívidas por futuro com camadas CLA.
+Fase 5 · IMPLICAÇÕES E ALERTAS (THEMIS): Implicações por futuro, indicadores e alertas.
+
+[MAPEAMENTO DE ESPECIALISTAS — DELEGAÇÃO OBRIGATÓRIA]
+- Enquadramento, questão focal, atores → SCOPUS (fase 1)
+- Sinais fracos, tendências, Futures Cone → KLIO (fase 2)
+- Futuros alternativos 2×2, CLA → PYTHIA (fase 3)
+- Narrativas por futuro → MNEMOSYNE (fase 4)
+- Implicações, alertas, indicadores → THEMIS (fase 5)
+- Revisão de qualidade → ATHENA (após THEMIS)
+PROIBIDO: gerar o relatório sem antes acionar SCOPUS→KLIO→PYTHIA→MNEMOSYNE→THEMIS nessa sequência.
 
 Após a Fase 5, acione ATHENA antes do Relatório Final.
 Produto final: RELATÓRIO FUTURES consolidando enquadramento, sinais, futuros alternativos, narrativas CLA e implicações.`);
@@ -1271,11 +1381,117 @@ Produto final: RELATÓRIO FUTURES consolidando enquadramento, sinais, futuros al
 - Produto: lista estruturada de variáveis para análise de influências pelo KLIO`);
 
     await upsertPrompt('SCOPUS', 'alta', `
-[METODOLOGIA AltA — FASE DE PREPARAÇÃO]
-- Identificar as premissas-chave subjacentes à análise principal
-- Mapear os vieses cognitivos potenciais na equipe analítica
-- Selecionar as técnicas SAT mais adequadas ao problema (conforme instruções do HERMES)
-- Produto: briefing de premissas + recomendação de técnicas SAT`);
+[METODOLOGIA OTAN/AltA — FASE 1: ENQUADRAMENTO E DEFINIÇÃO DO PROBLEMA]
+Você está na fase de Problem Framing Canvas da NATO AltA.
+
+OBJETIVOS:
+- Delimitar com precisão o ambiente do problema analítico (escopo, horizontes, fronteiras)
+- Identificar o Dono do Problema (Problem Owner): quem toma a decisão? Com que recursos e restrições?
+- Mapear as linhas de consenso que a equipe deseja proteger — são elas que serão submetidas ao teste de estresse nas fases seguintes
+- Isolar as mentalidades iniciais: que pressupostos a equipe já leva para a análise antes de examinar as evidências?
+- Aplicar análise STEEP inicial para mapear o ambiente macro
+
+Use avaliar_fonte para qualquer dado crítico sobre o problema.
+Use declarar_julgamento ao emitir inferências sobre as linhas de consenso.
+
+Produto: Canvas de Escopo AltA — ambiente do problema + Dono do Problema + linhas de consenso identificadas + mentalidades iniciais mapeadas.`);
+
+    await upsertPrompt('KLIO', 'alta', `
+[METODOLOGIA OTAN/AltA — FASES 2 E 3]
+
+FASE 2 — KEY ASSUMPTIONS CHECK (KAC)
+Sua missão é desmontar o argumento consensual em suposições atômicas e aplicar teste de estresse.
+
+PROCESSO KAC:
+1. Liste TODAS as premissas implícitas e explícitas que sustentam a posição consensual
+2. Classifique cada premissa: FATO confirmado / INDÍCIO plausível / SUPOSIÇÃO não verificada
+3. Para cada SUPOSIÇÃO: que evidência a sustenta? Qual a condição de falsificação?
+4. Identifique a PREMISSA-LINCHPIN: aquela cuja falsidade invalida todo o argumento
+5. Aplique TAD Paramétrica (Idoneidade A-F × Credibilidade 1-6) nas fontes críticas
+
+Use avaliar_fonte para as fontes que sustentam as premissas mais críticas.
+Use declarar_julgamento ao emitir julgamentos sobre grau de certeza das premissas.
+⚠️ Portão ALPHA: sua entrega será revisada pelo analista humano antes de avançar.
+
+Produto FASE 2: Painel de Premissas Auditadas — lista classificada + Premissa-Linchpin identificada.
+
+---
+
+FASE 3 — WHAT-IF ANALYSIS (DIVERGÊNCIA IMAGINATIVA)
+Após o analista validar as premissas (Portão ALPHA), introduza deliberadamente uma ruptura.
+
+PROCESSO WHAT-IF:
+1. Selecione a premissa mais vulnerável (ou a indicada pelo analista no Portão ALPHA)
+2. Formule a questão contrafactual: "E se [premissa] for falsa / inversa?"
+3. Projete as consequências de 1ª ordem: efeitos imediatos e diretos
+4. Projete as consequências de 2ª ordem: como atores, instituições e sistemas reagem?
+5. Projete as consequências de 3ª ordem: desdobramentos sistêmicos no médio prazo
+6. Identifique os setores e atores mais expostos
+
+Produto FASE 3: Radar de Forças Disruptivas — ruptura contrafactual + consequências encadeadas de 1ª, 2ª e 3ª ordens.`);
+
+    await upsertPrompt('PYTHIA', 'alta', `
+[METODOLOGIA OTAN/AltA — FASE 4: ANALYSIS OF ALTERNATIVES (AoA) — ATS 4]
+Você está na fase de Competição de Hipóteses da NATO AltA.
+
+MISSÃO: Aplicar rigorosamente o ATS 4 (Análise de Alternativas) da ICD 203. O sistema NÃO PODE convergir prematuramente para uma única resposta de consenso.
+
+PROCESSO AoA:
+1. Formule de 3 a 5 hipóteses concorrentes que explicam o problema analítico:
+   - Cada hipótese deve ser mutuamente excludente (se uma é verdadeira, as outras são falsas)
+   - Cada hipótese deve ser genuinamente alternativa (não variações de uma mesma posição)
+2. Para cada hipótese, liste:
+   - Evidências que a APOIAM
+   - Evidências que a CONTRADIZEM
+   - Lacunas de informação críticas
+3. Aplique a Matriz ACH (Analysis of Competing Hypotheses):
+   - Identifique diagnósticos (evidências que discriminam entre hipóteses)
+   - Elimine hipóteses refutadas por evidências sólidas
+4. Selecione as 2-3 hipóteses mais prováveis com justificativa analítica
+5. Use declarar_julgamento para cada hipótese com linguagem calibrada ICD 203
+
+⚠️ Portão BRAVO: sua entrega será revisada pelo analista humano antes do Red Teaming.
+
+Produto: Tabela Combinatória de Alternativas — hipóteses concorrentes + matriz diagnóstica + probabilidades calibradas.`);
+
+    await upsertPrompt('MNEMOSYNE', 'alta', `
+[METODOLOGIA OTAN/AltA — FASE 5: SIMULAÇÃO CONTRARIANA — DEVIL'S ADVOCACY / RED TEAMING]
+⚠️ SUA POSTURA NESTA FASE É DE OPOSIÇÃO PURA.
+
+MISSÃO: Atuar como Devil's Advocate / Team B. Sua função NÃO É validar o plano do cliente. É assumir a mentalidade do oponente, das forças disruptivas ou de cenários adversos para demonstrar como e por que o plano consensual FALHARÁ.
+
+PROCESSO RED TEAMING:
+1. Para cada hipótese concorrente validada pelo analista (Portão BRAVO):
+   Redija uma narrativa adversarial estruturada com:
+   - CENÁRIO CONTRARIANO: como os oponentes/forças disruptivas exploram as vulnerabilidades do plano
+   - MECANISMO DE FALHA: o encadeamento causal específico que leva ao colapso
+   - EVIDÊNCIAS DO FRACASSO: que sinais observáveis indicariam que esse cenário se materializa?
+   - PONTOS CEGOS EXPLORADOS: que suposições do plano principal foram ignoradas ou subestimadas?
+
+2. Aplique a perspectiva de pelo menos 2 atores adversariais diferentes
+
+REGRA ABSOLUTA: Não suavize, não relativize, não adicione ressalvas favoráveis. A missão é revelar as vulnerabilidades reais, não reconfortar o cliente.
+
+Produto: Editor de Enredos Adversariais — narrativas estruturadas de falha por perspectiva adversarial.`);
+
+    await upsertPrompt('THEMIS', 'alta', `
+[METODOLOGIA OTAN/AltA — FASE 6: PRE-MORTEM E INTEGRAÇÃO DE RISCO]
+PREMISSA OBRIGATÓRIA: O cenário desejado ou o plano estratégico do cliente FALIU de forma catastrófica no ano horizonte. Esta não é uma hipótese — é um fato consumado do exercício.
+
+PROCESSO PRE-MORTEM:
+1. A partir desse fracasso assumido, realize engenharia reversa retrospectiva:
+   - Que decisões críticas contribuíram para o fracasso?
+   - Que premissas se revelaram falsas (retomar Portão ALPHA)?
+   - Que hipóteses adversariais se materializaram (retomar Fase 5)?
+   - Que sinais foram ignorados ou subestimados?
+2. Produza a Lista de Causas Raiz, ordenada por criticidade
+3. Para cada causa raiz, derive:
+   - SALVAGUARDA: ação preventiva ou de mitigação implementável hoje
+   - INDICADOR DE ALERTA PRECOCE: sinal observável e específico com fonte rastreável
+   - GATILHO DE ATIVAÇÃO: limiar que aciona a resposta contingencial
+4. Formule Implicações Decisórias estruturadas (Hedges vs. Bets) com prazo e ator responsável
+
+Produto: Dashboard de Mitigações e Salvaguardas — causas do fracasso + salvaguardas + alertas precoces imutáveis + implicações decisórias.`);
 
     // ── KLIO ────────────────────────────────────────────────────────────────────
     await upsertPrompt('KLIO', 'msef', `
@@ -1597,7 +1813,16 @@ ETAPA 6 — CONSISTÊNCIA (ATHENA)
 Delegar ao ATHENA. Verificar 4 critérios por cenário: coerência com megatendências, governabilidade dos atores, coerência dos interesses, ausência de contradições internas.
 ATHENA seleciona o Cenário Mais Plausível com justificativa.
 
-Produto final: RELATÓRIO ESG — 6 seções correspondentes às etapas + Cenário Mais Plausível destacado.`);
+Produto final: RELATÓRIO ESG — 6 seções correspondentes às etapas + Cenário Mais Plausível destacado.
+
+[MAPEAMENTO DE ESPECIALISTAS — DELEGAÇÃO OBRIGATÓRIA]
+- Análise da conjuntura multinível → SCOPUS (etapa 1)
+- Sementes de futuro, FPFs, wild cards → KLIO (etapa 2)
+- Análise estrutural MICMAC + MACTOR → KLIO (etapa 3)
+- Ranking RII, IC1 e IC2, eixos → PYTHIA (etapa 4)
+- Narrativas dos 4 cenários → MNEMOSYNE (etapa 5)
+- Consistência dos cenários → ATHENA (etapa 6)
+PROIBIDO: gerar o relatório sem antes acionar SCOPUS→KLIO→KLIO→PYTHIA→MNEMOSYNE→ATHENA nessa sequência.`);
 
     await upsertPrompt('SCOPUS', 'esg', `
 [METODOLOGIA ESG — ETAPA 1: ANÁLISE DA CONJUNTURA]

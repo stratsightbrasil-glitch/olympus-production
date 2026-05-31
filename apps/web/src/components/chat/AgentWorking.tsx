@@ -6,18 +6,22 @@ interface AgentWorkingProps {
 export function AgentWorking({ progressAgent, stepLog }: AgentWorkingProps) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', animation: 'fade-in .2s ease' }}>
-      <div style={{
-        display: 'flex', alignItems: 'center', gap: 10,
-        padding: '8px 14px',
-        background: '#ffffff',
-        border: '1px solid #D4E2DA',
-        borderRadius: '12px',
-        fontSize: 12, color: '#3D5A48',
-        maxWidth: 340,
-        boxShadow: '0 1px 3px rgba(13,22,18,.08)',
-        marginLeft: 38,
-        fontFamily: "'DM Sans', system-ui, sans-serif",
-      }}>
+      <div
+        role="status"
+        aria-live="polite"
+        aria-label={`${progressAgent || 'HERMES'} processando análise`}
+        style={{
+          display: 'flex', alignItems: 'center', gap: 10,
+          padding: '8px 14px',
+          background: '#ffffff',
+          border: '1px solid #D4E2DA',
+          borderRadius: '12px',
+          fontSize: 12, color: '#3D5A48',
+          maxWidth: 340,
+          boxShadow: '0 1px 3px rgba(13,22,18,.08)',
+          marginLeft: 38,
+          fontFamily: "'DM Sans', system-ui, sans-serif",
+        }}>
         {/* Três dots pulsantes */}
         <div style={{ display: 'flex', gap: 3, flexShrink: 0 }}>
           {[0, 1, 2].map(i => (

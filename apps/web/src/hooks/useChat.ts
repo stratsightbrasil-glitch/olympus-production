@@ -63,10 +63,8 @@ export function useChat({
     }
   }, [flushTokenBuffer]);
 
-  // Detecta se o vizMode usa o motor LangGraph
-  const isGraphMode = vizMode === 'grafo';
-  // Endpoint SSE: /stream/graph para motor LangGraph, /stream para motor clássico
-  const streamEndpoint = isGraphMode ? '/api/v1/chat/stream/graph' : '/api/v1/chat/stream';
+  // Motor único LangGraph — todos os modos (passos/etapa/passagem/thinking) usam /stream/graph (Sprint 21)
+  const streamEndpoint = '/api/v1/chat/stream/graph';
 
   const callChatStream = async (payload: object, onDone: (data: DonePayload) => void): Promise<void> => {
     // Cancela qualquer RAF pendente da stream anterior
@@ -306,9 +304,9 @@ export function useChat({
           projectId:   sessionId,
           projectName: projeto.nome,
           metodologia: projeto.metodologia,
-          vizMode:     'grafo',
+          vizMode,               // preserva o modo ativo (passos/etapa/passagem/thinking)
           isResuming:  true,
-          messages:    [],  // não envia histórico — o checkpointer do grafo tem o estado
+          messages:    [],       // o checkpointer LangGraph tem o estado completo
         },
         ({ text, thinking, messageType }) => {
           appendAssistantMessage(text, thinking, messageType);
