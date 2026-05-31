@@ -191,7 +191,15 @@ function adaptOlympusTool(ot: OlympusTool, projectId: string): Tool<any> {
   // preserving the exact runtime shape Agent.run() expects.
   const schm = jsonSchema(rawSchema);
   const adapted: Record<string, unknown> = {
+    // name é OBRIGATÓRIO: Agent.ts usa t.name como chave em aiTools[t.name].
+    // Sem ele, todas as ferramentas analíticas colapsam em aiTools[undefined]
+    // e apenas a última sobrevive — as demais ficam inacessíveis ao LLM.
+    name:        ot.name,
     description: ot.description,
+    // schema (raw JSON) é OBRIGATÓRIO: Agent.ts usa `t.schema || TOOL_JSON_SCHEMAS[t.name] || FALLBACK`
+    // para construir o wrappedSchema passado ao tool(). Sem ele, o LLM vê parâmetros
+    // vazios ({}) para todos os analytical-engine tools.
+    schema:      rawSchema,
     parameters:  schm,
     execute:     async (args: any) => ot.execute({ projectId, ...args }),
     // LangChain compatibility: @langchain/core ≥0.2 calls tool.inputSchema()
