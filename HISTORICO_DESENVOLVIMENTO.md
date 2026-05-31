@@ -1,6 +1,6 @@
 # OLYMPUS v4 — Histórico de Desenvolvimento e Estado Atual
 **StratSight Brasil · Strategic Foresight · IA Agêntica**
-**Atualizado em:** 30 Mai 2026 (Sprint 19 concluído)
+**Atualizado em:** 31 Mai 2026 (Sprint 21 concluído)
 **Destinatário:** Claude Chat / Claude Design — revisão de arquitetura e UI
 
 ---
@@ -668,7 +668,7 @@ Se Docker travar com `input/output error`: `wsl --shutdown` + *Clean/Purge data*
 
 ### 22.1 Decisões arquiteturais conhecidas (intencionais, não problemas)
 
-- **Duas rotas de análise:** `/chat/stream` (ReAct, produção) e `/chat/stream/graph` (LangGraph, experimental/futuro). Decisão intencional — LangGraph aguarda feature parity antes de substituir a rota principal.
+- ~~**Duas rotas de análise:**~~ **✅ Sprint 21 — Motor único LangGraph.** `/chat/stream` e a rota síncrona foram removidas. Toda análise passa por `/chat/stream/graph`. Os 4 modos (passos/etapa/passagem/thinking) são configurações do grafo.
 - **App.tsx com estado global centralizado:** padrão deliberado para MVP. Decomposição em contextos React (LLMContext, SessionContext) está no roadmap mas não é bloqueadora.
 
 ### 22.2 Débito técnico conhecido
@@ -676,19 +676,57 @@ Se Docker travar com `input/output error`: `wsl --shutdown` + *Clean/Purge data*
 - **export.ts — mapeamentos de fase:** usa `_getPhaseMap()` com TTL 5 min — fonte única via banco. ✅ Resolvido Sprint 20.
 - **parseScenarioProbabilities() — regex frágil:** ainda em uso para análises antigas. `tool_register_scenario` é o substituto para novas análises.
 - **HERMES_SIPLEX no banco:** deletado via seed.ts a partir do Sprint 20. Não recriado.
-- **Mensagem duplicada (Bug #2/#3):** HERMES transcreve especialista nos tokens SSE + inclui na síntese → 2 mensagens salvas. Aberto.
-- **Páginas vazias PDF (Bug D):** mensagens `parcial` curtas exportadas como blocos quase vazios. Aberto.
+- ~~**Mensagem duplicada (Bug #2/#3):**~~ ✅ Resolvido Sprint 21 — instrução de transcrição verbatim removida.
+- ~~**Páginas vazias PDF (Bug D):**~~ ✅ Resolvido Sprint 21 — filterAgentMessages threshold 800 chars.
+- **Normalização de slugs pendente:** `alta`→`otan`, `macroplan`→`ipea`, `futures`→`gbn`, `siplex`→`siplex_ceex`. Não afeta funcionamento (loadMethodology busca por nome E slug). Migração requer DROP+RECREATE ou UPDATE preservando FKs.
+- **OLYMPUS stubs pendentes:** grumbach_plj, siex_mpc, siplex_plj, asplan_sped (metodologias de planejamento estratégico — fases indefinidas, orquestrador OLYMPUS).
 
 ### 22.3 UI/UX — itens pendentes de design
 
-- **Modo `passos` supervisionado:** orquestrador apresenta [PLANO DE FASE] e aguarda confirmação. UI exibe inline, sem painel dedicado para estado de espera.
+- **Modo `passos` — HitlDecisionCard:** ✅ Sprint 21 — cartão de Confirmar/Redirecionar implementado acima do InputZone.
+- **VizStatusBar:** ✅ Sprint 21 — barra de status mostrando modo, fase e agente ativo.
 - **Seletor de `reportLayout`:** ✅ Toggle Standard/Estendido implementado no CommandBar (Sprint 20). Estado em localStorage por projeto.
-- **vizMode não comunicado ao usuário:** diferença entre `etapa` (autônomo), `passos` (HITL), `passagem` (contínuo) e `thinking` não é clara na interface.
+- **Seletor de `vizMode`:** ✅ Sprint 21 — 'Motor LangGraph' removido (obsoleto). 4 modos disponíveis: Passo a Passo, Etapa Completa, Processo Completo, Raciocínio Estendido.
 - **EventsPanel (HITL):** funcional, flicker corrigido (Sprint 20). Theming ainda inconsistente com o restante da UI.
-- **SIPLEx/CEEEx:** agentMethodPrompts migrado Sprint 17. Testado end-to-end com HERMES — funcional.
-- **CONFIRMAR contextualizado:** a partir do Sprint pós-deploy, CONFIRMAR injeta `[Fase N/Total]` automaticamente no payload. HERMES orientado sem perder contexto em análises longas.
 
 ---
 
-*Atualizado em 31/05/2026 — Sprint 20 + pós-deploy concluídos — Railway online — 42/42 testes ✅*
+## Sprint 21 — Motor LangGraph-first + Bugs + OTAN (31 Mai 2026)
+
+### Decisão arquitetural principal
+
+**Eliminação do `runAnalysis()` e adoção do LangGraph como motor único.** Ver seção 22.1 acima.
+
+### Mudanças críticas
+
+| Componente | Antes | Depois |
+|---|---|---|
+| `chat.ts` | 3 rotas (/, /stream, /stream/graph) | 1 rota (/stream/graph) |
+| `analysis.service.ts` | 569 linhas — orquestrador ReAct completo | 75 linhas — cache de metodologias |
+| `useChat.ts` | Alternava entre /stream e /stream/graph | Sempre /stream/graph |
+| `cron.ts KRATOS` | `runAnalysis()` | `runDirectAgent()` (sem grafo) |
+| `synthesisNode` | Pegava primeiro orchestrator do DB | Prefere HERMES via agentMethodPrompts |
+| `NewSessionModal` | 5 modos (incl. Motor LangGraph) | 4 modos (todos já usam LangGraph) |
+
+### Bugs resolvidos
+
+| Bug | Fix |
+|---|---|
+| pg-boss crash Railway (ERR_UNHANDLED_ERROR) | `cron.ts`: `boss.start()` → `boss.work()` + `boss.on('error')` |
+| Bugs #2/#3: conteúdo duplicado | Instrução "Transcreva verbatim" → "Apresente sem duplicar" |
+| Bug #6: `---` repetido | Regex `/(\n\s*---\s*){3,}/g` em analysis.service.ts |
+| Bug C: export bloqueado em erro de especialista | useExport.ts: fallback 3 níveis (>300 chars, excl. planning) |
+| Bug D: páginas vazias PDF | export.ts: filterAgentMessages threshold 800 chars |
+
+### Metodologias
+
+- **OTAN/AltA**: 6 fases per OTAN.md — KAC, What-If, Analysis of Alternatives, Red Teaming, Pre-Mortem
+- **SIPLEx/CEEEx**: 7 fases — HERMES removido como agentRole (causava crash SSE ao tentar usar consultar_agente como especialista)
+- **SIEx**: nome canônico "SIEx: Conhecimento Estimativa EB" (era "MPC: Conhecimento Estimativa EB")
+- **HERMES agentMethodPrompts**: Grumbach (9 fases) e SIEx (5 fases) adicionados; Godet, OTAN, ESG, macroplan, futures reforçados com [MAPEAMENTO DE ESPECIALISTAS]
+- **seed.ts**: cleanup automático de fases excedentes com `gt(phaseNum, max)`
+
+---
+
+*Atualizado em 31/05/2026 — Sprint 21 concluído — Railway deploy em andamento — LangGraph-first*
 *Para revisão de arquitetura e UI pelo Claude Chat e Design*

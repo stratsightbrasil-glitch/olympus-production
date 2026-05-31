@@ -1,5 +1,5 @@
 # ESTADO ATUAL DO OLYMPUS v4
-**Documento técnico para revisão de arquitetura e design — atualizado em 31/05/2026 (Sprint 20 + pós-deploy concluídos)**
+**Documento técnico para revisão de arquitetura e design — atualizado em 31/05/2026 (Sprint 21 concluído — Motor LangGraph-first)**
 **Gerado por:** Claude Code (análise estática do código-fonte + execução da suite de testes)
 **Destinatário:** Claude Chat / Claude Design — análise arquitetural, revisão de UI e continuidade do desenvolvimento
 
@@ -16,7 +16,7 @@ Olympus/
 │   │       ├── mailer.ts           # Nodemailer — alertas SMTP do KRATOS
 │   │       ├── cron.ts             # pg-boss worker + node-cron scheduler (T-10c Sprint 20)
 │   │       │                       # → enqueueKratosJob() + initKratosQueue() + limpeza 03h
-│   │       ├── graph/              # LangGraph StateGraph — motor de orquestração v2 (experimental)
+│   │       ├── graph/              # LangGraph StateGraph — motor de orquestração ÚNICO (Sprint 21)
 │   │       │   ├── builder.ts      # getOlympusGraph() async singleton — PostgresSaver
 │   │       │   ├── postgresSaver.ts# PostgresSaver singleton — 4 tabelas checkpoint
 │   │       │   ├── nodes.ts        # scopus/klio/pythia(HITL interrupt)/mnemosyne/integration/synthesis
@@ -291,9 +291,10 @@ boss.work('kratos-analysis', { localConcurrency: 1 }) → runKratosJob()
 
 ### 12.1 Decisões arquiteturais conhecidas (intencionais)
 
-- **Duas rotas de análise:** `/chat/stream` (ReAct, produção) e `/chat/stream/graph` (LangGraph, experimental)
+- **Motor único LangGraph (Sprint 21):** `/chat/stream` e rota síncrona removidas. Apenas `/chat/stream/graph`. Os 4 modos (passos/etapa/passagem/thinking) são configurações do grafo.
+- **`analysis.service.ts`:** gutted Sprint 21 — apenas 3 funções de cache de metodologia (loadMethodology, invalidateMethodologyCache, getMethodologyCacheStatus). runAnalysis() eliminado.
+- **KRATOS:** usa `runDirectAgent()` de `graph/helpers.ts` — execução direta sem grafo (monitoramento single-agent).
 - **App.tsx com estado global centralizado:** padrão MVP deliberado
-- **analysis.service.ts:** extraído de chat.ts no Sprint 20 — chat.ts agora < 200 linhas com apenas handlers HTTP/SSE
 
 ### 12.2 Débito técnico
 
