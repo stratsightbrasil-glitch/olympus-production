@@ -233,6 +233,46 @@ serve({ fetch: app.fetch, port, hostname: '0.0.0.0' });
       await db.execute(sql`CREATE EXTENSION IF NOT EXISTS vector`);
       console.log('[pgvector] ✅ Extensão vector habilitada.');
 
+      // ── Migrations Olympus 1.0 (idempotentes — seguro rodar múltiplas vezes) ──
+      await db.execute(sql`
+        ALTER TABLE methodologies
+          ADD COLUMN IF NOT EXISTS methodology_type        TEXT DEFAULT 'cenarios',
+          ADD COLUMN IF NOT EXISTS implementation_status   TEXT DEFAULT 'v1.0',
+          ADD COLUMN IF NOT EXISTS parent_relation         TEXT,
+          ADD COLUMN IF NOT EXISTS source_documents        JSONB DEFAULT '[]'
+      `);
+      await db.execute(sql`
+        CREATE TABLE IF NOT EXISTS phase_outputs (
+          id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          project_id      TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+          phase_slug      TEXT NOT NULL,
+          node_slug       TEXT NOT NULL,
+          phase_num       INTEGER NOT NULL,
+          methodology_id  TEXT NOT NULL,
+          summary         TEXT NOT NULL DEFAULT '',
+          key_findings    JSONB NOT NULL DEFAULT '[]',
+          tool_call_ids   TEXT[] DEFAULT '{}',
+          athena_verdict  TEXT,
+          athena_checks   JSONB DEFAULT '[]',
+          athena_used_llm BOOLEAN DEFAULT FALSE,
+          created_at      TIMESTAMPTZ DEFAULT NOW() NOT NULL
+        )
+      `);
+      await db.execute(sql`
+        DO $$ BEGIN
+          IF NOT EXISTS (
+            SELECT 1 FROM pg_constraint WHERE conname = 'uq_phase_outputs_project_phase'
+          ) THEN
+            ALTER TABLE phase_outputs
+              ADD CONSTRAINT uq_phase_outputs_project_phase UNIQUE (project_id, phase_slug);
+          END IF;
+        END $$
+      `);
+      await db.execute(sql`
+        CREATE INDEX IF NOT EXISTS idx_phase_outputs_project ON phase_outputs(project_id)
+      `);
+      console.log('[Migration] ✅ Olympus 1.0 — phase_outputs e campos methodologies OK.');
+
       // Valores padrão em platform_settings — onConflictDoNothing = nunca sobrescreve customizações
       // Padrão dev: Haiku (mais barato). Para prod, use a UI de Settings ou PATCH /api/v1/settings/llm
       // onConflictDoNothing preserva customizações feitas via UI — nunca sobrescreve em restart.

@@ -36,8 +36,8 @@ import { eq, and, asc } from "drizzle-orm";
 // Buffer de janela deslizante: mantém apenas as N mensagens mais recentes +
 // a primeira mensagem (âncora de contexto do projeto).
 // Evita o "Efeito Bola de Neve" onde o custo cresce exponencialmente com o histórico.
-const MEMORY_TOKEN_BUDGET   = 32_000; // reduzido de 80K — limita acúmulo de outputs longos
-const MEMORY_WINDOW_MESSAGES = 10;    // máximo de mensagens no janela deslizante (além da âncora)
+const MEMORY_TOKEN_BUDGET   = 48_000; // comporta 8 saídas de ~5K chars + contexto
+const MEMORY_WINDOW_MESSAGES = 16;    // âncora + 16 recentes = cobre MSEF (8 fases) com folga
 
 function estimateTokens(content: unknown): number {
   if (!content) return 0;
@@ -211,13 +211,85 @@ function adaptOlympusTool(ot: OlympusTool, projectId: string): Tool<any> {
 }
 
 /**
+ * Cria a ferramenta consultar_agente com closure sobre projectId e llmConfig.
+ * O sub-agente (ex: ATHENA) é instanciado via Agent.run() direto — não via LangGraph.
+ * Sem ferramentas próprias: sub-agentes respondem com análise textual pura.
+ * llmConfig herdado do agente pai — garante consistência de modelo na cadeia.
+ */
+function createConsultarAgenteTool(
+  projectId: string,
+  llmConfig: { provider: string; model: string } | undefined,
+  llmTiers:  Record<string, string>,
+): Tool<any> {
+  return {
+    name: 'consultar_agente',
+    description:
+      'Delega uma tarefa para um agente especialista da equipe OLYMPUS. '
+      + 'Use agent_name="ATHENA" para auditoria de qualidade analítica (ATS). '
+      + 'Outros valores: SCOPUS, KLIO, PYTHIA, MNEMOSYNE, THEMIS.',
+    schema: {
+      type: 'object' as const,
+      properties: {
+        agent_name: {
+          type: 'string',
+          description: 'Nome do agente especialista a consultar.',
+        },
+        query: {
+          type: 'string',
+          description: 'Tarefa ou pergunta para o agente. Inclua o conteúdo a auditar.',
+        },
+      },
+      required: ['agent_name', 'query'],
+    },
+    execute: async (args: { agent_name: string; query: string }) => {
+      const dbAgent = await db.query.agents.findFirst({
+        where: eq(agentsTable.name, args.agent_name),
+      });
+      if (!dbAgent) return `[ERRO] Agente '${args.agent_name}' não encontrado.`;
+
+      const subAgent = new Agent(
+        dbAgent.name,
+        dbAgent.role,
+        dbAgent.systemPrompt,
+        [],  // sub-agentes sem ferramentas — evita chamadas recursivas
+        dbAgent.modelOverride ?? undefined,
+      );
+
+      const memory = await loadMemoryWindow(projectId);
+
+      const subCtx: AgentContext = {
+        projectId,
+        methodology:        '',
+        memory,
+        llmConfig:          llmConfig ?? { provider: 'anthropic', model: 'claude-haiku-4-5-20251001' },
+        llmTiers,
+        phases:             [],
+        agentMethodPrompts: {},
+        connectivityMode:   'ONLINE',
+      };
+
+      try {
+        return await subAgent.run(args.query, subCtx, 'etapa');
+      } catch (err: any) {
+        return `[ERRO ao consultar ${args.agent_name}]: ${err?.message ?? 'desconhecido'}`;
+      }
+    },
+  };
+}
+
+/**
  * Constrói a lista de ferramentas para um agente a partir de toolsConfig (JSON array de nomes).
  * Ferramentas ausentes são silenciosamente ignoradas (feature, não bug).
  *
  * Inclui as ferramentas do motor analítico (analytical-engines.ts) que ficam em
  * apps/api/src/tools/ porque dependem de @olympus/db (proibido em packages/tools/).
  */
-export function buildToolsForAgent(agentRow: any, projectId: string): Tool<any>[] {
+export function buildToolsForAgent(
+  agentRow:   any,
+  projectId:  string,
+  llmConfig?: { provider: string; model: string },
+  llmTiers?:  Record<string, string>,
+): Tool<any>[] {
   const { registrarSinal, buscarSinais, atualizarSentinela } =
     createSignalTools(projectId);
   const { declararJulgamento, registrarHipoteseAlternativa, avaliarFonte } =
@@ -229,6 +301,8 @@ export function buildToolsForAgent(agentRow: any, projectId: string): Tool<any>[
   );
 
   const available: Record<string, Tool<any>> = {
+    // ── Delegação intra-equipe ────────────────────────────────────────────────
+    consultar_agente: createConsultarAgenteTool(projectId, llmConfig, llmTiers ?? {}),
     // ── Ferramentas externas / RAG ─────────────────────────────────────────────
     web_search:                     tavilySearchTool,
     buscar_dados_publicos:          dadosPublicosTool,
@@ -298,6 +372,19 @@ export async function runAgentForPhase(
   // 2. TechniqueEngine — injeta instruções SAT no prompt
   let agentPrompt = dbAgent.systemPrompt;
 
+  // KLIO FIRST-STEP enforcement — injetar instrução explícita antes do system prompt.
+  // Garante que a PRIMEIRA ação seja registrar evento (TAD), não buscar na web.
+  if (agentName === 'KLIO' && process.env.TEST_MODE !== 'true') {
+    agentPrompt =
+      "[REGRA OPERACIONAL OBRIGATÓRIA — PRIMEIRO PASSO SEMPRE]:\n"
+      + "Sua PRIMEIRA ação DEVE ser chamar tool_register_event para registrar\n"
+      + "o evento, tendência ou fator de inflexão que você identificará.\n"
+      + "SOMENTE após registrar via tool_register_event, use web_search ou\n"
+      + "buscar_dados_publicos para complementar com dados externos.\n"
+      + "NUNCA inicie com web_search. Violações desta regra invalidam a análise TAD.\n\n"
+      + agentPrompt;
+  }
+
   // TEST_MODE: ATHENA auto-aprova HITL — evita loops de validação sem analista humano
   if (process.env.TEST_MODE === 'true' && agentName === 'ATHENA') {
     agentPrompt = `[MODO TESTE ATIVO] Você está em modo de teste automatizado. ` +
@@ -321,7 +408,7 @@ export async function runAgentForPhase(
   }
 
   // 3. Monta ferramentas
-  const tools = buildToolsForAgent(dbAgent, state.projectId);
+  const tools = buildToolsForAgent(dbAgent, state.projectId, state.llmConfig, state.llmTiers);
 
   // 4. Carrega memória e âncora em paralelo
   const [memory, anchorContext] = await Promise.all([
@@ -413,7 +500,7 @@ export async function runDirectAgent(opts: {
   // Salva mensagem do usuário
   await db.insert(messages).values({ projectId, role: 'user', content: input });
 
-  const tools = buildToolsForAgent(dbAgent, projectId);
+  const tools = buildToolsForAgent(dbAgent, projectId, llmConfig, llmTiers);
   const [memory, anchorCtx] = await Promise.all([
     loadMemoryWindow(projectId),
     buildAnchorCtx(projectId, 'ONLINE'),
@@ -439,6 +526,24 @@ export async function runDirectAgent(opts: {
 
   onStatus?.(`${agentName} concluído.`);
   return output;
+}
+
+// ── buildToolsForPhase (Olympus 1.0 / phaseLoopNode) ─────────────────────────
+
+/**
+ * Constrói ferramentas para uma fase a partir de uma lista de nomes.
+ * Substitui buildToolsForAgent no fluxo v5 — recebe allowedTools da PhaseConfig.
+ */
+export function buildToolsForPhase(
+  allowedToolNames: string[],
+  projectId:        string,
+  llmConfig?:       { provider: string; model: string },
+  llmTiers?:        Record<string, string>,
+): ReturnType<typeof buildToolsForAgent> {
+  // Reutiliza o dict 'available' construindo um agentRow fictício
+  // com toolsConfig = allowedToolNames
+  const fakeAgentRow = { toolsConfig: allowedToolNames };
+  return buildToolsForAgent(fakeAgentRow, projectId, llmConfig, llmTiers);
 }
 
 // ── Helpers de roteamento (usados por nodes.ts e router.ts) ──────────────────

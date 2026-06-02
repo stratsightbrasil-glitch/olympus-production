@@ -25,12 +25,21 @@ export const users = pgTable("users", {
 export const methodologies = pgTable("methodologies", {
   id: uuid("id").primaryKey().defaultRandom(),
   name: text("name").notNull().unique(),
-  slug: text("slug").unique(), // identificador URL-safe (ex: 'msef', 'grumbach')
+  slug: text("slug").unique(), // identificador URL-safe (ex: 'grumbach', 'ceeex')
   description: text("description"),
   sourceDoc: text("source_doc"), // documento de referência (ex: 'EB70-MT-10.401')
   category: text("category").default("Cenários Prospectivos").notNull(),
   isDefault: boolean("is_default").default(false).notNull(),
   agentsConfig: jsonb("agents_config"),
+  // ── Campos Olympus 1.0 (Bloco A/B, status de implementação) ──────────────
+  methodologyType: text("methodology_type").default("cenarios"),
+  // 'cenarios' | 'planejamento' | 'inteligencia'
+  implementationStatus: text("implementation_status").default("v1.0"),
+  // 'v1.0' = disponível; 'v2.0' = stub (pipeline futuro)
+  parentRelation: text("parent_relation"),
+  // ex: 'Fase de cenários do grumbach_gestao' / 'Motor de cenarização do siplex'
+  sourceDocuments: jsonb("source_documents").default([]),
+  // array de strings com os documentos fonte verificados
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
@@ -365,6 +374,43 @@ export const matrixDirectImpactsRelations = relations(matrixDirectImpacts, ({ on
 
 export const techniqueOutputsRelations = relations(techniqueExecutionOutputs, ({ one }) => ({
   project: one(projects, { fields: [techniqueExecutionOutputs.projectId], references: [projects.id] }),
+}));
+
+// ── Artefatos estruturados por fase (Olympus 1.0) ────────────────────────────
+// Substitui o uso de messages como canal de passagem de contexto entre fases.
+// Cada registro representa uma fase concluída com findings estruturados e veredicto ATHENA.
+export const phaseOutputs = pgTable("phase_outputs", {
+  id:            uuid("id").defaultRandom().primaryKey(),
+  projectId:     text("project_id")
+                   .notNull()
+                   .references(() => projects.id, { onDelete: "cascade" }),
+  phaseSlug:     text("phase_slug").notNull(),
+  nodeSlug:      text("node_slug").notNull(),
+  phaseNum:      integer("phase_num").notNull(),
+  methodologyId: text("methodology_id").notNull(),
+  // Contexto compacto para próxima fase (~500 tokens máx). Construído deterministicamente.
+  summary:       text("summary").notNull().default(""),
+  // [{claim, factStatus, tadScore?, source?}]
+  keyFindings:   jsonb("key_findings").notNull().default([]),
+  // UUIDs de registros em project_events e project_scenarios
+  toolCallIds:   text("tool_call_ids").array().default([]),
+  // Resultado da auditoria ATHENA determinística
+  athenaVerdict: text("athena_verdict"),   // APROVADO | RESSALVAS | REQUER_REVISAO
+  // [{atsCode, passed, finding}]
+  athenaChecks:  jsonb("athena_checks").default([]),
+  athenaUsedLlm: boolean("athena_used_llm").default(false),
+  createdAt:     timestamp("created_at").defaultNow().notNull(),
+},
+(t) => ({
+  uqPhase:    uniqueIndex("uq_phase_outputs_project_phase").on(t.projectId, t.phaseSlug),
+  idxProject: index("idx_phase_outputs_project").on(t.projectId),
+}));
+
+export type PhaseOutput    = typeof phaseOutputs.$inferSelect;
+export type NewPhaseOutput = typeof phaseOutputs.$inferInsert;
+
+export const phaseOutputsRelations = relations(phaseOutputs, ({ one }) => ({
+  project: one(projects, { fields: [phaseOutputs.projectId], references: [projects.id] }),
 }));
 
 // ── Tokens JWT Revogados (T-04 Sprint 20) ─────────────────────────────────────

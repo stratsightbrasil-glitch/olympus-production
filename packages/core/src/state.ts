@@ -26,10 +26,20 @@ export const OlympusStateAnnotation = Annotation.Root({
   projectId:   Annotation<string>({ reducer: (_c, u) => u, default: () => "" }),
   methodology: Annotation<string>({ reducer: (_c, u) => u, default: () => "" }),
 
-  /** Último node_slug concluído. null = grafo não iniciado. */
+  /** Último node_slug concluído. null = grafo não iniciado. (v4 compat) */
   currentNodeSlug: Annotation<string | null>({
     reducer: (_c, u) => u,
     default: () => null as string | null,
+  }),
+
+  /**
+   * Cursor 0-based da fase atual no loop v5.
+   * null = análise não iniciada.
+   * Quando currentPhaseIndex >= phases.length → synthesis.
+   */
+  currentPhaseIndex: Annotation<number | null>({
+    reducer: (_c, u) => u,
+    default: () => null as number | null,
   }),
 
   // ── Controle de soberania de dados ──────────────────────────────────────────

@@ -10,10 +10,11 @@
 
 import { Hono } from 'hono';
 import { streamSSE } from 'hono/streaming';
-import { db, projects, messages } from '@olympus/db';
+import { db, projects, messages, phaseOutputs } from '@olympus/db';
 import { eq } from 'drizzle-orm';
 import { Command } from '@langchain/langgraph';
 import { getOlympusGraph, graphConfig } from '../graph';
+import { getPostgresSaver, clearCheckpointSql } from '../graph/postgresSaver';
 import { getLLMConfig, getLLMTiers } from './settings';
 import { loadMethodology } from '../services/analysis.service';
 
@@ -23,6 +24,42 @@ export { invalidateMethodologyCache, getMethodologyCacheStatus } from '../servic
 const chatRoutes = new Hono();
 
 const SSE_MAX_BODY_BYTES = 512 * 1024;
+
+// ── GET /status/:projectId — consulta checkpointer para interrupt pendente ───
+// Deve preceder qualquer rota com parâmetro genérico para evitar interceptação.
+chatRoutes.get('/status/:projectId', async (c) => {
+  const jwtPayload = (c.get('jwtPayload') as any) || {};
+  if (jwtPayload?.role === 'cliente') return c.json({ status: 'idle' });
+
+  const { projectId } = c.req.param();
+  try {
+    const graph  = await getOlympusGraph();
+    const config = { configurable: { thread_id: projectId } };
+    const state  = await graph.getState(config);
+
+    const pendingTasks = (state as any).tasks ?? [];
+    const hasInterrupt = pendingTasks.some(
+      (t: any) => Array.isArray(t.interrupts) && t.interrupts.length > 0
+    );
+
+    if (!hasInterrupt) return c.json({ status: 'idle' });
+
+    const iv = pendingTasks
+      .flatMap((t: any) => t.interrupts ?? [])
+      .find(Boolean);
+    const val = iv?.value ?? {};
+
+    return c.json({
+      status:        'interrupted',
+      interruptType: val.interruptType ?? 'hitl_required',
+      agent:         val.agent         ?? 'PYTHIA',
+      message:       val.message       ?? 'Análise pausada. Retome quando pronto.',
+      projectId,
+    });
+  } catch {
+    return c.json({ status: 'idle' });
+  }
+});
 
 // ── Rota SSE — motor LangGraph (único caminho de análise) ────────────────────
 chatRoutes.post('/stream/graph', async (c) => {
@@ -47,7 +84,7 @@ chatRoutes.post('/stream/graph', async (c) => {
   return streamSSE(c, async (stream) => {
     let hbTimer: ReturnType<typeof setInterval> | null = setInterval(() => {
       stream.writeSSE({ data: JSON.stringify({ type: 'ping' }) }).catch(() => {});
-    }, 20_000);
+    }, 15_000);
     const stopHb = () => { if (hbTimer) { clearInterval(hbTimer); hbTimer = null; } };
     const write  = (obj: object) => stream.writeSSE({ data: JSON.stringify(obj) }).catch(() => {});
 
@@ -72,6 +109,22 @@ chatRoutes.post('/stream/graph', async (c) => {
         await db.insert(messages).values({ projectId, role: 'user', content: userInputStr });
       }
 
+      // Limpa checkpoint e phase_outputs anteriores ao iniciar NOVA análise.
+      if (!isResuming) {
+        try {
+          const checkpointerForClear = await getPostgresSaver();
+          if (typeof (checkpointerForClear as any).delete === 'function') {
+            await (checkpointerForClear as any).delete({
+              configurable: { thread_id: projectId },
+            });
+          } else {
+            await clearCheckpointSql(projectId);
+          }
+        } catch { /* idempotente */ }
+        // Limpa phase_outputs anteriores do projeto (nova análise começa do zero)
+        await db.delete(phaseOutputs).where(eq(phaseOutputs.projectId, projectId));
+      }
+
       const [llmConfig, llmTiers] = await Promise.all([getLLMConfig(), getLLMTiers()]);
       const { phases, agentMethodPrompts: agentPromptMap } = await loadMethodology(metodologiaName);
 
@@ -92,6 +145,9 @@ chatRoutes.post('/stream/graph', async (c) => {
         projectId, methodology: metodologiaName, connectivityMode,
         llmConfig, llmTiers, phases, agentMethodPrompts: agentPromptMap,
         userInput: userInputStr, vizMode,
+        // Cursores: currentNodeSlug (v4 compat) + currentPhaseIndex (v5)
+        currentNodeSlug:  null as string | null,
+        currentPhaseIndex: null as number | null,
       };
       const graphInput = isResuming
         ? new Command({ resume: userInputStr || 'continuar' })
@@ -117,10 +173,11 @@ chatRoutes.post('/stream/graph', async (c) => {
         for (const [, stateUpdate] of Object.entries(event)) {
           if (!stateUpdate || typeof stateUpdate !== 'object') continue;
           const upd = stateUpdate as any;
-          if (upd.lastOutput)      finalOutput  = upd.lastOutput;
-          if (upd.agentName)       finalAgent   = upd.agentName;
-          if (upd.messageType)     finalMsgType = upd.messageType;
-          if (upd.currentNodeSlug) await write({ type: 'status', text: `Fase '${upd.currentNodeSlug}' concluída.` });
+          if (upd.lastOutput)        finalOutput  = upd.lastOutput;
+          if (upd.agentName)         finalAgent   = upd.agentName;
+          if (upd.messageType)       finalMsgType = upd.messageType;
+          if (upd.currentNodeSlug)   await write({ type: 'status', text: `Fase '${upd.currentNodeSlug}' concluída.` });
+          if (upd.currentPhaseIndex) await write({ type: 'status', text: `Fase ${upd.currentPhaseIndex} concluída.` });
         }
       }
 
