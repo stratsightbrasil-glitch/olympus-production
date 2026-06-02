@@ -19,6 +19,8 @@
  */
 
 import { PostgresSaver } from "@langchain/langgraph-checkpoint-postgres";
+import { sql } from "drizzle-orm";
+import { db } from "@olympus/db";
 
 const CONNECTION_STRING =
   process.env.DATABASE_URL ||
@@ -54,4 +56,16 @@ export async function getPostgresSaver(): Promise<PostgresSaver> {
   }
 
   return _initPromise;
+}
+
+/**
+ * Remove checkpoints do thread_id via SQL direto.
+ * Usado como fallback quando o PostgresSaver não expõe .delete().
+ * Nomes de tabela gerenciados pelo PostgresSaver — não estão no schema Drizzle.
+ */
+export async function clearCheckpointSql(projectId: string): Promise<void> {
+  try {
+    await db.execute(sql`DELETE FROM checkpoints WHERE thread_id = ${projectId}`);
+    await db.execute(sql`DELETE FROM checkpoint_writes WHERE thread_id = ${projectId}`);
+  } catch { /* idempotente — não existe checkpoint ainda */ }
 }
