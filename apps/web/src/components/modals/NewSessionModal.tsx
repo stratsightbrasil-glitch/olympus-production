@@ -126,7 +126,8 @@ export function NewSessionModal({ onClose, onStart, cenariosMethodologies, teams
               <span className="text-2xl">📂</span>
               <div className="flex-1">
                 <p className="text-xs font-bold text-stratsight-dark uppercase tracking-wide mb-1">Documentos de Contexto (opcional)</p>
-                <p className="text-xs text-gray-500 mb-3">Carregue relatórios, estudos ou bases de dados. O sistema os incorporará como contexto da análise.</p>
+                <p className="text-xs text-gray-500 mb-1">Carregue relatórios, estudos ou bases de dados. O sistema os incorporará como contexto da análise.</p>
+                <p className="text-[10px] text-gray-400 mb-3">Formatos aceitos: PDF, DOCX, XLSX, CSV, TXT, MD, imagens · <strong>Tamanho máximo: 50 MB por envio</strong></p>
                 <input ref={fileInputRef} type="file" accept={ACCEPTED_TYPES} multiple className="hidden" onChange={handleFileChange} />
                 <button onClick={() => fileInputRef.current?.click()} disabled={scopeExtracting} className="px-4 py-2 bg-white border border-stratsight-medium/40 text-stratsight-dark text-xs font-bold rounded-lg hover:bg-stratsight-light transition-colors shadow-sm disabled:opacity-50">
                   {scopeExtracting ? '⏳ Processando...' : '📎 Selecionar Arquivos'}
