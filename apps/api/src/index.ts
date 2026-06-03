@@ -293,29 +293,20 @@ serve({ fetch: app.fetch, port, hostname: '0.0.0.0' });
         .onConflictDoNothing();
       console.log('[Settings] ✅ platform_settings inicializada.');
 
-      // Guard de dimensão de embeddings — falha ruidosa > falha silenciosa.
-      // Voyage (512d) e Ollama (768d) são incompatíveis: cosine similarity entre
-      // vetores de dimensões diferentes retorna resultados plausíveis mas errados.
-      try {
-        const dimResult = await db.execute(sql`SELECT vector_dims(embedding) AS dims FROM embeddings LIMIT 1`);
-        const dimRows = dimResult as unknown as Array<{ dims: number }>;
-        if (dimRows.length > 0) {
-          const stored = Number(dimRows[0].dims);
-          const expected = process.env.VOYAGE_API_KEY ? 512 : 768;
-          if (stored !== expected) {
-            console.error(`[Embeddings] ❌ MISMATCH: banco=${stored}d provider_esperado=${expected}d`);
-            console.error('[Embeddings]    Solução: reindexar todos os embeddings antes de subir.');
-            console.error('[Embeddings]    DELETE FROM embeddings; então re-extraia os documentos.');
-            process.exit(1);
-          }
-          console.log(`[Embeddings] ✅ Dimensões OK: ${stored}d`);
-        } else {
-          console.log('[Embeddings] ✅ Banco vazio — nenhuma verificação de dimensão necessária.');
+      // Embeddings: Ollama nomic-embed-text (768 dims) — provider único.
+      // Voyage AI foi removido. Garante que a coluna no banco seja 768d.
+      await db.execute(sql`
+        ALTER TABLE embeddings
+          ALTER COLUMN embedding TYPE vector(768)
+          USING embedding::text::vector(768)
+      `).then(() => {
+        console.log('[Embeddings] ✅ Coluna embeddings: vector(768) — Ollama nomic-embed-text.');
+      }).catch((e: any) => {
+        // Pode falhar se já for 768d (idempotente) ou se a tabela estiver vazia
+        if (!e.message?.includes('does not exist') && !e.message?.includes('cannot be cast')) {
+          console.log(`[Embeddings] ℹ️  Coluna embeddings já em 768d ou sem dados: ${e.message?.slice(0, 80)}`);
         }
-      } catch (e: any) {
-        // vector_dims() requer pgvector — se falhar aqui, a extensão ainda está sendo criada
-        console.log(`[Embeddings] ⚠ Guard de dimensão ignorado (pgvector ainda não disponível): ${e.message}`);
-      }
+      });
 
       // pg-boss: inicializa fila KRATOS antes de recarregar os crons
       await initKratosQueue();

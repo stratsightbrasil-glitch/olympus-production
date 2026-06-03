@@ -1,9 +1,9 @@
 import { pgTable, text, timestamp, uuid, jsonb, doublePrecision, boolean, customType, integer, primaryKey, uniqueIndex, index } from "drizzle-orm/pg-core";
 import { relations } from "drizzle-orm";
 
-// pgvector custom column type (512 dims — Voyage voyage-3-lite)
+// pgvector custom column type (768 dims — Ollama nomic-embed-text)
 const vector = customType<{ data: number[] }>({
-  dataType() { return 'vector(512)'; },
+  dataType() { return 'vector(768)'; },
   toDriver(v: number[]) { return `[${v.join(',')}]`; },
   fromDriver(v: any) {
     if (Array.isArray(v)) return v as number[];
