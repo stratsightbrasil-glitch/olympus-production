@@ -6,10 +6,29 @@ import { generateEmbedding, chunkText } from '@olympus/tools';
 async function assertProjectOwner(c: any, projectId: string): Promise<boolean> {
   const jwt = c.get('jwtPayload') as any;
   if (jwt?.role === 'admin') return true;
+
   const proj = await db.query.projects.findFirst({
-    where: and(eq(projects.id, projectId), isNull(projects.deletedAt), eq(projects.createdBy, jwt?.name || '')),
+    where: eq(projects.id, projectId),
   });
-  return !!proj;
+
+  // Projeto ainda não existe no banco (upload de contexto antes de iniciar a análise).
+  // Cria o registro agora para que os embeddings possam ser associados — chat.ts vai
+  // encontrá-lo já existente quando o grafo iniciar e não duplicará.
+  if (!proj) {
+    await db.insert(projects).values({
+      id:         projectId,
+      name:       'Análise em preparação',
+      methodology:'grumbach',
+      createdBy:  jwt?.name || 'Sistema',
+      updatedBy:  jwt?.name || 'Sistema',
+    }).onConflictDoNothing();
+    return true;
+  }
+
+  // Projeto existe mas está deletado ou pertence a outro usuário
+  if (proj.deletedAt || proj.createdBy !== (jwt?.name || '')) return false;
+
+  return true;
 }
 
 const router = new Hono();

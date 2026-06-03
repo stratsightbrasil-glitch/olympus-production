@@ -295,7 +295,8 @@ export function useChat({
       );
     } catch (error: any) {
       console.error('Erro ao iniciar:', error);
-      setMessages(prev => [...prev, { role: 'assistant', content: '⚠️ Erro ao conectar com o servidor.' }]);
+      const detail = error?.message ? `: ${error.message}` : '';
+      setMessages(prev => [...prev, { role: 'assistant', content: `⚠️ Erro ao conectar com o servidor${detail}` }]);
     } finally {
       setLoading(false);
       setStreamingText('');
@@ -310,7 +311,7 @@ export function useChat({
    * Chama /stream/graph com isResuming=true — o backend injeta Command({resume}).
    * Usado pelo botão "▶ Continuar → PYTHIA" no EventsPanel.
    */
-  const resumeGraph = async () => {
+  const resumeGraph = async (userInstruction?: string) => {
     if (!hitlGate || loading) return;
     setHitlGate(null);
     setLoading(true);
@@ -320,9 +321,13 @@ export function useChat({
           projectId:   sessionId,
           projectName: projeto.nome,
           metodologia: projeto.metodologia,
-          vizMode,               // preserva o modo ativo (passos/etapa/passagem/thinking)
+          vizMode,
           isResuming:  true,
-          messages:    [],       // o checkpointer LangGraph tem o estado completo
+          // Se analista forneceu instrução, incluir como última mensagem
+          // para que chat.ts extraia como userInputStr e passe no Command({resume})
+          messages: userInstruction
+            ? [{ role: 'user', content: userInstruction }]
+            : [],
         },
         ({ text, thinking, messageType }) => {
           appendAssistantMessage(text, thinking, messageType);
@@ -343,7 +348,7 @@ export function useChat({
     messages, setMessages,
     loading, progressAgent, streamingText, stepLog,
     thinkingBlocks, thinkingOpen,
-    hitlGate,
+    hitlGate, setHitlGate,
     sendMessage, deletarMensagem, gerarRelatorioKratos, iniciarSessao,
     toggleThinking, resumeGraph,
   };

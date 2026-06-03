@@ -180,6 +180,7 @@ export async function phaseLoopNode(
   );
 
   // ── Persistir phase_output (upsert) ───────────────────────────────────────
+  onStep?.(`[phaseLoopNode] Persistindo phase_output: ${phaseConfig.phaseSlug} (${keyFindings.length} findings, ATHENA: ${athenaVerdict.verdict})`);
   await db.insert(phaseOutputs)
     .values({
       projectId:     state.projectId,
@@ -205,6 +206,8 @@ export async function phaseLoopNode(
         athenaUsedLlm: athenaVerdict.usedLLM,
       },
     });
+
+  onStep?.(`[phaseLoopNode] phase_output persistido ✅ — ${phaseConfig.phaseSlug}`);
 
   // ── Modo passos: interromper para revisão do analista ────────────────────
   if (state.vizMode === "passos" && process.env.TEST_MODE !== "true") {
@@ -266,10 +269,16 @@ export async function synthesisNode(
     orderBy: [asc(phaseOutputs.phaseNum)],
   });
 
+  console.log(`[synthesisNode] Buscando phase_outputs: projectId=${state.projectId} methodology=${state.methodology}`);
+  console.log(`[synthesisNode] Encontrados: ${outputs.length} outputs`);
+
   if (outputs.length === 0) {
     throw new Error(
-      "[synthesisNode] Nenhum phase_output encontrado. "
-      + "O phaseLoopNode deve ter falhado antes de chegar aqui."
+      `[synthesisNode] Nenhum phase_output para projeto '${state.projectId}' (metodologia: '${state.methodology}'). ` +
+      `Causas possíveis: (1) phaseLoopNode falhou antes de persistir artefatos — ver logs acima; ` +
+      `(2) metodologia '${state.methodology}' não tem PHASE_CONFIGS implementados ` +
+      `— disponíveis: [${Object.keys(PHASE_CONFIGS).join(", ")}]; ` +
+      `(3) o seed ainda não foi executado no ambiente Railway.`
     );
   }
 

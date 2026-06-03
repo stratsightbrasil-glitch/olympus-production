@@ -31,7 +31,13 @@ function buildGraph(checkpointer: Awaited<ReturnType<typeof getPostgresSaver>>) 
 function routeFromStart(state: any): "phase_loop" | "synthesis" {
   const idx    = state.currentPhaseIndex ?? 0;
   const config = PHASE_CONFIGS[state.methodology ?? "grumbach"] ?? [];
-  // Se não há phase configs → phaseLoopNode vai lançar erro explícito
+  if (config.length === 0) {
+    console.error(
+      `[routeFromStart] PHASE_CONFIGS não encontrado para metodologia '${state.methodology}'. ` +
+      `Disponíveis: [${Object.keys(PHASE_CONFIGS).join(", ")}]. ` +
+      `Roteando para synthesis — vai falhar com mensagem clara.`
+    );
+  }
   if (idx >= config.length) return "synthesis";
   return "phase_loop";
 }

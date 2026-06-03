@@ -126,7 +126,11 @@ chatRoutes.post('/stream/graph', async (c) => {
       }
 
       const [llmConfig, llmTiers] = await Promise.all([getLLMConfig(), getLLMTiers()]);
-      const { phases, agentMethodPrompts: agentPromptMap } = await loadMethodology(metodologiaName);
+      const { method, phases, agentMethodPrompts: agentPromptMap } = await loadMethodology(metodologiaName);
+      // Usa o slug canônico do banco (não o valor bruto do frontend).
+      // Garante que PHASE_CONFIGS[methodology] funcione mesmo que o frontend envie
+      // o nome completo ("Grumbach: Produção de Cenários") ou um valor legado ("MSEF").
+      const methodologySlug = method.slug ?? metodologiaName;
 
       const projectRow = await db.query.projects.findFirst({
         columns: { connectivityMode: true },
@@ -142,11 +146,13 @@ chatRoutes.post('/stream/graph', async (c) => {
       });
 
       const initialState = {
-        projectId, methodology: metodologiaName, connectivityMode,
+        projectId,
+        methodology:       methodologySlug,   // slug canônico do banco
+        connectivityMode,
         llmConfig, llmTiers, phases, agentMethodPrompts: agentPromptMap,
         userInput: userInputStr, vizMode,
         // Cursores: currentNodeSlug (v4 compat) + currentPhaseIndex (v5)
-        currentNodeSlug:  null as string | null,
+        currentNodeSlug:   null as string | null,
         currentPhaseIndex: null as number | null,
       };
       const graphInput = isResuming
