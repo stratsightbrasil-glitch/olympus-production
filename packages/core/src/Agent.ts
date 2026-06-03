@@ -410,6 +410,10 @@ export class Agent {
     const TOOL_LOOP_MAX = 2; // permite até 2 chamadas idênticas consecutivas; da 3ª em diante devolve cache
 
     for (const t of this.tools) {
+      if (!t.name) {
+        console.error(`[${this.name}] ⚠️ Ferramenta sem nome encontrada em toolsConfig — ignorada.`, t);
+        continue;
+      }
       // Prioriza o schema dinâmico vindo da ferramenta, ou faz fallback para o estático
       const rawSchema = t.schema || TOOL_JSON_SCHEMAS[t.name] || FALLBACK_JSON_SCHEMA;
       const wrappedSchema = jsonSchema(rawSchema as any);
@@ -489,16 +493,16 @@ export class Agent {
     // MSEF tem 8 fases (SCOPUS×1, KLIO×3, PYTHIA×2, MNEMOSYNE×1, THEMIS×1) + 8 ATHENA + síntese ≈ 25 steps mínimo.
     // ATHENA é chamada UMA VEZ ao final de cada fase (gate HITL), não após cada tool call.
     // Especialistas: 5 em TEST_MODE (resposta completa suficiente), 8 em produção.
-    const maxSteps  = isOrchestrator ? (isTestMode ? 30 : 15) : (isTestMode ? 5 : 8);
+    const maxSteps  = isOrchestrator ? (isTestMode ? 30 : 15) : (isTestMode ? 5 : 12);
 
     const hasTools = Object.keys(aiTools).length > 0;
 
-    // Anthropic Prompt Cache — marca o system prompt como ephemeral cache breakpoint.
-    // Economia estimada: ~84% tokens em chamadas repetidas com mesmo system prompt.
-    // Só ativo para provider 'anthropic'; outros providers ignoram o campo.
-    const systemContent: any = activeProvider === 'anthropic'
-      ? [{ type: 'text', text: finalSystemPrompt, providerOptions: { anthropic: { cacheControl: { type: 'ephemeral' } } } }]
-      : finalSystemPrompt;
+    // System prompt: sempre string pura.
+    // A abordagem de prompt cache via array [{type:'text', providerOptions:{cacheControl}}]
+    // foi removida — o @ai-sdk/anthropic@3.0.71 não aceita esse formato no campo `system`
+    // (requer string ou SystemModelMessage com role:'system'). Causa: InvalidPromptError.
+    // TODO: reintroduzir cache quando migrar para @ai-sdk/anthropic≥3.1 ou via messages[].
+    const systemContent: string = finalSystemPrompt;
 
     const sharedParams = {
       model: getModel(effectiveConfig),
