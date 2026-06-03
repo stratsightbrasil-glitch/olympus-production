@@ -393,7 +393,7 @@ export function CommandBar({
   mode, projetoNome, progressAgent, streamingText, currentStep, user,
   mainView, onToggleSidebar, onNovaSessao, onGerarRelatorio, onGerarPlaybook, onCopyClientLink, onToggleKratos,
   cliente, horizonte, questaoEstrategica, classificacao, teamName,
-  methodologyName = 'MSEF', methodologySteps,
+  methodologyName = 'grumbach', methodologySteps,
   llmConfig, anthropicModels, googleModels, deepseekModels,
   ollamaModels, ollamaAvailable, onLlmChange, llmTiers, onTierChange,
   cacheStatus, onInvalidateCache,

@@ -2,7 +2,7 @@ import { useState } from 'react';
 import type { Projeto, Message } from '../types';
 
 const DEFAULT_PROJETO: Projeto = {
-  nome: '', metodologia: 'MSEF', status: 'Em produção',
+  nome: '', metodologia: 'grumbach', status: 'Em produção',
   kratosCron: '0 6 * * *', alertEmails: '',
   horizonte: '', elaborador: '', cliente: '',
   questaoEstrategica: '', mudancaIdentificada: '', teamId: null,

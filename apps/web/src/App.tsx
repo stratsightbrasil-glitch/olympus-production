@@ -29,7 +29,12 @@ import { useExport } from './hooks/useExport';
 import { useEvents } from './hooks/useEvents';
 import type { ActiveModal } from './types';
 
-const ATHENA_SLUGS = new Set(['esg', 'msef', 'godet', 'grumbach', 'macroplan', 'futures', 'siex', 'alta']);
+// Slugs das metodologias Bloco A disponíveis no banco (Olympus 1.0).
+// msef · macroplan · futures · asplan foram removidas no seed do Olympus 1.0.
+const ATHENA_SLUGS = new Set([
+  'grumbach',      // ← CASO DE VALIDAÇÃO — phase configs implementados
+  'ceeex', 'esg', 'godet', 'gbn', 'alta', 'ipea_buarque', 'mpo', 'siex',
+]);
 
 function App() {
   const auth = useAuth();
@@ -112,6 +117,33 @@ function App() {
     else setReportLayout('standard');
   }, [projectState?.sessionId]);
 
+  // Verifica interrupt pendente no checkpointer ao carregar/mudar de sessão.
+  // Restaura hitlGate sem precisar iniciar nova análise (projeto pausado na sidebar).
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (!projectState.sessionId || !token) return;
+    const checkInterrupt = async () => {
+      try {
+        const res = await fetch(
+          `/api/v1/chat/status/${projectState.sessionId}`,
+          { headers: { Authorization: `Bearer ${token}` } }
+        );
+        if (!res.ok) return;
+        const data = await res.json();
+        if (data.status === 'interrupted') {
+          chat.setHitlGate({
+            message:       data.message,
+            agent:         data.agent,
+            projectId:     data.projectId,
+            interruptType: data.interruptType,
+            output:        undefined,
+          });
+        }
+      } catch { /* silencioso — não bloqueia carregamento */ }
+    };
+    checkInterrupt();
+  }, [projectState.sessionId]);
+
   // Polling do status do cache de metodologias — apenas para admin, a cada 30s
   useEffect(() => {
     if (!token || user?.role !== 'admin') return;
@@ -166,19 +198,30 @@ function App() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [messageCount, currentMethodologySteps]);
 
-  // Detecta quando o motor aguarda confirmação do analista (vizMode=passos).
-  // Dois casos: interrupt LangGraph 'phase_complete' OU mensagem HERMES legado.
+  // Detecta quando o motor aguarda confirmação do analista.
+  // hitl_required: PYTHIA aguarda aprovação de eventos — todos os modos.
+  // phase_complete: especialista concluiu fase — só no modo passos.
   const isWaiting = useMemo(() => {
-    if (vizMode !== 'passos' || chat.loading) return false;
-    // Caso 1: LangGraph emitiu interrupt phase_complete (fonte primária)
-    if (chat.hitlGate?.interruptType === 'phase_complete') return true;
-    // Caso 2: legado — mensagem de orquestrador com texto de confirmação
-    for (let i = chat.messages.length - 1; i >= 0; i--) {
-      if (chat.messages[i].role === 'assistant') {
-        const c = typeof chat.messages[i].content === 'string' ? chat.messages[i].content as string : '';
-        return c.includes('Confirme para prosseguir') || c.includes('Oriente com ajustes');
+    if (chat.loading) return false;
+
+    // hitl_required (PYTHIA aguarda aprovação de eventos) — todos os modos
+    if (chat.hitlGate?.interruptType === 'hitl_required') return true;
+
+    // phase_complete (especialista concluiu fase) — só no modo passos
+    if (chat.hitlGate?.interruptType === 'phase_complete') {
+      return vizMode === 'passos';
+    }
+
+    // Legado: texto de confirmação em mensagem de orquestrador (modo passos)
+    if (vizMode === 'passos') {
+      for (let i = chat.messages.length - 1; i >= 0; i--) {
+        if (chat.messages[i].role === 'assistant') {
+          const c = typeof chat.messages[i].content === 'string' ? chat.messages[i].content as string : '';
+          return c.includes('Confirme para prosseguir') || c.includes('Oriente com ajustes');
+        }
       }
     }
+
     return false;
   }, [vizMode, chat.loading, chat.messages, chat.hitlGate]);
 
@@ -189,7 +232,9 @@ function App() {
   };
 
   const openNewSession = () => {
-    projectState.setProjeto(p => ({ ...p, metodologia: 'MSEF' }));
+    // Default: grumbach (único com PHASE_CONFIGS implementados em Olympus 1.0).
+    // Nunca usar 'MSEF' — removida do banco no seed do Olympus 1.0.
+    projectState.setProjeto(p => ({ ...p, metodologia: 'grumbach' }));
     setActiveModal('newSession');
   };
 
@@ -356,7 +401,7 @@ function App() {
           horizonte={projectState.projeto.horizonte}
           questaoEstrategica={projectState.projeto.questaoEstrategica}
           teamName={currentTeamName}
-          methodologyName={projectState.projeto.metodologia || 'MSEF'}
+          methodologyName={projectState.projeto.metodologia || 'grumbach'}
           methodologySteps={currentMethodologySteps}
           llmConfig={llm.llmConfig}
           anthropicModels={llm.anthropicModels}
@@ -380,7 +425,7 @@ function App() {
             activeAgent={chat.progressAgent}
             currentStep={currentStep}
             totalSteps={currentMethodologySteps.length}
-            methodologyName={projectState.projeto.metodologia || 'MSEF'}
+            methodologyName={projectState.projeto.metodologia || 'grumbach'}
           />
         )}
 
@@ -488,7 +533,13 @@ function App() {
               setInput('');
             }}
             onRedirect={(instruction) => {
-              chat.sendMessage(instruction, [], undefined);
+              // Redirecionar: se for interrupt LangGraph, retomar com instrução no resume
+              // Se for legado, enviar como nova mensagem (comportamento anterior)
+              if (chat.hitlGate?.interruptType === 'phase_complete') {
+                chat.resumeGraph(instruction);
+              } else {
+                chat.sendMessage(instruction, [], undefined);
+              }
               setInput('');
             }}
           />

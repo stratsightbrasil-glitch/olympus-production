@@ -44,12 +44,13 @@ export function NewSessionModal({ onClose, onStart, cenariosMethodologies, teams
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
     if (!files.length) return;
+    if (!token) { alert('Sessão expirada. Faça login novamente.'); return; }
     setScopeExtracting(true);
     try {
       const fd = new FormData();
       files.forEach(f => fd.append('files', f));
       const res = await fetch('/api/v1/extract', { method: 'POST', headers: authHeader, body: fd });
-      if (!res.ok) throw new Error(`Erro ${res.status}`);
+      if (!res.ok) throw new Error(`Erro ${res.status} — verifique se está autenticado`);
       const result = await res.json();
       const ok: { name: string; text: string }[] = [];
       result.files.forEach((f: any) => { if (f.text?.trim()) ok.push({ name: f.name, text: f.text }); });
@@ -160,8 +161,12 @@ export function NewSessionModal({ onClose, onStart, cenariosMethodologies, teams
             <label className="block text-xs font-bold text-stratsight-dark uppercase mb-1.5 tracking-wide">Metodologia de Análise</label>
             <select value={metodologia} onChange={e => setMetodologia(e.target.value)} className="w-full border-2 border-gray-200 rounded-xl px-4 py-2.5 focus:border-stratsight-medium outline-none transition-colors text-sm bg-white">
               {cenariosMethodologies.length > 0
-                ? cenariosMethodologies.map(m => <option key={m.id} value={m.name}>{m.name} — {m.description}</option>)
-                : <option value="MSEF">MSEF — Método Multidimensional de Exploração de Futuros</option>
+                ? cenariosMethodologies.map(m => (
+                    <option key={m.id} value={m.slug ?? m.name}>
+                      {m.name}{m.description ? ` — ${m.description?.slice(0, 80)}` : ''}
+                    </option>
+                  ))
+                : <option value="grumbach">Grumbach — Produção de Cenários Prospectivos</option>
               }
             </select>
           </div>

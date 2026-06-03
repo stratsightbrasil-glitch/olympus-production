@@ -37,8 +37,10 @@ export function ProjectSettingsModal({ projeto, cenariosMethodologies, onClose, 
               <label className="block text-xs font-bold text-stratsight-dark uppercase mb-2">Metodologia</label>
               <select value={projeto.metodologia} onChange={set('metodologia')} className="w-full border-2 border-gray-200 rounded-xl px-4 py-3 focus:border-stratsight-medium outline-none bg-white">
                 {cenariosMethodologies.length > 0
-                  ? cenariosMethodologies.map(m => <option key={m.id} value={m.name}>{m.name} — {m.description}</option>)
-                  : <option value="MSEF">MSEF</option>
+                  ? cenariosMethodologies.map(m => (
+                      <option key={m.id} value={m.slug ?? m.name}>{m.name}</option>
+                    ))
+                  : <option value="grumbach">Grumbach</option>
                 }
               </select>
             </div>
