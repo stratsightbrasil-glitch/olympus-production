@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>OLYMPUS v4 — Histórico de Desenvolvimento e Estado Atual</title>
+<title>OLYMPUS 1.0 — Histórico de Desenvolvimento e Estado Atual</title>
 <style>
   :root{--dark:#1B3A2D;--medium:#2E7D52;--light:#E8F5E9;--gold:#C9A84C;--text:#1a1a1a;--bg:#fafafa;--code-bg:#f4f4f4;--border:#d0d0d0}
   *{box-sizing:border-box;margin:0;padding:0}
@@ -50,21 +50,24 @@
 </nav>
 
 <div id="content">
-<h1>OLYMPUS v4 — Histórico de Desenvolvimento e Estado Atual</h1>
-<p><strong>StratSight Brasil · Strategic Foresight · IA Agêntica</strong>
-<strong>Atualizado em:</strong> 31 Mai 2026 (Sprint 21 concluído)
+<h1>OLYMPUS 1.0 — Histórico de Desenvolvimento e Estado Atual</h1>
+<p><strong>StratSight Brasil · Strategic Foresight · IA Agêntica</strong><br>
+<strong>Atualizado em:</strong> 02 Jun 2026 (Olympus 1.0 — Sprint 22 concluído)<br>
 <strong>Destinatário:</strong> Claude Chat / Claude Design — revisão de arquitetura e UI</p>
+<blockquote><p><strong>⚠️ Cuidado para Claude Code:</strong> este arquivo (<code>HISTORICO_DESENVOLVIMENTO.html</code>) e o correspondente <code>.md</code> são os registros canônicos da evolução do sistema. Sempre que uma mudança arquitetural relevante for implementada, <strong>ambos os arquivos devem ser atualizados no mesmo commit</strong>. O <code>.md</code> é a fonte da verdade; o <code>.html</code> é a versão de leitura amigável. Nunca divergir os dois.</p></blockquote>
 <hr>
 <h2>PARTE 1 — CONTEXTO E STACK</h2>
 <h3>O que é o OLYMPUS</h3>
-<p>Plataforma multi-agente de Strategic Foresight e monitoramento contínuo.</p>
-<pre><code>OLYMPUS
-├── Motor ATHENA   → produção de cenários (11 metodologias, 9 agentes)
-├── Motor KRATOS   → monitoramento contínuo (indicadores, alertas, cron)
-├── Painel Cliente → URL compartilhável com JWT, dashboard de indicadores
-└── API OLYMPUS    → webhooks n8n, integração com parceiros
+<p>Plataforma soberana de análise prospectiva estruturada — agnóstica de metodologia, adaptável a cada cliente, executável sem dependência de infraestrutura externa. O analista humano está no centro; a IA é o motor que garante rigor.</p>
+<pre><code>OLYMPUS 1.0
+├── Motor analítico   → phaseLoopNode (KLIO) + synthesisNode (HERMES)
+│                       12 metodologias Bloco A/B · 5 agentes · PHASE_CONFIGS
+├── Motor KRATOS      → monitoramento contínuo (indicadores, alertas, cron pg-boss)
+├── ATHENA            → auditora determinística por fase (ATS 1-9 ICD 203 + EB70)
+├── Painel Cliente    → URL compartilhável com JWT, dashboard de indicadores
+└── API OLYMPUS       → webhooks n8n, integração com parceiros
 </code></pre>
-<p><strong>Premissas de negócio:</strong> operação solo · custo &lt; R$1.500/mês · clientes defesa/governo (air-gapped, CONFIDENCIAL, auditoria) · produto-âncora R$80K–250K · meta Ano 1: R$300K · exit Big Tech em 8 anos · O Playbook MSEF é o principal ativo de PI.</p>
+<p><strong>Premissas de negócio:</strong> operação solo · custo &lt; R$1.500/mês · clientes defesa/governo (air-gapped, CONFIDENCIAL, auditoria) · produto-âncora R$80K–250K · meta Ano 1: R$300K · exit Big Tech em 8 anos · O Playbook de metodologias verificadas é o principal ativo de PI.</p>
 <h3>Stack tecnológica</h3>
 <table>
 <thead>
@@ -1068,10 +1071,15 @@ Nenhum configurado       → erro explícito (não silencioso)
 <td>31 Mai</td>
 <td>Bug A (tool loop guard Agent.ts), Bug B (fase no CONFIRMAR), watermark ACESSO RESTRITO, EventsPanel flicker, batch/status order, T-10c pg-boss KRATOS</td>
 </tr>
+<tr>
+<td><strong>Sprint 22</strong></td>
+<td><strong>02 Jun 2026</strong></td>
+<td><strong>Olympus 1.0 — Migração arquitetural v4→v5:</strong> <code>phaseLoopNode</code> substitui 6 nós especializados · <code>PHASE_CONFIGS</code> em código · tabela <code>phase_outputs</code> (artefatos estruturados) · ATHENA determinística por fase (<code>athena-validator.ts</code>) · contexto ~268 tokens vs 40-60K · 5 agentes (remove SCOPUS/PYTHIA/MNEMOSYNE/THEMIS) · 12 metodologias (Bloco A/B, slugs corretos) · migration idempotente em <code>index.ts</code> · stress test 10/10 · TypeScript zero erros · Railway deploy + fix <code>clearCheckpointSql</code></td>
+</tr>
 </tbody></table>
 <hr>
 <h2>PARTE 16 — BACKLOG</h2>
-<h3>✅ Todos os itens de alta/média prioridade concluídos (Sprints 1–20 + pós-deploy)</h3>
+<h3>✅ Todos os itens de alta/média prioridade concluídos (Sprints 1–22)</h3>
 <table>
 <thead>
 <tr>

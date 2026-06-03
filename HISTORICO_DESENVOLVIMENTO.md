@@ -1,24 +1,28 @@
-# OLYMPUS v4 — Histórico de Desenvolvimento e Estado Atual
+# OLYMPUS 1.0 — Histórico de Desenvolvimento e Estado Atual
 **StratSight Brasil · Strategic Foresight · IA Agêntica**
-**Atualizado em:** 31 Mai 2026 (Sprint 21 concluído)
+**Atualizado em:** 02 Jun 2026 (Olympus 1.0 — Sprint 22 concluído)
 **Destinatário:** Claude Chat / Claude Design — revisão de arquitetura e UI
+
+> **⚠️ Cuidado para Claude Code:** este arquivo (`HISTORICO_DESENVOLVIMENTO.md`) e o correspondente `HISTORICO_DESENVOLVIMENTO.html` são os registros canônicos da evolução do sistema. Sempre que uma mudança arquitetural relevante for implementada, **ambos os arquivos devem ser atualizados no mesmo commit**. O `.md` é a fonte da verdade; o `.html` é gerado a partir dele para leitura amigável. Nunca divergir os dois.
 
 ---
 
 ## PARTE 1 — CONTEXTO E STACK
 
 ### O que é o OLYMPUS
-Plataforma multi-agente de Strategic Foresight e monitoramento contínuo.
+Plataforma soberana de análise prospectiva estruturada — agnóstica de metodologia, adaptável a cada cliente, executável sem dependência de infraestrutura externa. O analista humano está no centro; a IA é o motor que garante rigor.
 
 ```
-OLYMPUS
-├── Motor ATHENA   → produção de cenários (11 metodologias, 9 agentes)
-├── Motor KRATOS   → monitoramento contínuo (indicadores, alertas, cron)
-├── Painel Cliente → URL compartilhável com JWT, dashboard de indicadores
-└── API OLYMPUS    → webhooks n8n, integração com parceiros
+OLYMPUS 1.0
+├── Motor analítico   → phaseLoopNode (KLIO) + synthesisNode (HERMES)
+│                       12 metodologias Bloco A/B · 5 agentes · PHASE_CONFIGS
+├── Motor KRATOS      → monitoramento contínuo (indicadores, alertas, cron pg-boss)
+├── ATHENA            → auditora determinística por fase (ATS 1-9 ICD 203 + EB70)
+├── Painel Cliente    → URL compartilhável com JWT, dashboard de indicadores
+└── API OLYMPUS       → webhooks n8n, integração com parceiros
 ```
 
-**Premissas de negócio:** operação solo · custo < R$1.500/mês · clientes defesa/governo (air-gapped, CONFIDENCIAL, auditoria) · produto-âncora R$80K–250K · meta Ano 1: R$300K · exit Big Tech em 8 anos · O Playbook MSEF é o principal ativo de PI.
+**Premissas de negócio:** operação solo · custo < R$1.500/mês · clientes defesa/governo (air-gapped, CONFIDENCIAL, auditoria) · produto-âncora R$80K–250K · meta Ano 1: R$300K · exit Big Tech em 8 anos · O Playbook de metodologias verificadas é o principal ativo de PI.
 
 ### Stack tecnológica
 
@@ -47,27 +51,30 @@ Olympus/
 ├── apps/
 │   ├── api/src/
 │   │   ├── index.ts                # Entry point, startup, CORS, JWT
+│   │   │                           # ⚡ Migrations Olympus 1.0 idempotentes aqui
 │   │   ├── cron.ts                 # KratosOrchestrator — cron jobs
 │   │   ├── graph/
-│   │   │   ├── builder.ts          # getOlympusGraph() async — PostgresSaver
+│   │   │   ├── builder.ts          # 2 nós: phase_loop + synthesis
 │   │   │   ├── postgresSaver.ts    # Singleton async — 4 tabelas checkpoint
-│   │   │   ├── nodes.ts            # 6 nós LangGraph
-│   │   │   ├── helpers.ts          # buildMemoryWindow(), buildAnchorCtx()
-│   │   │   └── router.ts           # routeFromState()
+│   │   │   ├── nodes.ts            # phaseLoopNode + synthesisNode + PHASE_CONFIGS export
+│   │   │   ├── helpers.ts          # buildToolsForPhase(), buildAnchorCtx(), loadMemoryWindow()
+│   │   │   ├── router.ts           # routeFromState() — legado, não usado pelo novo fluxo
+│   │   │   ├── athena-validator.ts # ATHENA determinística: ATS por nodeSlug (sem LLM)
+│   │   │   ├── phase-context.ts    # loadPhaseContext() + buildPhaseSummary()
+│   │   │   └── phase-configs/
+│   │   │       └── grumbach.ts     # 9 PhaseConfig com systemPromptInject verificado
 │   │   ├── routes/
-│   │   │   ├── chat.ts             # Motor principal — loadMethodology(), runAnalysis()
-│   │   │   │                       # + PROTOCOLO DE PLANEJAMENTO DE FASE
-│   │   │   │                       # + Strategic Slate Compiler
+│   │   │   ├── chat.ts             # SSE /stream/graph — currentPhaseIndex + phaseOutputs cleanup
 │   │   │   ├── events.ts           # HITL API — CRUD project_events
 │   │   │   ├── export.ts           # Exportação DOCX/PDF/HTML
 │   │   │   ├── settings.ts         # Config LLM — GET/PATCH, getLLMTiers()
 │   │   │   └── audit.ts / sessions / kratos / indicators / signals / ...
 │   │   ├── services/
-│   │   │   └── report-compiler.ts  # Strategic Slate Compiler — 9 metodologias
+│   │   │   └── report-compiler.ts  # Strategic Slate Compiler — legado
 │   │   ├── utils/
 │   │   │   └── audit.ts            # logAudit() — hash-chain SHA-256
 │   │   └── tools/
-│   │       ├── analytical-engines.ts  # 8 ferramentas analíticas (JSON Schema puro)
+│   │       ├── analytical-engines.ts  # 10 ferramentas analíticas (JSON Schema puro)
 │   │       ├── analytic-standards.ts  # ICD 203 (declarar_julgamento, etc.)
 │   │       ├── technique-engine.ts    # SAT Engine
 │   │       └── signals.ts / rag.ts
@@ -104,13 +111,13 @@ Olympus/
 | Tabela | Descrição | Notas |
 |--------|-----------|-------|
 | `users` | Usuários | role: analista/admin/cliente |
-| `methodologies` | 11 metodologias | agentsConfig JSONB (agents[] + steps[]) |
+| `methodologies` | 12 metodologias | agentsConfig JSONB; **novos campos Olympus 1.0:** methodology_type, implementation_status, parent_relation, source_documents |
 | `methodology_phases` | Fases por metodologia | slug, node_slug (mapeamento LangGraph) |
-| `agents` | 9 agentes | systemPrompt, toolsConfig, modelOverride (tier label) |
-| `agent_method_prompts` | Instruções agente×metodologia | extraInstructions injetado em runtime |
+| `agents` | **5 agentes** (v1.0) | HERMES, KLIO, KRATOS, ATHENA, OLYMPUS(stub) |
+| `agent_method_prompts` | Instruções agente×metodologia | Legado — não usado pelo phaseLoopNode (prompts em phase-configs/) |
 | `techniques` | 12 técnicas SAT (AltA) | — |
 | `projects` | Projetos/sessões | methodology, kratosCron, alertEmails, deletedAt |
-| `messages` | Histórico de mensagens | role, content, agentName |
+| `messages` | Histórico de mensagens | role, content, agentName — relatório final persiste aqui |
 | `embeddings` | Vetores RAG (pgvector) | vector(512) Voyage / vector(768) Ollama |
 | `project_events` | Eventos analíticos (TAD) | sourceEvaluation JSONB (reliability A-F, credibility 1-6) |
 | `project_scenarios` | Cenários prospectivos | probability, matrixValue JSONB |
@@ -118,34 +125,41 @@ Olympus/
 | `technique_execution_outputs` | Saídas matemáticas SAT | techniqueType, outputData JSONB |
 | `audit_logs` | Logs de auditoria | metadata._hash + ._previousHash (hash-chain SHA-256) |
 | `platform_settings` | Config plataforma | llm, llm_tiers, anthropic_models |
+| **`phase_outputs`** ⭐ | **Artefatos por fase (Olympus 1.0)** | **phaseSlug, summary, keyFindings JSONB, athenaVerdict, athenaChecks — substitui messages como canal de contexto entre fases** |
 | `checkpoints` + 3 tabelas | LangGraph | **Gerenciadas pelo PostgresSaver.setup() — NÃO no schema Drizzle** |
 
 ---
 
-## PARTE 4 — AGENTES
+## PARTE 4 — AGENTES (Olympus 1.0)
 
-### Orquestradores
+> **Mudança arquitetural crítica (Sprint 22):** SCOPUS, PYTHIA, MNEMOSYNE e THEMIS foram removidos. O KLIO agora executa TODAS as fases analíticas — prompts específicos por fase são injetados dinamicamente via `phase-configs/`. Esta é a arquitetura monolítica descrita no Design Arquitetural v5.
 
-| Agente | Metodologias | Observação |
-|--------|--------------|------------|
-| **HERMES** | MSEF, Godet, Grumbach/Cenários, OTAN/AltA, SIEx/Estimativa, SIPLEx/CEEEx, IPEA/FGV, MPO, ASPLAN/Cenários, GBN, ESG | Orquestrador universal de cenários prospectivos e estimativas |
-| **OLYMPUS** | Grumbach/Planejamento Estratégico, SIEx-MPC, SIPLEx/Planejamento, SPED | Planejamento Estratégico e Produção do Conhecimento — **fases não implementadas** |
+### Agentes ativos (5)
 
-> **Regra crítica (Sprint 21):** HERMES é orquestrador para TODAS as metodologias de cenários implementadas no LangGraph. OLYMPUS reservado para variantes de Planejamento Estratégico ainda não implementadas (slugs: `grumbach_plj`, `siex_mpc`, `siplex_plj`, `asplan_sped`). Não confundir Grumbach/Produção de Cenários (HERMES, slug `grumbach`) com Grumbach/Planejamento (OLYMPUS, slug futuro `grumbach_plj`).
->
-> **Sprint 17:** HERMES_SIPLEX foi removido como anti-padrão. SIPLEx/CEEEx usa HERMES + `agentMethodPrompts/siplex`.
+| Agente | Tipo | Função em Olympus 1.0 |
+|--------|------|-----------------------|
+| **HERMES** | orchestrator | Compilador de relatório final — lê phase_outputs e gera o relatório em Markdown. Sem ferramentas. |
+| **KLIO** | expert | Analista monolítico — executa TODAS as 9 fases da análise Grumbach via phaseLoopNode. Tier: premium. 18 ferramentas. |
+| **KRATOS** | expert | Monitoramento autônomo via pg-boss — cron jobs, alertas, runDirectAgent(). Tier: economy. |
+| **ATHENA** | expert | Auditora qualitativa LLM — chamada por synthesisNode quando necessário. Sem ferramentas. Tier: premium. |
+| **OLYMPUS** | orchestrator | **Stub — Olympus 2.0.** Reservado para síntese multi-metodologia futura. Não invocado ativamente. |
 
-### Especialistas
+> **Regra arquitetural (Olympus 1.0):** HERMES é o orquestrador de síntese para todas as metodologias de cenários. ATHENA determinística roda via `athena-validator.ts` (TypeScript puro) — não via consultar_agente. Cada fase do phaseLoopNode recebe seu systemPromptInject específico de `phase-configs/`.
 
-| Agente | Tier | Ferramentas analíticas principais | ATS ICD 203 |
-|--------|------|----------------------------------|-------------|
-| **SCOPUS** | economy | tool_register_event | ATS 5 (KIQ) + ATS 3 (linchpin) |
-| **KLIO** | premium | **tool_register_event** (FIRST-STEP), tool_register_impact_relation, tool_mpc_source_evaluator | ATS 1 (TAD) + ATS 7 (trajetória) |
-| **PYTHIA** | premium | tool_mactor_analysis, tool_esg_rii_calculator, tool_register_scenario | ATS 2 (Hendrikson) + ATS 8 + ATS 4 |
-| **MNEMOSYNE** | premium | tool_register_scenario | ATS 6 (lógica causal) + ATS 8 |
-| **THEMIS** | premium | tool_mpo_backcasting | ATS 5 (Bet vs. Hedge) + ATS 9 |
-| **KRATOS** | economy | buscar_dados_publicos, atualizar_sentinela | Relatório monitoramento |
-| **ATHENA** | premium | *(sem ferramentas — auditora pura)* | ATS 1-9 por macroetapa (ICD 203 + EB70) |
+### Ferramentas analíticas (`analytical-engines.ts`)
+
+| Ferramenta | Quem usa | Função |
+|-----------|----------|--------|
+| `tool_register_event` | KLIO | Registra FPF/tendência/incerteza com TAD |
+| `tool_register_impact_relation` | KLIO | Impacto direto entre variáveis (MICMAC) |
+| `tool_grumbach_expert_simulation` | KLIO | 7 personas — projeção Grumbach P(i) e P(i\|j) |
+| `tool_mactor_analysis` | KLIO | Análise de atores |
+| `tool_mpo_backcasting` | KLIO | Backcasting MPO |
+| `tool_esg_rii_calculator` | KLIO | RII = I×(6-G)×(6-C) |
+| `tool_mpc_source_evaluator` | KLIO | Avaliação MPC alfanumérica |
+| `tool_register_scenario` | KLIO | Cenário estruturado com configuração booleana |
+| `tool_tad_score_calculator` | KLIO | Cálculo score TAD paramétrico (6 subcritérios) |
+| `tool_unified_search_engine` | KLIO | Busca unificada Tavily + fallback |
 
 ### Ferramentas analíticas (`analytical-engines.ts`)
 
@@ -169,62 +183,81 @@ Todas criadas via `createAnalyticalEngineTools(projectId)` — projectId injetad
 **Fonte canônica:** `D:\Pessoais\DEV\_Diversos\_contexto\Design\REVISAO_ARQUITETURA\metodologias.txt`
 **Fonte canônica:** `D:\Pessoais\DEV\_Diversos\_contexto\Design\REVISAO_ARQUITETURA\orquestradores.txt`
 
-### Metodologias de Cenários Prospectivos e Estimativas — Implementadas ✅
+### Bloco A — Cenários (9 metodologias, v1.0)
 
-| Nome Canônico | Slug canônico | Slug atual no banco | Orquestrador | Fases |
-|---|---|---|---|---|
-| MSEF v3 (8 etapas ENAP) | `msef` | `msef` ✅ | HERMES | 8 |
-| Godet: Escola Estrutural | `godet` | `godet` ✅ | HERMES | 7 |
-| Grumbach: Produção de Cenários | `grumbach` | `grumbach` ✅ | HERMES | 9 |
-| OTAN/AltA | `otan` | `alta` ⚠️ | HERMES | 6 |
-| SIEx: Conhecimento Estimativa EB | `siex` | `siex` ✅ | HERMES | 5 |
-| SIPLEx/CEEEx: Cenários da Força Terrestre | `siplex_ceex` | `siplex` ⚠️ | HERMES | 7 |
-| IPEA/FGV: Cenários Estreitados | `ipea` | `macroplan` ⚠️ | HERMES | 7 |
-| MPO: Estratégia Brasil 2050 | `mpo` | `mpo` ✅ | HERMES | 8 |
-| ASPLAN/MD: Produção de Cenários | `asplan` | `asplan` ✅ | HERMES | 7 |
-| GBN (Global Business Network) | `gbn` | `futures` ⚠️ | HERMES | 8 |
-| ESG: Cenários Prospectivos | `esg` | `esg` ✅ | HERMES | 6 |
-
-### Metodologias de Planejamento Estratégico e Produção do Conhecimento — Não implementadas 🔲
-
-| Nome Canônico | Slug canônico | Orquestrador | Status |
+| Slug no banco | Nome | PHASE_CONFIGS | Status |
 |---|---|---|---|
-| Grumbach: Planejamento Estratégico | `grumbach_plj` | OLYMPUS | 🔲 Fases não definidas |
-| SIEx: Metodologia de Produção do Conhecimento | `siex_mpc` | OLYMPUS | 🔲 Fases não definidas |
-| SIPLEx: Sistema de Planejamento Estratégico do Exército | `siplex_plj` | OLYMPUS | 🔲 Fases não definidas |
-| SPED: Sistema de Planejamento Estratégico de Defesa | `asplan_sped` | OLYMPUS | 🔲 Fases não definidas |
+| `grumbach` ⭐ | Grumbach: Produção de Cenários | ✅ 9 fases implementadas | **CASO DE VALIDAÇÃO 1.0** |
+| `ceeex` | CEEEx: Cenários Prospectivos do Exército | 🔲 a implementar | Erro explícito se usado |
+| `esg` | ESG: Cenários Prospectivos | 🔲 a implementar | Erro explícito se usado |
+| `godet` | Godet: Escola Estrutural | 🔲 a implementar | Erro explícito se usado |
+| `gbn` | GBN — Global Business Network | 🔲 a implementar | Erro explícito se usado |
+| `alta` | OTAN — Alternative Analysis (AltA) | 🔲 a implementar | Erro explícito se usado |
+| `ipea_buarque` | IPEA/Buarque — Metodologia de Cenários | 🔲 a implementar | Erro explícito se usado |
+| `mpo` | MPO: Estratégia Brasil 2050 | 🔲 a implementar | Erro explícito se usado |
+| `siex` | SIEx: Conhecimento Estimativa EB | 🔲 a implementar | Erro explícito se usado |
 
-> **⚠️ Slugs divergentes** (`alta`, `macroplan`, `futures`, `siplex`): slugs históricos no banco que diferem dos canônicos. Não afetam o funcionamento (loadMethodology busca por nome E slug). Migração requer UPDATE com preservação de FKs de `agent_method_prompts`.
+### Bloco B — Planejamento Estratégico (3 stubs, v2.0)
 
-### Fluxo de execução (Sprint 21 — Motor único LangGraph)
+| Slug no banco | Nome | Status |
+|---|---|---|
+| `siplex` | SIPLEx: Sistema de Planejamento do Exército | Stub — pipeline Olympus 2.0 |
+| `grumbach_gestao` | Grumbach: Gestão Estratégica Completa | Stub — pipeline Olympus 2.0 |
+| `sped` | SPED/PESD: Planejamento Estratégico Setorial de Defesa | Stub — pipeline Olympus 2.0 |
+
+> **Regra Olympus 1.0:** metodologia sem `PHASE_CONFIGS` implementado → `phaseLoopNode` lança erro explícito com mensagem clara (não fallback silencioso). Isso impede análises metodologicamente incorrectas rotuladas errado.
+>
+> **Slugs corrigidos vs. v4:** `futures` → `gbn`, `macroplan` → `ipea_buarque`, `asplan` removido, `msef` removido, `siplex` mantido (Bloco B).
+
+### Fluxo de execução (Olympus 1.0 — phaseLoopNode)
 
 ```
-POST /api/v1/chat/stream/graph          ← único endpoint (runAnalysis() eliminado)
-  ├─ loadMethodology()                  → banco (lança exceção se ausente)
-  ├─ getLLMConfig()+getLLMTiers()       → paralelo, de platform_settings
-  └─ getOlympusGraph().stream()         → LangGraph StateGraph
-       ├─ routeFromState()              → determinístico via currentNodeSlug+phaseSlug
-       ├─ scopusNode  → runAgentForPhase(SCOPUS,  phaseSlug)
-       ├─ klioNode    → runAgentForPhase(KLIO,    phaseSlug)   ← pode repetir (fases múltiplas)
-       ├─ pythiaNode  → HITL gate (interrupt se sem eventos aprovados)
-       │               runAgentForPhase(PYTHIA,   phaseSlug)
-       ├─ mnemosyeNode→ runAgentForPhase(MNEMOSYNE,phaseSlug)
-       ├─ integrationNode→runAgentForPhase(THEMIS/KRATOS,phaseSlug)
-       └─ synthesisNode → Agent(HERMES/OLYMPUS).run() com token streaming
-            └─ Salva mensagem final (relatorio_final) no banco
+POST /api/v1/chat/stream/graph               ← único endpoint
+  ├─ loadMethodology()                       → banco (fases + agentMethodPrompts legado)
+  ├─ DELETE phase_outputs WHERE projectId    → nova análise começa limpa
+  ├─ getLLMConfig()+getLLMTiers()            → paralelo, de platform_settings
+  └─ getOlympusGraph().stream()              → StateGraph (2 nós)
+       ├─ routeFromStart()                   → phase_loop (se PHASE_CONFIGS existe)
+       │                                        synthesis (se fases esgotadas)
+       │
+       ├─ [LOOP] phaseLoopNode               → executa para cada currentPhaseIndex
+       │    ├─ PHASE_CONFIGS[methodology]    → resolve PhaseConfig da fase atual
+       │    │   └─ se ausente → Error explícito
+       │    ├─ interrupt() se requiresHitlBefore  ← HITL portão (fase 3 Grumbach)
+       │    ├─ loadPhaseContext()            → summaries compactos das fases anteriores
+       │    ├─ buildAnchorCtx()              → eventos aprovados (HITL)
+       │    ├─ fullSystemPrompt = KLIO.base + phase.systemPromptInject + context
+       │    ├─ buildToolsForPhase()          → só as ferramentas da fase atual
+       │    ├─ Agent(KLIO).run()             → executa com token streaming
+       │    ├─ query projectEvents(createdAt >= phaseStartedAt) → keyFindings
+       │    ├─ athenaAuditPhase()            → ATHENA determinística (TypeScript puro)
+       │    ├─ buildPhaseSummary()           → summary < 500 chars, determinístico
+       │    ├─ INSERT phase_outputs          → persiste artefato estruturado
+       │    ├─ interrupt() se vizMode=passos ← modo passo-a-passo
+       │    └─ return { currentPhaseIndex: i+1 }
+       │
+       ├─ routeAfterPhase()                  → phase_loop (mais fases) | synthesis (fim)
+       │
+       └─ synthesisNode                      → lê phase_outputs do banco
+            ├─ Agent(HERMES).run()           → compila relatório (sem ferramentas)
+            └─ INSERT messages(relatorio_final)
 
-vizMode como configuração do grafo:
-  passos   → interrupt() após cada nó especialista (analista confirma cada fase)
-  etapa    → interrupt() apenas no HITL obrigatório de PYTHIA
+vizMode:
+  passos   → interrupt() após cada fase (analista confirma)
+  etapa    → interrupt() só no HITL explícito (fase 3 Grumbach)
   passagem → sem interrupts (totalmente autônomo)
-  thinking → sem interrupts + extended thinking nos agentes
 ```
 
 KRATOS (pg-boss): usa `runDirectAgent()` de `graph/helpers.ts` — execução direta sem grafo.
 
 ---
 
-## PARTE 6 — ATHENA v3 (ICD 203 + EB70-MT-10.401)
+## PARTE 6 — ATHENA (ICD 203 + EB70-MT-10.401)
+
+**Olympus 1.0 — dois modos de operação:**
+
+1. **Determinístico** (`athena-validator.ts`) — TypeScript puro, sem LLM, sem custo. Roda automaticamente após cada fase do phaseLoopNode. Verifica estruturalmente: TAD em FATOs (ATS1), linchpin (ATS3), Hendrikson (ATS2), mínimo de narrativas (ATS6), signposts com limiar (ATS9).
+2. **Qualitativo LLM** — chamado apenas se estágio determinístico passou E a fase requer julgamento qualitativo (node_narrative, node_integration, node_modeling). **TODO em 1.1.**
 
 Auditora pura — `toolsConfig: []`. Combina ICD 203 (ODNI 2022) + EB70-MT-10.401 (Exército Brasileiro).
 
@@ -337,10 +370,10 @@ Antes de acionar cada especialista:
 
 ### Tier System
 
-| Tier | Agentes | Google | Anthropic |
-|------|---------|--------|-----------|
-| `economy` | SCOPUS, KRATOS | gemini-2.5-flash-lite | claude-sonnet-4-6 |
-| `premium` | KLIO, PYTHIA, MNEMOSYNE, THEMIS, ATHENA | gemini-2.5-flash | claude-opus-4-7 |
+| Tier | Agentes (Olympus 1.0) | Google | Anthropic |
+|------|----------------------|--------|-----------|
+| `economy` | KRATOS | gemini-2.5-flash-lite | claude-sonnet-4-6 |
+| `premium` | KLIO, ATHENA | gemini-2.5-flash | claude-opus-4-7 |
 | *(global)* | HERMES, OLYMPUS | gemini-2.5-flash-lite | via `llm.model` |
 
 **Anthropic Prompt Cache:** `cacheControl: ephemeral` quando `provider === 'anthropic'` (~84% economia tokens em chamadas repetidas).
@@ -438,6 +471,7 @@ services:
 | 20 | 30 Mai | 18 tarefas: IDOR 6 rotas, JWT jti+revogação, rate limit PG, JOIN loadMethodology, HNSW, cache UI, AuditModal, AnalysisService, reportLayout UI |
 | Deploy | 30 Mai | **Railway online** — olympus-api + olympus-web. Fixes: railway.toml, nginx SNI, pg_dump PGDG, PORT dinâmica |
 | Pós-deploy | 31 Mai | Bug A (tool loop guard Agent.ts), Bug B (fase no CONFIRMAR), watermark ACESSO RESTRITO, EventsPanel flicker, batch/status order, T-10c pg-boss KRATOS |
+| **Sprint 22** | **02 Jun 2026** | **Olympus 1.0 — Migração arquitetural v4→v5:** phaseLoopNode substitui 6 nós especializados · PHASE_CONFIGS em código · phase_outputs (artefatos estruturados) · ATHENA determinística por fase · contexto ~268 tokens vs 40-60K · 5 agentes (remove SCOPUS/PYTHIA/MNEMOSYNE/THEMIS) · 12 metodologias (Bloco A/B) · migration idempotente em index.ts · stress test 10/10 · TypeScript zero erros · Railway deploy + fix clearCheckpointSql |
 
 ---
 
