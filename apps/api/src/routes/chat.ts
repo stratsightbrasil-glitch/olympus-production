@@ -73,7 +73,9 @@ chatRoutes.post('/stream/graph', async (c) => {
 
   const projectId       = body.projectId || body.id || `sess_${Date.now()}`;
   const isResuming      = !!body.isResuming;
-  const metodologiaName = (body.metodologia as string) || 'MSEF';
+  // 'grumbach' = único com PHASE_CONFIGS implementados em Olympus 1.0.
+  // 'MSEF' foi removida do banco no seed — usar 'grumbach' como fallback seguro.
+  const metodologiaName = (body.metodologia as string) || 'grumbach';
   const projectName     = body.projectName || 'Novo Projeto';
   const vizMode         = body.vizMode || 'etapa';
   const userInput       = body.messages?.[body.messages.length - 1]?.content || '';
