@@ -21,7 +21,7 @@ import {
   projectEvents,
   projects,
 } from "@olympus/db";
-import { eq, asc, gte, and, inArray } from "drizzle-orm";
+import { eq, asc, gte, and, inArray, sql } from "drizzle-orm";
 import { athenaAuditPhase }           from "./athena-validator";
 import type { KeyFinding }            from "./athena-validator";
 import { loadPhaseContext, buildPhaseSummary } from "./phase-context";
@@ -153,8 +153,12 @@ export async function phaseLoopNode(
     onToken,
   };
 
-  // Timestamp antes da execução para filtrar eventos criados nesta fase
-  const phaseStartedAt = new Date();
+  // Timestamp de início da fase capturado do relógio do POSTGRESQL (não do Node.js).
+  // Crítico: project_events.createdAt é gerado por PostgreSQL defaultNow().
+  // Usar new Date() do Node.js causaria skew de clock → eventos da fase seriam
+  // invisíveis na query de keyFindings (gte comparison falharia silenciosamente).
+  const tsResult = await db.execute(sql`SELECT NOW() AS ts`);
+  const phaseStartedAt: Date = (tsResult as any).rows?.[0]?.ts ?? new Date();
 
   const phaseInput = currentIndex === 0 && state.userInput
     ? `Contexto do projeto: ${state.userInput}\n\nExecute a fase ${phaseConfig.phaseNum}: ${phaseConfig.label}.`

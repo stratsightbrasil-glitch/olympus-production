@@ -418,7 +418,12 @@ export class Agent {
       const rawSchema = t.schema || TOOL_JSON_SCHEMAS[t.name] || FALLBACK_JSON_SCHEMA;
       const wrappedSchema = jsonSchema(rawSchema as any);
 
-      console.log(`[${this.name}] Registrando ferramenta: ${t.name} -> ${JSON.stringify(rawSchema)}`);
+      // Schema completo só em DEBUG — evitar 162 dumps por análise (18 tools × 9 fases)
+      if (process.env.LOG_LEVEL === 'debug') {
+        console.log(`[${this.name}] Registrando ferramenta: ${t.name} -> ${JSON.stringify(rawSchema)}`);
+      } else {
+        console.log(`[${this.name}] Registrando ferramenta: ${t.name}`);
+      }
 
       const myTool = tool({
         description: t.description,
@@ -482,18 +487,21 @@ export class Agent {
     //   • Especialistas: 3 steps × 4 000 tokens — resposta rápida e curta.
     //   • Orquestradores: 15 steps × 8 000 tokens — ainda precisam chamar
     //     todos os especialistas em sequência antes de sintetizar.
-    const isTestMode    = process.env.TEST_MODE === 'true';
-    const isOrchestrator = this.tools.some((t: any) => t.name === 'consultar_agente');
+    const isTestMode = process.env.TEST_MODE === 'true';
+    // Olympus 1.0: consultar_agente foi removido de todos os agentes.
+    // Detectar orquestrador por nome explícito (HERMES, OLYMPUS) OU pela presença
+    // de consultar_agente (compat com código legado). Sem essa detecção correta,
+    // HERMES recebe maxSteps=12 (especialista) e pode truncar relatórios longos.
+    const isOrchestrator = this.name === 'HERMES' || this.name === 'OLYMPUS'
+      || this.tools.some((t: any) => t.name === 'consultar_agente');
     const maxTokens = isTestMode
       ? (isOrchestrator ? 8_000 : 4_000)
       : vizMode === "thinking"  ? 32000
       : vizMode === "passagem"  ? 16000
       : 32000;
-    // Orquestradores: 30 em TEST_MODE (8 fases × ~3 steps: 1 especialista + 1 ATHENA + buffer), 15 em produção.
-    // MSEF tem 8 fases (SCOPUS×1, KLIO×3, PYTHIA×2, MNEMOSYNE×1, THEMIS×1) + 8 ATHENA + síntese ≈ 25 steps mínimo.
-    // ATHENA é chamada UMA VEZ ao final de cada fase (gate HITL), não após cada tool call.
-    // Especialistas: 5 em TEST_MODE (resposta completa suficiente), 8 em produção.
-    const maxSteps  = isOrchestrator ? (isTestMode ? 30 : 15) : (isTestMode ? 5 : 12);
+    // Orquestradores: 30 em TEST_MODE, 15 em produção.
+    // Especialistas (KLIO): 5 em TEST_MODE, 12 em produção.
+    const maxSteps = isOrchestrator ? (isTestMode ? 30 : 15) : (isTestMode ? 5 : 12);
 
     const hasTools = Object.keys(aiTools).length > 0;
 

@@ -52,7 +52,7 @@ chatRoutes.get('/status/:projectId', async (c) => {
     return c.json({
       status:        'interrupted',
       interruptType: val.interruptType ?? 'hitl_required',
-      agent:         val.agent         ?? 'PYTHIA',
+      agent:         val.agent         ?? 'KLIO',
       message:       val.message       ?? 'Análise pausada. Retome quando pronto.',
       projectId,
     });
@@ -124,22 +124,32 @@ chatRoutes.post('/stream/graph', async (c) => {
         await db.delete(projectScenarios).where(eq(projectScenarios.projectId, projectId));
         console.log(`[chat] Análise anterior limpa para ${projectId}`);
       } else {
-        // RESUME (HITL ou retomada): apaga events anteriores ao primeiro phase_output
-        // para eliminar contaminação de runs anteriores falhadas.
-        const firstOutput = await db.query.phaseOutputs.findFirst({
+        // RESUME (HITL ou retomada): purga apenas eventos contaminados de runs anteriores.
+        //
+        // ATENÇÃO: NÃO usar firstOutput.createdAt como cutoff.
+        // Motivo: events de phase 1 são criados DURANTE agent.run() (antes de phase_output
+        // ser escrito), então lt(createdAt, firstOutput.createdAt) deletaria events
+        // legítimos de phase 1, quebrando o Delphi e Impact Cross que dependem desses FPFs.
+        //
+        // Estratégia correta:
+        //   - Se há phase_outputs: eventos 'approved' são intocáveis (o analista os aprovou).
+        //     Deletar apenas eventos 'proposed' criados há mais de 1 hora (contaminação antiga).
+        //   - Se não há phase_outputs: a análise nunca completou uma fase; limpar tudo.
+        const hasPhaseOutputs = await db.query.phaseOutputs.findFirst({
           where:   eq(phaseOutputs.projectId, projectId),
-          orderBy: [asc(phaseOutputs.phaseNum)],
-          columns: { createdAt: true },
+          columns: { id: true },
         });
-        if (firstOutput) {
-          // Deleta events DO PROJETO mais antigos que o início da análise atual
+        if (hasPhaseOutputs) {
+          // Deletar apenas proposed stale (> 1h): não tocar em approved (aprovados pelo analista)
+          const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
           await db.delete(projectEvents).where(
             and(
               eq(projectEvents.projectId, projectId),
-              lt(projectEvents.createdAt, firstOutput.createdAt)
+              eq(projectEvents.status, 'proposed' as any),
+              lt(projectEvents.createdAt, oneHourAgo)
             )
           );
-          console.log(`[chat] Resume: events anteriores a ${firstOutput.createdAt.toISOString()} removidos para ${projectId}`);
+          console.log(`[chat] Resume: proposed events > 1h removidos para ${projectId} (approved preservados)`);
         } else {
           // Sem phase_outputs: análise nunca completou uma fase — limpa tudo
           await db.delete(projectEvents).where(eq(projectEvents.projectId, projectId));
