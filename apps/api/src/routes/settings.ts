@@ -152,7 +152,27 @@ settingsRoutes.patch('/llm', async (c) => {
     DO UPDATE SET value = ${value}::jsonb, updated_at = NOW()
   `);
 
-  return c.json({ ok: true, llm: { provider, model } });
+  // Ao trocar provider, atualizar llm_tiers com defaults do novo provider.
+  // Sem isso, tiers continuam apontando para IDs de modelo do provider anterior
+  // e o Agent.ts tenta usar ex: 'gemini-2.5-flash' com o provider Anthropic → erro.
+  const DEFAULT_TIERS: Record<string, { economy: string; premium: string }> = {
+    anthropic: { economy: 'claude-haiku-4-5-20251001', premium: 'claude-sonnet-4-6' },
+    google:    { economy: 'gemini-2.5-flash-lite',     premium: 'gemini-2.5-flash'  },
+    deepseek:  { economy: 'deepseek-chat',             premium: 'deepseek-chat'     },
+    ollama:    { economy: model,                       premium: model               },
+  };
+  const defaultTiers = DEFAULT_TIERS[provider];
+  if (defaultTiers) {
+    const tiersValue = JSON.stringify(defaultTiers);
+    await db.execute(sql`
+      INSERT INTO platform_settings (key, value, updated_at)
+      VALUES ('llm_tiers', ${tiersValue}::jsonb, NOW())
+      ON CONFLICT (key)
+      DO UPDATE SET value = ${tiersValue}::jsonb, updated_at = NOW()
+    `);
+  }
+
+  return c.json({ ok: true, llm: { provider, model }, llmTiers: defaultTiers ?? null });
 });
 
 // ── PATCH /api/v1/settings/anthropic-models ── atualiza lista sem rebuild ──────

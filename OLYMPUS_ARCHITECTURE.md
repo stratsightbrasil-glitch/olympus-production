@@ -130,18 +130,18 @@
 <!-- AUTO:metodologias:START -->
 | Metodologia | Orquestrador | Fases | Categoria | Agentes |
 |-------------|-------------|-------|-----------|---------|
-| IPEA/Buarque — Metodologia de Cenários | HERMES | ? | Cenários Prospectivos |  |
 | SIEx: Conhecimento Estimativa EB | HERMES | 7 | Produção do Conhecimento |  |
-| SPED/PESD: Planejamento Estratégico Setorial de Defesa | HERMES | ? | Planejamento Estratégico |  |
 | SIPLEx: Sistema de Planejamento do Exército | HERMES | 7 | Planejamento Estratégico |  |
+| SPED/PESD: Planejamento Estratégico Setorial de Defesa | HERMES | ? | Planejamento Estratégico |  |
+| Grumbach: Produção de Cenários | HERMES | 9 | Cenários Prospectivos |  |
 | CEEEx: Cenários Prospectivos do Exército | HERMES | ? | Cenários Prospectivos |  |
 | Godet: Escola Estrutural | HERMES | 7 | Cenários Prospectivos |  |
 | GBN — Global Business Network (Schwartz) | HERMES | ? | Cenários Prospectivos |  |
+| IPEA/Buarque — Metodologia de Cenários | HERMES | ? | Cenários Prospectivos |  |
 | Grumbach: Gestão Estratégica Completa | HERMES | ? | Planejamento Estratégico |  |
-| Grumbach: Produção de Cenários | HERMES | 9 | Cenários Prospectivos |  |
 | ESG: Cenários Prospectivos | HERMES | 6 | Cenários Prospectivos |  |
-| MPO: Estratégia Brasil 2050 | HERMES | 8 | Planejamento Estratégico |  |
 | OTAN — Alternative Analysis (AltA) | HERMES | 6 | Cenários Prospectivos |  |
+| MPO: Estratégia Brasil 2050 | HERMES | 8 | Planejamento Estratégico |  |
 <!-- AUTO:metodologias:END -->
 
 ---
@@ -151,17 +151,17 @@
 <!-- AUTO:tecnicas:START -->
 | # | Nome | Descrição |
 |---|------|-----------|
-| 1 | Advocacia do Diabo | Um analista assume o papel de crítico e constrói o melhor argumento possível con |
-| 2 | Análise Pré-Mortem | Simula mentalmente o fracasso de um plano ou análise e trabalha retrospectivamen |
-| 3 | Análise E-Se | Assume que um evento (positivo ou negativo) já ocorreu e explora como poderia te |
-| 4 | Análise SWOT | Avalia forças, fraquezas, oportunidades e ameaças de um projeto, decisão ou estr |
-| 5 | Cinco Porquês | Identifica a causa-raiz de um problema perguntando "por quê?" cinco vezes, quebr |
+| 1 | Análise Pré-Mortem | Simula mentalmente o fracasso de um plano ou análise e trabalha retrospectivamen |
+| 2 | Análise E-Se | Assume que um evento (positivo ou negativo) já ocorreu e explora como poderia te |
+| 3 | Análise SWOT | Avalia forças, fraquezas, oportunidades e ameaças de um projeto, decisão ou estr |
+| 4 | Cinco Porquês | Identifica a causa-raiz de um problema perguntando "por quê?" cinco vezes, quebr |
+| 5 | Advocacia do Diabo | Um analista assume o papel de crítico e constrói o melhor argumento possível con |
 | 6 | Verificação de Qualidade da Informação | Avalia a completude, precisão, credibilidade e confiabilidade das fontes de info |
 | 7 | PMI — Prós, Contras e Pontos Interessantes | Técnica rápida que avalia os aspectos positivos, negativos e interessantes de um |
 | 8 | Adversário Substituto | Modela o comportamento de atores externos (adversários, competidores, neutros) r |
 | 9 | Time A / Time B | Dois grupos debatem hipóteses ou posições opostas diante de um júri neutro, expo |
-| 10 | Identificação de Premissas-Chave | Identifica sistematicamente as premissas que sustentam o raciocínio e avalia qua |
-| 11 | Pensamento de Fora para Dentro | Aborda um problema da perspectiva externa, mapeando forças externas que moldam a |
+| 10 | Pensamento de Fora para Dentro | Aborda um problema da perspectiva externa, mapeando forças externas que moldam a |
+| 11 | Identificação de Premissas-Chave | Identifica sistematicamente as premissas que sustentam o raciocínio e avalia qua |
 | 12 | Futuros Alternativos | Explora sistematicamente múltiplas formas em que uma situação complexa e incerta |
 <!-- AUTO:tecnicas:END -->
 

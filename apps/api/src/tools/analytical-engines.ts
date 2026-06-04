@@ -141,6 +141,89 @@ Credibilidade (1-6): 1=confirmado por outras fontes, 2=provavelmente verdadeiro,
   },
 };
 
+// ── 3b. CALCULADORA PARAMÉTRICA TAD ──────────────────────────────────────────
+// Calcula o score alfanumérico MPC (EB70-MT-10.401) deterministicamente.
+// O agente fornece os 6 subcritérios numéricos; a ferramenta produz a nota A-F × 1-6.
+// Use ANTES de tool_mpc_source_evaluator — fornece o score para persistir.
+//
+// Escala dos subcritérios: 1=melhor, 6=pior (mesma escala da credibilidade MPC).
+// Idoneidade: média(autenticidade, confiabilidade, competencia) → letra A-F
+//   ≤1.5=A  ≤2.5=B  ≤3.5=C  ≤4.5=D  ≤5.5=E  >5.5=F
+// Credibilidade: média(coerencia, compatibilidade, semelhanca) → inteiro 1-6
+export const toolTadScoreCalculator: OlympusTool = {
+  name: "tool_tad_score_calculator",
+  description:
+    "Calcula o score alfanumérico MPC (EB70-MT-10.401) de forma determinística "
+    + "a partir de seis subcritérios numéricos. Elimina a estimativa subjetiva do LLM "
+    + "na avaliação de fontes. Use ANTES de tool_mpc_source_evaluator.\n\n"
+    + "IDONEIDADE DA FONTE (letra A-F) — subcritérios 1-6 (1=melhor, 6=pior):\n"
+    + "  autenticidade: origem verificável e identificável?\n"
+    + "  confiabilidade: histórico consistente de precisão?\n"
+    + "  competencia: expertise reconhecida no domínio?\n\n"
+    + "CREDIBILIDADE DO DADO (número 1-6) — subcritérios 1-6 (1=melhor, 6=pior):\n"
+    + "  coerencia: internamente consistente, sem contradições?\n"
+    + "  compatibilidade: compatível com outras fontes independentes?\n"
+    + "  semelhanca: segue padrões esperados para este tipo de informação?",
+  parameters: {
+    type: "object",
+    properties: {
+      autenticidade:   { type: "number", minimum: 1, maximum: 6 },
+      confiabilidade:  { type: "number", minimum: 1, maximum: 6 },
+      competencia:     { type: "number", minimum: 1, maximum: 6 },
+      coerencia:       { type: "number", minimum: 1, maximum: 6 },
+      compatibilidade: { type: "number", minimum: 1, maximum: 6 },
+      semelhanca:      { type: "number", minimum: 1, maximum: 6 },
+      sourceName:      { type: "string", description: "Identificação da fonte avaliada (opcional)" },
+      factStatement:   { type: "string", description: "Afirmação factual sendo avaliada (opcional)" },
+    },
+    required: [
+      "autenticidade", "confiabilidade", "competencia",
+      "coerencia", "compatibilidade", "semelhanca",
+    ],
+  },
+  execute: async (args) => {
+    const {
+      autenticidade, confiabilidade, competencia,
+      coerencia, compatibilidade, semelhanca,
+      sourceName = "fonte não identificada",
+      factStatement = "dado não especificado",
+    } = args;
+
+    const idoneityAvg = (autenticidade + confiabilidade + competencia) / 3;
+    const letter =
+      idoneityAvg <= 1.5 ? "A" :
+      idoneityAvg <= 2.5 ? "B" :
+      idoneityAvg <= 3.5 ? "C" :
+      idoneityAvg <= 4.5 ? "D" :
+      idoneityAvg <= 5.5 ? "E" : "F";
+
+    const credAvg = (coerencia + compatibilidade + semelhanca) / 3;
+    const number  = Math.min(6, Math.max(1, Math.round(credAvg)));
+    const score   = `${letter}${number}`;
+
+    const letterLabel: Record<string, string> = {
+      A: "completamente confiável",  B: "geralmente confiável",
+      C: "suficientemente confiável", D: "geralmente não confiável",
+      E: "não confiável",            F: "idoneidade não julgável",
+    };
+    const numberLabel: Record<number, string> = {
+      1: "confirmado por outras fontes", 2: "provavelmente verdadeiro",
+      3: "possivelmente verdadeiro",     4: "duvidoso",
+      5: "improvável",                   6: "veracidade não julgável",
+    };
+
+    return JSON.stringify({
+      alphanumericScore: score,
+      reliability: { letter, label: letterLabel[letter], avg: +idoneityAvg.toFixed(2) },
+      credibility: { number, label: numberLabel[number], avg: +credAvg.toFixed(2) },
+      subcriteria: { autenticidade, confiabilidade, competencia, coerencia, compatibilidade, semelhanca },
+      source: sourceName,
+      fact:   factStatement,
+      instruction: `Score calculado: ${score}. Use este valor ao chamar tool_mpc_source_evaluator ou tool_register_event.`,
+    });
+  },
+};
+
 // ── 4. REGISTRO DA MATRIZ DE IMPACTO DIRETO (MICMAC INPUT) ───────────────────
 export const toolRegisterImpactRelation: OlympusTool = {
   name: "tool_register_impact_relation",
@@ -510,11 +593,13 @@ export const analyticalEngineTools: OlympusTool[] = [
   toolUnifiedSearchEngine,
   toolRegisterEvent,
   toolMpcSourceEvaluator,
+  toolTadScoreCalculator,
   toolRegisterImpactRelation,
   toolGrumbachExpertSimulation,
   toolMactorAnalysis,
   toolMpoBackcasting,
   toolEsgRiiCalculator,
+  toolRegisterScenario,
 ];
 
 export const analyticalEngineSchemas: Record<string, object> = Object.fromEntries(
