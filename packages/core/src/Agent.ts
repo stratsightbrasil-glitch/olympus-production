@@ -472,11 +472,14 @@ export class Agent {
     // HERMES (synthesisNode) e OLYMPUS (stub v2.0) recebem maxSteps/maxTokens maiores
     // pois compilam relatórios longos a partir de múltiplos phase_outputs.
     const isOrchestrator = this.name === 'HERMES' || this.name === 'OLYMPUS';
+    // HERMES (synthesisNode) precisa de 32k para compilar o relatório final a partir de 9 fases.
+    // KLIO em uma fase analítica individual: 12k é mais que suficiente e evita OOM.
     const maxTokens = isTestMode
       ? (isOrchestrator ? 8_000 : 4_000)
       : vizMode === "thinking"  ? 32000
-      : vizMode === "passagem"  ? 16000
-      : 32000;
+      : isOrchestrator          ? 32000
+      : vizMode === "passagem"  ? 12000
+      : 12000;
     // Orquestradores: 30 em TEST_MODE, 15 em produção.
     // Especialistas (KLIO): 5 em TEST_MODE, 12 em produção.
     const maxSteps = isOrchestrator ? (isTestMode ? 30 : 15) : (isTestMode ? 5 : 12);

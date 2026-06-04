@@ -28,6 +28,7 @@ export interface Message {
   content: MessageContent;
   id?: string;
   messageType?: string;
+  agentName?: string;
 }
 
 export interface AttachedFile {

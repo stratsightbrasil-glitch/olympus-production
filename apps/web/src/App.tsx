@@ -492,7 +492,14 @@ function App() {
 
               {chat.messages.map((msg, idx) => {
                 if (msg.role === 'user' && typeof msg.content === 'string' && msg.content.startsWith('Iniciar')) return null;
-                const agent = msg.role === 'assistant' ? getAgentInfo(typeof msg.content === 'string' ? msg.content : '') : null;
+                // Preferir msg.agentName (definido pelo SSE hitl_gate) sobre detecção por conteúdo.
+                // getAgentInfo(content) é frágil: se o output do KLIO mencionar "HERMES",
+                // HERMES ganha porque está primeiro em AGENTS. msg.agentName é canônico.
+                const agent = msg.role === 'assistant'
+                  ? (msg.agentName && AGENTS[msg.agentName]
+                      ? { name: msg.agentName, ...AGENTS[msg.agentName] }
+                      : getAgentInfo(typeof msg.content === 'string' ? msg.content : ''))
+                  : null;
                 return (
                   <MessageBubble
                     key={idx}
@@ -515,9 +522,16 @@ function App() {
                 );
               })}
 
-              {chat.streamingText && (
-                <MessageBubble role="assistant" content={chat.streamingText} idx={-1} agentName="HERMES" agentLabel="Orquestrador" agentHex="#1B3A2D" isStreaming />
-              )}
+              {chat.streamingText && (() => {
+                const streamAgent = chat.progressAgent && AGENTS[chat.progressAgent]
+                  ? { name: chat.progressAgent, ...AGENTS[chat.progressAgent] }
+                  : { name: 'KLIO', ...AGENTS.KLIO };
+                return (
+                  <MessageBubble role="assistant" content={chat.streamingText} idx={-1}
+                    agentName={streamAgent.name} agentLabel={streamAgent.label} agentHex={streamAgent.hex}
+                    isStreaming />
+                );
+              })()}
               {chat.loading && !chat.streamingText && (
                 <AgentWorking progressAgent={chat.progressAgent} stepLog={chat.stepLog} />
               )}

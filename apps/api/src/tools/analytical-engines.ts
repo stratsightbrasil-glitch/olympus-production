@@ -277,7 +277,23 @@ Use apenas com FPFs aprovados pelo analista (status='approved').`,
       .from(projectEvents)
       .where(and(eq(projectEvents.projectId, projectId), eq(projectEvents.status, "approved")));
 
-    const validIds = eventIds.filter((id: string) => approved.some(e => e.id === id));
+    // Lookup 1: match por UUID exato
+    let validIds: string[] = eventIds.filter((id: string) => approved.some(e => e.id === id));
+
+    // Lookup 2: KLIO frequentemente passa nomes descritivos, não UUIDs — tentar por name
+    if (validIds.length < 3) {
+      validIds = eventIds.flatMap((nameOrId: string) => {
+        const hit = approved.find(e => e.id === nameOrId || e.name === nameOrId);
+        return hit ? [hit.id] : [];
+      });
+    }
+
+    // Fallback: usar todos os eventos aprovados do projeto quando IDs/nomes não batem
+    // (ocorre quando o analista aprovou eventos em fases anteriores via HITL)
+    if (validIds.length < 3 && approved.length >= 3) {
+      validIds = approved.map(e => e.id);
+    }
+
     if (validIds.length < 3) {
       return JSON.stringify({
         error: "Mínimo 3 eventos aprovados necessários.",
