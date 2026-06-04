@@ -10,7 +10,7 @@
 
 import { Hono } from 'hono';
 import { streamSSE } from 'hono/streaming';
-import { db, projects, messages, phaseOutputs } from '@olympus/db';
+import { db, projects, messages, phaseOutputs, projectEvents, projectScenarios } from '@olympus/db';
 import { eq } from 'drizzle-orm';
 import { Command } from '@langchain/langgraph';
 import { getOlympusGraph, graphConfig } from '../graph';
@@ -116,9 +116,14 @@ chatRoutes.post('/stream/graph', async (c) => {
       // do @langchain/langgraph-checkpoint-postgres@1.0.1 não limpa checkpoint_writes,
       // deixando writes pendentes que causam replay indevido e crash (502 no SSE).
       if (!isResuming) {
-        await clearCheckpointSql(projectId);  // limpa checkpoints + checkpoint_writes
+        // Limpa TODOS os dados da análise anterior para começar do zero.
+        // project_events e project_scenarios são críticos: se não limpos,
+        // buildAnchorCtx() os carrega como contexto e KLIO continua o tema errado.
+        await clearCheckpointSql(projectId);
         await db.delete(phaseOutputs).where(eq(phaseOutputs.projectId, projectId));
-        console.log(`[chat] Checkpoint e phase_outputs limpos para ${projectId}`);
+        await db.delete(projectEvents).where(eq(projectEvents.projectId, projectId));
+        await db.delete(projectScenarios).where(eq(projectScenarios.projectId, projectId));
+        console.log(`[chat] Análise anterior limpa para ${projectId} (checkpoints, phase_outputs, events, scenarios)`);
       }
 
       const [llmConfig, llmTiers] = await Promise.all([getLLMConfig(), getLLMTiers()]);
