@@ -114,7 +114,7 @@ export function EventsPanel({ proposedEvents, loading, onApprove, onReject, onAp
 
   // EventsPanel visível apenas para:
   //   a) há eventos propostos (independente do interrupt)
-  //   b) hitl_required — PYTHIA aguarda aprovação humana
+  //   b) hitl_required — KLIO aguarda aprovação dos eventos pelo analista
   // NÃO mostrar para 'phase_complete' (passos) — nesses casos só o HitlDecisionCard aparece.
   const isPythiaHitl = hitlGate?.interruptType === 'hitl_required';
   if (proposedEvents.length === 0 && !isPythiaHitl) return null;
@@ -202,10 +202,10 @@ export function EventsPanel({ proposedEvents, loading, onApprove, onReject, onAp
           {hitlGate && proposedEvents.length === 0 && onResume && (
             <div className="px-3 py-3 border-t border-purple-200 bg-purple-50">
               <p className="text-[11px] text-purple-700 mb-2 leading-snug">
-                ✅ Todos os eventos foram revisados. Clique para continuar a análise com PYTHIA.
+                ✅ Todos os eventos foram revisados. Clique para continuar para a próxima fase.
               </p>
               <button
-                onClick={onResume}
+                onClick={() => onResume?.()}
                 disabled={busy}
                 className="w-full text-sm font-bold py-2 px-3 rounded-lg bg-purple-700 text-white hover:bg-purple-800 disabled:opacity-50 transition-colors"
               >
@@ -228,7 +228,7 @@ export function EventsPanel({ proposedEvents, loading, onApprove, onReject, onAp
             <div className="px-3 py-2 border-t border-amber-200 bg-amber-100/60">
               <p className="text-[10px] text-amber-700 leading-tight">
                 Eventos aprovados alimentam a Âncora de Contexto dos agentes.
-                PYTHIA só processa incertezas e FPFs com status <em>approved</em>.
+                KLIO só utiliza incertezas e FPFs com status <em>approved</em> nas fases seguintes.
               </p>
             </div>
           )}

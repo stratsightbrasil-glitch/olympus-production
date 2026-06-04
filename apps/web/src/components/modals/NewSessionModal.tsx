@@ -25,7 +25,7 @@ const EMPTY_SCOPE: ScopeForm = { tema: '', horizonte: '', elaborador: '', client
 // do analista, não pelo motor (todos usam /stream/graph internamente).
 const VIZ_MODES = [
   { id: 'passos',   label: '👣 Passo a Passo',        desc: 'Pausa após cada fase — analista revisa e confirma antes de avançar' },
-  { id: 'etapa',    label: '📋 Etapa Completa',        desc: 'Cada especialista entrega sua fase completa (Padrão). PYTHIA aguarda aprovação de eventos.' },
+  { id: 'etapa',    label: '📋 Etapa Completa',        desc: 'KLIO entrega cada fase completa (Padrão). Portão HITL aguarda aprovação dos eventos antes de avançar.' },
   { id: 'passagem', label: '⚡ Processo Completo',     desc: 'Todas as fases encadeadas de forma autônoma, sem interrupções' },
   { id: 'thinking', label: '🧠 Raciocínio Estendido',  desc: 'Raciocínio profundo antes de cada resposta — maior profundidade analítica' },
 ];

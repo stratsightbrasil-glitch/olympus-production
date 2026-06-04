@@ -352,7 +352,7 @@ function LlmSelector({
               {(['economy', 'premium'] as const).map(tier => {
                 const TIER_LABELS: Record<string, string> = {
                   economy: 'Economy  (SCOPUS, KRATOS)',
-                  premium: 'Premium  (PYTHIA, KLIO, THEMIS…)',
+                  premium: 'Premium  (KLIO, ATHENA, síntese…)',
                 };
                 const currentModelId = llmTiers[tier] ?? '';
                 return (

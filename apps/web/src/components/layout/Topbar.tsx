@@ -1,9 +1,9 @@
 const MSEF_STEPS = [
-  { num: 1, agent: 'SCOPUS',    label: 'Escopo' },
-  { num: 2, agent: 'KLIO',      label: 'Drivers + Sinais' },
-  { num: 3, agent: 'PYTHIA',    label: 'Incertezas · Eixos' },
-  { num: 4, agent: 'MNEMOSYNE', label: 'Narrativas' },
-  { num: 5, agent: 'THEMIS',    label: 'Implicações' },
+  { num: 1, agent: 'KLIO', label: 'Escopo' },
+  { num: 2, agent: 'KLIO', label: 'Drivers + Sinais' },
+  { num: 3, agent: 'KLIO', label: 'Incertezas · Eixos' },
+  { num: 4, agent: 'KLIO', label: 'Narrativas' },
+  { num: 5, agent: 'KLIO', label: 'Implicações' },
 ];
 
 interface TopbarProps {

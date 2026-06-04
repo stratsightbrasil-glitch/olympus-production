@@ -134,8 +134,10 @@ export async function phaseLoopNode(
       agent:         "KLIO",
       phaseSlug:     phaseConfig.phaseSlug,
       phaseNum:      phaseConfig.phaseNum,
-      message:       `Fase ${phaseConfig.phaseNum} (${phaseConfig.label}) requer aprovação do analista. `
-                   + "Revise os eventos no painel e clique Continuar.",
+      message:       `Portão de revisão — Fase ${phaseConfig.phaseNum}: ${phaseConfig.label}. `
+                   + "Revise os Fatos Portadores de Futuro (FPFs) no painel lateral. "
+                   + "Aprove os relevantes e rejeite os que não se aplicam ao escopo. "
+                   + "Ao concluir, clique em Continuar.",
       projectId:     state.projectId,
     });
   }
@@ -163,6 +165,7 @@ export async function phaseLoopNode(
     state.projectId,
     state.connectivityMode,
     firstPhaseOutput?.createdAt ?? undefined,
+    state.methodology,   // controla formato TAD: alfanumérico (siex/alta/ceeex) vs semântico
   );
 
   onStep?.(`[KLIO] Contexto: ${phaseContext.phaseCount} fase(s) ant. (~${phaseContext.estimatedTokens} tokens)`);
@@ -292,17 +295,32 @@ export async function phaseLoopNode(
 
   onStep?.(`[phaseLoopNode] phase_output persistido ✅ — ${phaseConfig.phaseSlug}`);
 
+  // ── Garantir output legível para o analista ───────────────────────────────
+  // Quando KLIO produz apenas tool calls (sem texto narrativo), o output fica
+  // vazio ou "Análise concluída." — substituir por resumo informativo.
+  const phaseOutput = (!rawOutput || rawOutput.trim() === '' || rawOutput.trim() === 'Análise concluída.')
+    ? `**KLIO** · \n\nFase ${phaseConfig.phaseNum} — ${phaseConfig.label} concluída.\n\n`
+      + `${keyFindings.length} artefato(s) registrado(s) nesta fase. `
+      + `Consulte o painel de eventos para revisar os FPFs e dados coletados.`
+    : rawOutput;
+
   // ── Modo passos: interromper para revisão do analista ────────────────────
   if (state.vizMode === "passos" && process.env.TEST_MODE !== "true") {
+    const verdictDisplay = athenaVerdict.verdict === "APROVADO"
+      ? "✅ Rigor analítico aprovado"
+      : athenaVerdict.verdict === "RESSALVAS"
+      ? "⚠️ Aprovado com ressalvas"
+      : "❌ Requer revisão";
     interrupt({
       interruptType: "phase_complete",
       agent:         "KLIO",
       phaseSlug:     phaseConfig.phaseSlug,
       phaseNum:      phaseConfig.phaseNum,
       verdict:       athenaVerdict.verdict,
-      message:       `Fase ${phaseConfig.phaseNum} (${phaseConfig.label}) concluída. `
-                   + `ATHENA: ${athenaVerdict.verdict}. Confirme para continuar.`,
-      output:        rawOutput,
+      message:       `Fase ${phaseConfig.phaseNum} — ${phaseConfig.label} concluída. `
+                   + `${verdictDisplay} por ATHENA. `
+                   + `Clique em "Confirmar e Avançar" para ir à próxima fase, ou "Redirecionar" para ajustar o foco.`,
+      output:        phaseOutput,
     });
   }
 
@@ -310,7 +328,7 @@ export async function phaseLoopNode(
   return {
     currentPhaseIndex: currentIndex + 1,
     currentNodeSlug:   phaseConfig.phaseSlug,  // compat SSE chat.ts
-    lastOutput:        rawOutput,
+    lastOutput:        phaseOutput,
     agentName:         "KLIO",
     messageType:       "parcial",
   };

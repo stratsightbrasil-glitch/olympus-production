@@ -94,18 +94,43 @@ export async function loadMemoryWindow(projectId: string): Promise<any[]> {
 
 // ── Âncora de contexto HITL ───────────────────────────────────────────────────
 
+// Metodologias militares que usam código alfanumérico MPC (ex: B2, A1).
+// Para todas as demais, usar descrição semântica por extenso.
+const MILITARY_METHODOLOGY_SLUGS = new Set(['siex', 'alta', 'ceeex']);
+
+/** Converte reliability (A-F) em descrição semântica. */
+function reliabilityLabel(r: string): string {
+  const MAP: Record<string, string> = {
+    A: 'totalmente idônea', B: 'habitualmente idônea', C: 'regularmente idônea',
+    D: 'habitualmente suspeita', E: 'totalmente suspeita', F: 'sem condições de julgar',
+  };
+  return MAP[r] ?? r;
+}
+
+/** Converte credibility (1-6) em descrição semântica. */
+function credibilityLabel(c: string): string {
+  const MAP: Record<string, string> = {
+    '1': 'verdadeiro', '2': 'provavelmente verdadeiro', '3': 'possivelmente verdadeiro',
+    '4': 'duvidoso', '5': 'improvável', '6': 'não se pode julgar',
+  };
+  return MAP[c] ?? c;
+}
+
 /**
  * Constrói a âncora de contexto com eventos aprovados.
  *
- * @param sinceDate - Se fornecido, inclui apenas eventos registrados APÓS esta data.
- *   Usado pelo phaseLoopNode para filtrar eventos de análises anteriores falhadas,
- *   prevenindo contaminação de tema (o guardrail de texto não é suficiente sozinho).
+ * @param sinceDate   - Se fornecido, inclui apenas eventos registrados APÓS esta data.
+ * @param methodology - Slug da metodologia ativa. Controla o formato TAD:
+ *   - Militar (siex, alta, ceeex): código alfanumérico [B2]
+ *   - Demais: descrição semântica (habitualmente idônea / provavelmente verdadeiro)
  */
 export async function buildAnchorCtx(
   projectId: string,
   connectivityMode: string,
   sinceDate?: Date,
+  methodology?: string,
 ): Promise<string> {
+  const useMilitaryFormat = MILITARY_METHODOLOGY_SLUGS.has(methodology ?? '');
   const whereClause = sinceDate
     ? and(
         eq(projectEvents.projectId, projectId),
@@ -133,8 +158,19 @@ export async function buildAnchorCtx(
   const byType = (t: string) => approvedEvents.filter(e => e.type === t);
   const fmt = (e: typeof approvedEvents[0]) => {
     const ev = e.sourceEvaluation as any;
-    const mpc = ev ? ` [MPC:${ev.reliability}${ev.credibility}]` : "";
-    return `· ${e.name}: ${e.description}${mpc}`;
+    let tadNote = "";
+    if (ev?.reliability || ev?.credibility) {
+      if (useMilitaryFormat) {
+        // SIEx / OTAN: código alfanumérico compacto (ex: B2)
+        tadNote = ` [${ev.reliability ?? ''}${ev.credibility ?? ''}]`;
+      } else {
+        // Demais metodologias: descrição semântica por extenso
+        const r = ev.reliability ? reliabilityLabel(ev.reliability) : null;
+        const c = ev.credibility ? credibilityLabel(ev.credibility) : null;
+        tadNote = (r || c) ? ` (${[r, c].filter(Boolean).join(' / ')})` : "";
+      }
+    }
+    return `· ${e.name}: ${e.description}${tadNote}`;
   };
 
   const trends     = byType("trend");
