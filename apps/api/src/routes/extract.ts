@@ -52,8 +52,11 @@ function extractPdf(buffer: Buffer): Promise<string> {
 }
 
 extractRoutes.post('/', async (c) => {
+  console.log('[Extract] Recebendo upload de arquivo...');
   try {
-    const body = (await c.req.parseBody()) as any;
+    // O limite de 50 MB é garantido pelo nginx (client_max_body_size).
+    // parseBody() lê o corpo inteiro em memória — arquivos muito grandes podem causar OOM.
+    const body = await c.req.parseBody() as any;
     const files = body.files;
     const projectId: string | undefined = body.projectId;
     if (!files) return c.json({ error: 'Nenhum arquivo recebido.' }, 400);
@@ -90,8 +93,13 @@ extractRoutes.post('/', async (c) => {
           } else text = buffer.toString('utf-8'); // txt, md
 
           results.push({ name: file.name, text: text.trim(), size: text.length, isImage: false });
-          // Auto-index in background when projectId is provided
-          if (projectId && text.trim()) autoIndex(projectId, text.trim(), file.name);
+          console.log(`[Extract] Arquivo processado: ${file.name} (${text.length} chars)`);
+          // Auto-index em background — .catch() obrigatório para evitar unhandled rejection
+          if (projectId && text.trim()) {
+            autoIndex(projectId, text.trim(), file.name).catch((e: any) =>
+              console.error('[Extract] autoIndex falhou:', e.message)
+            );
+          }
         } catch (err: any) { results.push({ name: file.name, text: null, error: err.message }); }
       }
     }

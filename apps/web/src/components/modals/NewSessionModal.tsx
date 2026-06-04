@@ -50,7 +50,11 @@ export function NewSessionModal({ onClose, onStart, cenariosMethodologies, teams
       const fd = new FormData();
       files.forEach(f => fd.append('files', f));
       const res = await fetch('/api/v1/extract', { method: 'POST', headers: authHeader, body: fd });
-      if (!res.ok) throw new Error(`Erro ${res.status} — verifique se está autenticado`);
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({})) as any;
+        const detail = body?.error || `HTTP ${res.status}`;
+        throw new Error(detail);
+      }
       const result = await res.json();
       const ok: { name: string; text: string }[] = [];
       result.files.forEach((f: any) => { if (f.text?.trim()) ok.push({ name: f.name, text: f.text }); });
