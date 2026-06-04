@@ -81,8 +81,8 @@ docker exec olympus_db psql -U postgres -d olympus -c "DELETE FROM checkpoint_wr
 # Deploy: just push to main — Railway auto-rebuilds
 git push origin main
 
-# Run seed on Railway after deploy
-railway run --service olympus-api npx tsx apps/api/src/scripts/seed.ts
+# Run seed on Railway after deploy (service name is olympus-production, not olympus-api)
+railway run --service olympus-production npx tsx apps/api/src/scripts/seed.ts
 ```
 
 ---
@@ -153,6 +153,12 @@ START → phase_loop ──(loop N phases)──→ synthesis → END
 
 **On resume (`isResuming=true`):** only deletes `proposed` events older than 1 hour (stale contamination from failed runs). `approved` events (confirmed by analyst at HITL gate) are never touched.
 
+### Phase Config Rules (`apps/api/src/graph/phase-configs/grumbach.ts`)
+
+- **`allowedTools`** controls exactly which tools KLIO can call in a phase. If a tool is missing, KLIO will refuse the phase rather than silently skip the tool. Always verify `allowedTools` matches the `systemPromptInject` requirements.
+- **`systemPromptInject` must not describe other phases** — KLIO will hallucinate the methodology structure from its training data if given the opportunity. Every phase inject should include only its own instructions. Use the "REGRA ABSOLUTA — ESCOPO DESTA FASE" guardrail pattern from phase 1 as reference.
+- **TAD format is methodology-dependent.** `buildAnchorCtx` (in `helpers.ts`) accepts `methodology` and formats TAD as alphanumeric `[B2]` for `siex`/`alta`/`ceeex`, or semantic `(habitualmente idônea / provavelmente verdadeiro)` for all others. Always pass `state.methodology` when calling it.
+
 ### phaseLoopNode — Clock and Cache Invariants
 
 **`phaseStartedAt` uses PostgreSQL clock, not `new Date()`**: `project_events.createdAt` is set by `PostgreSQL defaultNow()`. Using Node.js `new Date()` causes clock skew (50–200ms in Docker) that silently drops events from `keyFindings`. Always capture with `SELECT NOW()`:
@@ -201,3 +207,9 @@ Ollama `nomic-embed-text` = 768 dims. The schema uses `vector(768)`. Voyage AI s
 **JWT secret validation at startup.** `index.ts` checks that `JWT_SECRET` is ≥ 32 characters and does not contain obvious patterns (`'secret'`, `'olympus'`, `'2026'`, etc.). In `NODE_ENV=production`, a short secret or `NODE_TLS_REJECT_UNAUTHORIZED=0` causes `process.exit(1)`.
 
 **`consultar_agente` was removed** from all agents in Olympus 1.0. The `isOrchestrator` detection in `Agent.ts` checks by agent name (`this.name === 'HERMES' || this.name === 'OLYMPUS'`) — do not restore the `consultar_agente`-based detection as the sole mechanism.
+
+**Login rate limiting is Postgres-backed.** `checkLoginRateLimitPg` in `middleware/rateLimit.ts` uses the `rateLimitLogs` table keyed by `ip:<address>`. The in-process `Map` bucket approach (used only for `/register`) does not work across multiple API replicas.
+
+**Security headers are applied in two places:** `nginx.conf` (for browser clients via the web proxy) and the Hono middleware at the top of `index.ts` (for direct Railway API access). Keep them in sync. The nginx `proxy_pass` must remain static — do not switch back to `set $var` + resolver, which causes intermittent 502s from Docker DNS failures.
+
+**`onClick={handler}` on buttons that call graph functions passes the React SyntheticEvent as the first argument.** Always wrap: `onClick={() => handler()}`, not `onClick={handler}`. Passing a DOM event to a function that calls `JSON.stringify` causes a circular-structure crash via React Fiber (`stateNode`).
