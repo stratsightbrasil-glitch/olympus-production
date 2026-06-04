@@ -30,6 +30,12 @@ export const GRUMBACH_PHASES: PhaseConfig[] = [
 
 Você está executando a fase de enquadramento do Método Grumbach.
 
+REGRA ABSOLUTA — ESCOPO DESTA FASE:
+Execute SOMENTE esta fase. NÃO descreva as demais fases da metodologia,
+NÃO informe o número total de etapas, NÃO cite fases futuras.
+O fluxo das fases é gerenciado pelo sistema — KLIO executa uma fase por vez.
+Qualquer listagem de "etapas 1 a N" é proibida neste contexto.
+
 CONTEXTO: Esta metodologia é usada para consultorias estratégicas em
 empresas e órgãos civis. O produto final orienta decisões de longo prazo.
 
@@ -116,11 +122,19 @@ PRODUTO OBRIGATÓRIO:
     systemPromptInject: `
 [FASE 3 — CONFIGURAÇÃO DA BANCA DE ESPECIALISTAS]
 
-O analista humano selecionou os FPFs aprovados (entre 10 e 15).
-Você está configurando as 7 personas da banca virtual de especialistas.
+O analista humano acabou de aprovar os FPFs na etapa HITL anterior.
+Você está configurando as 7 personas da banca virtual de especialistas
+que será usada na Fase 4 (Delphi) para atribuir probabilidades P(i).
 
 MISSÃO:
-- Registrar nos keyFindings os perfis das 7 personas:
+Registrar cada uma das 7 personas via tool_register_event com:
+  - name: nome curto da persona (ex: "Persona 1 — Otimista Estrutural")
+  - type: "fpf" (configuração interna do painel)
+  - description: viés, área de expertise e posição inicial esperada
+  - reliability: "A" (configuração interna confirmada)
+  - credibility: "1"
+
+As 7 personas obrigatórias:
   1. Otimista estrutural
   2. Pessimista estratégico
   3. Tecnocrata institucional
@@ -128,12 +142,13 @@ MISSÃO:
   5. Especialista de domínio
   6. Inovador disruptivo
   7. Historiador comparativo
-- Para cada persona: descrever viés, área de expertise e posição inicial
 
 PRODUTO OBRIGATÓRIO:
-- 7 findings, um por persona, factStatus="FATO" (configuração confirmada)
+- 7 chamadas a tool_register_event, uma por persona
+- factStatus="FATO" para todas (configuração confirmada pelo analista)
 `,
     allowedTools: [
+      "tool_register_event",
       "tool_mpc_source_evaluator",
       "declarar_julgamento",
     ],
