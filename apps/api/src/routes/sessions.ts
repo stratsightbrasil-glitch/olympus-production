@@ -1,5 +1,6 @@
 import { Hono } from 'hono';
-import { db, projects, messages } from '@olympus/db';
+import { db, projects, messages, phaseOutputs, projectEvents, projectScenarios } from '@olympus/db';
+import { clearCheckpointSql } from '../graph/postgresSaver';
 import { eq, desc, asc, isNull, and } from 'drizzle-orm';
 import { reloadCronJobs } from '../cron';
 
@@ -66,13 +67,21 @@ sessionsRoutes.patch('/:id', async (c) => {
 sessionsRoutes.delete('/:id', async (c) => {
   try {
     const jwtPayload = (c.get('jwtPayload') as any) || { name: 'Sistema' };
-    const existing = await db.query.projects.findFirst({ where: eq(projects.id, c.req.param('id')) });
+    const id = c.req.param('id');
+    const existing = await db.query.projects.findFirst({ where: eq(projects.id, id) });
     if (!existing) return c.json({ error: 'Sessão não encontrada' }, 404);
     if (jwtPayload.role !== 'admin' && existing.createdBy !== jwtPayload.name) return c.json({ error: 'Acesso negado' }, 403);
 
-    await db.update(projects).set({ deletedAt: new Date(), deletedBy: jwtPayload.name }).where(eq(projects.id, c.req.param('id')));
-    // Await reload: stops the deleted project's CRON immediately. Without await,
-    // the job could still fire once between the soft-delete and the async reload.
+    // Hard delete: apaga o projeto e TODOS os dados associados.
+    // Backup é o mecanismo de recuperação — sem soft delete, sem dados órfãos.
+    //
+    // 1. Checkpoints do LangGraph (sem FK → não são cascadeados automaticamente)
+    await clearCheckpointSql(id);
+    // 2. Hard DELETE no projeto → CASCADE apaga automaticamente:
+    //    messages, embeddings, project_events, project_scenarios, phase_outputs,
+    //    indicators, weak_signals, analytic_reviews, matrix_direct_impacts, etc.
+    await db.delete(projects).where(eq(projects.id, id));
+    // 3. Para o CRON do projeto imediatamente (sem esperar o próximo ciclo)
     await reloadCronJobs();
     return c.json({ ok: true });
   } catch (e: any) { return c.json({ error: e.message }, 500); }
