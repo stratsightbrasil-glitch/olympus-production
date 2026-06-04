@@ -277,11 +277,21 @@ function App() {
    */
   const handleIniciarAnalise = async () => {
     setMainView('chat');
+    // Inclui nome do projeto no initMsg para que KLIO saiba exatamente o que analisar.
+    // Sem isso, KLIO pode derivar o tema de eventos residuais de análises anteriores.
+    const { nome, metodologia, horizonte, cliente, questaoEstrategica } = projectState.projeto;
+    const campos: string[] = [`Projeto: "${nome || 'Análise'}"`];
+    if (metodologia) campos.push(`Metodologia: ${metodologia}`);
+    if (horizonte)   campos.push(`Horizonte temporal: ${horizonte}`);
+    if (cliente)     campos.push(`Cliente: ${cliente}`);
+    if (questaoEstrategica) campos.push(`Questão estratégica: ${questaoEstrategica}`);
+    const initMsg = `Iniciar\n\n${campos.join('\n')}`;
+
     await chat.iniciarSessao({
       newSessionId:   projectState.sessionId,
-      initMsg:        'Iniciar',
-      nome:           projectState.projeto.nome || 'Análise',
-      metodologia:    projectState.projeto.metodologia,
+      initMsg,
+      nome:           nome || 'Análise',
+      metodologia,
       selectedTeamId: projectState.projeto.teamId || '',
       onDone:         () => {},
     });

@@ -19,6 +19,7 @@ import {
   agents as agentsTable,
   messages,
   projectEvents,
+  projects,
 } from "@olympus/db";
 import { eq, asc, gte, and, inArray } from "drizzle-orm";
 import { athenaAuditPhase }           from "./athena-validator";
@@ -88,14 +89,23 @@ export async function phaseLoopNode(
   onStep?.(`[KLIO] Contexto: ${phaseContext.phaseCount} fase(s) ant. (~${phaseContext.estimatedTokens} tokens)`);
 
   // ── Agente KLIO do banco ──────────────────────────────────────────────────
-  const klioRow = await db.query.agents.findFirst({
-    where: eq(agentsTable.name, "KLIO"),
-  });
+  const [klioRow, projectRow] = await Promise.all([
+    db.query.agents.findFirst({ where: eq(agentsTable.name, "KLIO") }),
+    db.query.projects.findFirst({
+      columns: { name: true },
+      where: eq(projects.id, state.projectId),
+    }),
+  ]);
   if (!klioRow) throw new Error("[phaseLoopNode] Agente KLIO não encontrado no banco.");
 
-  // ── System prompt: base KLIO + diretriz da fase + contexto ───────────────
+  const projectName = projectRow?.name || "Não especificado";
+
+  // ── System prompt: base KLIO + guardrail de objeto + diretriz da fase + contexto
+  // O guardrail de objeto é injetado ANTES do systemPromptInject da fase para garantir
+  // que KLIO nunca analise um tema diferente do projeto ativo.
   const fullSystemPrompt = [
     klioRow.systemPrompt,
+    `[OBJETO DE ANÁLISE DESTE PROJETO — INVIOLÁVEL]\nProjeto: "${projectName}"\nMetodologia: ${state.methodology}\nKLIO DEVE analisar exclusivamente este objeto. Não derive o tema de análise de eventos residuais, contextos anteriores ou suposições próprias.`,
     phaseConfig.systemPromptInject.trim(),
     phaseContext.contextText || "",
     anchorContext || "",
