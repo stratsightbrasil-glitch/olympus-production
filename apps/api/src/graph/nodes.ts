@@ -35,6 +35,65 @@ export const PHASE_CONFIGS: Record<string, PhaseConfig[]> = {
   grumbach: GRUMBACH_PHASES,
 };
 
+// ── Caches de dados estáticos por análise ──────────────────────────────────────
+// KLIO e project name são consultados em CADA uma das 9 fases — dados estáticos.
+// Cache elimina 2 DB round-trips × 9 fases = 18 queries desnecessárias por análise.
+const STATIC_CACHE_TTL_MS = 5 * 60 * 1000; // 5 min
+
+let _klioCache: { row: any; expiresAt: number } | null = null;
+
+async function getCachedKlioRow() {
+  const now = Date.now();
+  if (_klioCache && now < _klioCache.expiresAt) return _klioCache.row;
+  const row = await db.query.agents.findFirst({ where: eq(agentsTable.name, "KLIO") });
+  _klioCache = { row, expiresAt: now + STATIC_CACHE_TTL_MS };
+  return row;
+}
+
+const _projectNameCache = new Map<string, { name: string; expiresAt: number }>();
+
+async function getCachedProjectName(projectId: string): Promise<string> {
+  const now = Date.now();
+  const cached = _projectNameCache.get(projectId);
+  if (cached && now < cached.expiresAt) return cached.name;
+  const row = await db.query.projects.findFirst({
+    columns: { name: true },
+    where: eq(projects.id, projectId),
+  });
+  const name = row?.name || "Não especificado";
+  _projectNameCache.set(projectId, { name, expiresAt: now + STATIC_CACHE_TTL_MS });
+  return name;
+}
+
+// Invalida project name cache ao deletar/atualizar (chamado externamente se necessário)
+export function invalidateProjectNameCache(projectId: string) {
+  _projectNameCache.delete(projectId);
+}
+
+// ── Cache de ferramentas por projeto + conjunto de ferramentas ─────────────────
+// buildToolsForPhase cria 16 closures a cada chamada — mesmo projectId, mesmos tools.
+// Para 9 fases: 9 × 16 = 144 objetos idênticos por análise. Cache por chave composta.
+const _toolsCache = new Map<string, { tools: any[]; expiresAt: number }>();
+
+function getToolsCacheKey(projectId: string, allowedTools: string[]): string {
+  return `${projectId}:${[...allowedTools].sort().join(',')}`;
+}
+
+export function getCachedTools(
+  allowedTools: string[],
+  projectId: string,
+  llmConfig?: any,
+  llmTiers?: any,
+): any[] {
+  const key = getToolsCacheKey(projectId, allowedTools);
+  const now = Date.now();
+  const cached = _toolsCache.get(key);
+  if (cached && now < cached.expiresAt) return cached.tools;
+  const tools = buildToolsForPhase(allowedTools, projectId, llmConfig, llmTiers);
+  _toolsCache.set(key, { tools, expiresAt: now + STATIC_CACHE_TTL_MS });
+  return tools;
+}
+
 // ── Nó de loop de fases ────────────────────────────────────────────────────────
 
 export async function phaseLoopNode(
@@ -81,36 +140,32 @@ export async function phaseLoopNode(
     });
   }
 
-  // ── Contexto: fases anteriores + eventos aprovados ────────────────────────
-  // sinceDate: data do primeiro phase_output da análise atual.
-  // buildAnchorCtx só carrega eventos posteriores a essa data, prevenindo
-  // contaminação por events de análises anteriores falhadas.
-  const firstPhaseOutput = currentIndex > 0
-    ? await db.query.phaseOutputs.findFirst({
-        where:   eq(phaseOutputs.projectId, state.projectId),
-        orderBy: [asc(phaseOutputs.phaseNum)],
-        columns: { createdAt: true },
-      })
-    : null;
-  const anchorSinceDate = firstPhaseOutput?.createdAt ?? undefined;
-
-  const [phaseContext, anchorContext] = await Promise.all([
+  // ── Round-trip 1: parallelizar todas as queries independentes ─────────────
+  // firstPhaseOutput, phaseContext, klioRow, projectName em um único Promise.all.
+  // anchorContext precisa de firstPhaseOutput.createdAt → round-trip 2 (dependente).
+  const [firstPhaseOutput, phaseContext, klioRow, projectName] = await Promise.all([
+    currentIndex > 0
+      ? db.query.phaseOutputs.findFirst({
+          where:   eq(phaseOutputs.projectId, state.projectId),
+          orderBy: [asc(phaseOutputs.phaseNum)],
+          columns: { createdAt: true },
+        })
+      : Promise.resolve(null),
     loadPhaseContext(state.projectId),
-    buildAnchorCtx(state.projectId, state.connectivityMode, anchorSinceDate),
+    getCachedKlioRow(),         // cached — elimina 1 DB query por fase
+    getCachedProjectName(state.projectId), // cached — elimina 1 DB query por fase
   ]);
-  onStep?.(`[KLIO] Contexto: ${phaseContext.phaseCount} fase(s) ant. (~${phaseContext.estimatedTokens} tokens)`);
 
-  // ── Agente KLIO do banco ──────────────────────────────────────────────────
-  const [klioRow, projectRow] = await Promise.all([
-    db.query.agents.findFirst({ where: eq(agentsTable.name, "KLIO") }),
-    db.query.projects.findFirst({
-      columns: { name: true },
-      where: eq(projects.id, state.projectId),
-    }),
-  ]);
   if (!klioRow) throw new Error("[phaseLoopNode] Agente KLIO não encontrado no banco.");
 
-  const projectName = projectRow?.name || "Não especificado";
+  // ── Round-trip 2: anchorContext (depende de firstPhaseOutput) ─────────────
+  const anchorContext = await buildAnchorCtx(
+    state.projectId,
+    state.connectivityMode,
+    firstPhaseOutput?.createdAt ?? undefined,
+  );
+
+  onStep?.(`[KLIO] Contexto: ${phaseContext.phaseCount} fase(s) ant. (~${phaseContext.estimatedTokens} tokens)`);
 
   // ── System prompt: base KLIO + guardrail de objeto + diretriz da fase + contexto
   // O guardrail de objeto é injetado ANTES do systemPromptInject da fase para garantir
@@ -123,8 +178,10 @@ export async function phaseLoopNode(
     anchorContext || "",
   ].filter(Boolean).join("\n\n");
 
-  // ── Ferramentas para esta fase ────────────────────────────────────────────
-  const tools = buildToolsForPhase(
+  // ── Ferramentas para esta fase (cached) ──────────────────────────────────
+  // buildToolsForPhase cria 16 closures por chamada; para 9 fases = 144 objetos.
+  // getCachedTools reutiliza closures idênticas para o mesmo projectId+toolSet.
+  const tools = getCachedTools(
     phaseConfig.allowedTools,
     state.projectId,
     state.llmConfig,

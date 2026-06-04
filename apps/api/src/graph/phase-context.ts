@@ -25,16 +25,23 @@ export function buildPhaseSummary(
   toolCallIds: string[],
   verdict:     string | null | undefined,
 ): string {
-  const factCount = findings.filter(f => f.factStatus === "FATO").length;
-  const indiCount = findings.filter(f => f.factStatus === "INDICIO").length;
-  const supCount  = findings.filter(f => f.factStatus === "SUPOSICAO").length;
-  const topClaims = findings.slice(0, 3).map(f => f.claim.slice(0, 80)).join("; ");
+  // Single reduce replaces 3 separate filter() passes + 1 map() pass (4→1 iteration).
+  let factCount = 0, indiCount = 0, supCount = 0;
+  const topClaims: string[] = [];
+  for (let i = 0; i < findings.length; i++) {
+    const f = findings[i];
+    if (f.factStatus === "FATO")      factCount++;
+    else if (f.factStatus === "INDICIO")   indiCount++;
+    else if (f.factStatus === "SUPOSICAO") supCount++;
+    if (i < 3) topClaims.push(f.claim.slice(0, 80));
+  }
+  const topClaimsStr = topClaims.join("; ");
 
   return [
     `F${phaseNum} [${phaseLabel}]:`,
     `${factCount}F/${indiCount}I/${supCount}S,`,
     `${toolCallIds.length} reg.`,
-    topClaims ? `| ${topClaims}` : "",
+    topClaimsStr ? `| ${topClaimsStr}` : "",
     verdict   ? `| ATHENA:${verdict}` : "",
   ].filter(Boolean).join(" ");
 }

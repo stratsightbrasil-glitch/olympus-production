@@ -1,22 +1,37 @@
 import { Hono } from 'hono';
 import { db, projects, messages, phaseOutputs, projectEvents, projectScenarios } from '@olympus/db';
 import { clearCheckpointSql } from '../graph/postgresSaver';
-import { eq, desc, asc, isNull, and } from 'drizzle-orm';
-import { reloadCronJobs } from '../cron';
+import { eq, desc, asc, isNull, and, ilike, sql } from 'drizzle-orm';
+import { reloadCronJobs, updateCronJob, removeCronJob } from '../cron';
 
 const sessionsRoutes = new Hono();
 
 sessionsRoutes.get('/', async (c) => {
   try {
     const jwtPayload = c.get('jwtPayload') as any;
-    const condition = jwtPayload?.role === 'admin' 
-      ? isNull(projects.deletedAt) 
+    const condition = jwtPayload?.role === 'admin'
+      ? isNull(projects.deletedAt)
       : and(isNull(projects.deletedAt), eq(projects.createdBy, jwtPayload?.name || 'Sistema'));
 
-    const list = await db.query.projects.findMany({
-      where: condition,
-      orderBy: [desc(projects.updatedAt)]
-    });
+    // Selecionar apenas as colunas necessárias para a listagem — evitar serializar
+    // agentsConfig/techniquesConfig (JSONB grande) em cada item da sidebar.
+    const list = await db.select({
+      id:         projects.id,
+      name:       projects.name,
+      client:     projects.client,
+      status:     projects.status,
+      methodology:projects.methodology,
+      updatedAt:  projects.updatedAt,
+      createdAt:  projects.createdAt,
+      createdBy:  projects.createdBy,
+      kratosCron: projects.kratosCron,
+      teamId:     projects.teamId,
+      classification: projects.classification,
+    }).from(projects)
+      .where(condition)
+      .orderBy(desc(projects.updatedAt))
+      .limit(200); // hard cap — sem paginação ainda, mas previne O(N) runaway
+
     return c.json(list);
   } catch (e: any) { return c.json({ error: e.message }, 500); }
 });
@@ -34,12 +49,14 @@ sessionsRoutes.get('/:id', async (c) => {
     });
     if (!projeto) return c.json({ error: 'Sessão não encontrada' }, 404);
 
+    // Limitar mensagens — projetos maduros podem ter centenas; carregar tudo é desnecessário
     const msgs = await db.query.messages.findMany({
-      where: eq(messages.projectId, id),
-      orderBy: [asc(messages.createdAt)]
+      where:   eq(messages.projectId, id),
+      orderBy: [asc(messages.createdAt)],
+      limit:   150,
     });
 
-    return c.json({ ...projeto, messages: msgs });
+    return c.json({ ...projeto, mensagens: msgs });
   } catch (e: any) { return c.json({ error: e.message }, 500); }
 });
 
@@ -54,12 +71,16 @@ sessionsRoutes.patch('/:id', async (c) => {
       if (jwtPayload.role !== 'admin' && existing.createdBy !== jwtPayload.name) return c.json({ error: 'Acesso negado' }, 403);
       await db.update(projects).set({ name: body.name, status: body.status, kratosCron: body.kratosCron, alertEmails: body.alertEmails ?? existing.alertEmails, methodology: body.methodology, updatedBy: jwtPayload.name, updatedAt: new Date() }).where(eq(projects.id, id));
     } else {
-      await db.insert(projects).values({ id: id, name: body.name || 'Novo Projeto', status: body.status || 'Em produção', kratosCron: body.kratosCron || '0 6 * * *', alertEmails: body.alertEmails || '', methodology: body.methodology || 'MSEF v3 (8 etapas ENAP)', createdBy: jwtPayload.name, updatedBy: jwtPayload.name });
+      await db.insert(projects).values({ id: id, name: body.name || 'Novo Projeto', status: body.status || 'Em produção', kratosCron: body.kratosCron || '0 6 * * *', alertEmails: body.alertEmails || '', methodology: body.methodology || 'grumbach', createdBy: jwtPayload.name, updatedBy: jwtPayload.name });
     }
-    // Await reload: ensures CRON is updated (jobs stopped/restarted) before the
-    // HTTP response is sent. Prevents the brief race window where an inactivated
-    // project's job could fire between the DB write and the async reload.
-    await reloadCronJobs();
+    // Atualização cirúrgica do cron do projeto específico — evita O(N) reloadCronJobs()
+    // que parava e reiniciava TODOS os crons a cada PATCH de qualquer projeto.
+    const isActive = (body.status ?? existing?.status) === 'Ativo';
+    if (isActive && body.kratosCron) {
+      updateCronJob(id, body.name ?? existing?.name ?? 'Projeto', body.methodology ?? existing?.methodology ?? '', body.kratosCron);
+    } else if (!isActive) {
+      removeCronJob(id);
+    }
     return c.json({ ok: true });
   } catch (e: any) { return c.json({ error: e.message }, 500); }
 });
@@ -134,11 +155,18 @@ sessionsRoutes.post('/:id/webhook', async (c) => {
     const webhookUrl = process.env.N8N_WEBHOOK_URL;
     if (!webhookUrl) return c.json({ error: 'N8N_WEBHOOK_URL não configurada no .env' }, 400);
 
-    const msgs = await db.query.messages.findMany({
-      where: eq(messages.projectId, id),
-      orderBy: [desc(messages.createdAt)]
-    });
-    const lastKratos = msgs.find(m => m.role === 'assistant' && m.content.toUpperCase().includes('KRATOS'));
+    // Buscar diretamente a última mensagem do KRATOS — evitar carregar TODO o histórico
+    // para fazer find() em JavaScript (potencialmente centenas de msgs desnecessárias).
+    const kratosRows = await db.select({ content: messages.content })
+      .from(messages)
+      .where(and(
+        eq(messages.projectId, id),
+        eq(messages.role, 'assistant'),
+        ilike(messages.content, '%KRATOS%'),
+      ))
+      .orderBy(desc(messages.createdAt))
+      .limit(1);
+    const lastKratos = kratosRows[0] ? { content: kratosRows[0].content } : null;
 
     const payload = {
       projetoId: projeto.id,

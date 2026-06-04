@@ -106,16 +106,28 @@ async function runKratosJob(job: Job<KratosJobData>): Promise<void> {
   }
 }
 
+// Cache cooldown para evitar DB round-trip a cada job KRATOS.
+// A setting muda raramente; TTL de 5min é suficiente para capturar mudanças operacionais.
+let _kratosCooldownCache: { ms: number; expiresAt: number } | null = null;
+
 async function getKratosCooldown(): Promise<number> {
+  const now = Date.now();
+  if (_kratosCooldownCache && now < _kratosCooldownCache.expiresAt) {
+    return _kratosCooldownCache.ms;
+  }
   try {
     const result = await db.execute(sql`SELECT value FROM platform_settings WHERE key = 'kratos_cooldown_ms'`);
     const rows = (result as any).rows ?? result;
     if (rows.length > 0) {
       const v = rows[0].value;
       const ms = typeof v === 'number' ? v : Number(v);
-      if (ms > 0) return ms;
+      if (ms > 0) {
+        _kratosCooldownCache = { ms, expiresAt: now + 5 * 60 * 1000 };
+        return ms;
+      }
     }
   } catch { /* fallback */ }
+  _kratosCooldownCache = { ms: 15_000, expiresAt: now + 5 * 60 * 1000 };
   return 15_000;
 }
 
@@ -156,6 +168,9 @@ export async function initKratosQueue(): Promise<void> {
     });
     // start() DEVE preceder work() — pg-boss precisa da conexão antes de registrar workers
     await boss.start();
+    // Cria a queue explicitamente — idempotente (não falha se já existe).
+    // Sem isso, boss.work() pode registrar o handler antes da queue existir no schema pgboss.
+    await boss.createQueue('kratos-analysis');
     await boss.work('kratos-analysis', { localConcurrency: 1 }, runKratosJob as any);
     console.log('[pg-boss] ✅ Fila KRATOS inicializada (teamSize=1, histórico em pgboss.job)');
   } catch (err: any) {

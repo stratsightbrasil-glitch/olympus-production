@@ -199,31 +199,32 @@ function App() {
   }, [messageCount, currentMethodologySteps]);
 
   // Detecta quando o motor aguarda confirmação do analista.
-  // hitl_required: PYTHIA aguarda aprovação de eventos — todos os modos.
-  // phase_complete: especialista concluiu fase — só no modo passos.
+  // Olympus 1.0: hitlGate é a fonte primária — evita scan de mensagens durante streaming.
+  // O branch legado (scan de texto) só executa quando hitlGate é null E vizMode=passos
+  // E loading=false — i.e., nunca durante streaming (chat.loading=true nesse período).
   const isWaiting = useMemo(() => {
     if (chat.loading) return false;
 
-    // hitl_required (PYTHIA aguarda aprovação de eventos) — todos os modos
+    // LangGraph interrupts — caminho principal (sem scan de mensagens)
     if (chat.hitlGate?.interruptType === 'hitl_required') return true;
+    if (chat.hitlGate?.interruptType === 'phase_complete') return vizMode === 'passos';
 
-    // phase_complete (especialista concluiu fase) — só no modo passos
-    if (chat.hitlGate?.interruptType === 'phase_complete') {
-      return vizMode === 'passos';
-    }
-
-    // Legado: texto de confirmação em mensagem de orquestrador (modo passos)
-    if (vizMode === 'passos') {
+    // Legado: scan da última mensagem de assistente. Limitado à última mensagem
+    // (não scan completo) para O(1) em vez de O(N).
+    if (vizMode === 'passos' && messageCount > 0) {
       for (let i = chat.messages.length - 1; i >= 0; i--) {
-        if (chat.messages[i].role === 'assistant') {
-          const c = typeof chat.messages[i].content === 'string' ? chat.messages[i].content as string : '';
-          return c.includes('Confirme para prosseguir') || c.includes('Oriente com ajustes');
-        }
+        const msg = chat.messages[i];
+        if (msg.role !== 'assistant') continue;
+        const c = typeof msg.content === 'string' ? msg.content : '';
+        return c.includes('Confirme para prosseguir') || c.includes('Oriente com ajustes');
       }
     }
 
     return false;
-  }, [vizMode, chat.loading, chat.messages, chat.hitlGate]);
+  // messageCount (primitivo) em vez de chat.messages (referência) — evita re-run
+  // a cada token de streaming que recria o array.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [vizMode, chat.loading, messageCount, chat.hitlGate]);
 
   // ── Helpers ──────────────────────────────────────────────────────────────
   const getAgentInfo = (text: string) => {
