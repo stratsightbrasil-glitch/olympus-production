@@ -133,7 +133,7 @@ export function useChat({
             }
             setHitlGate({
               message:       event.message   || 'Fase concluída. Confirme para prosseguir.',
-              agent:         event.agent     || 'PYTHIA',
+              agent:         event.agent     || 'KLIO',   // era 'PYTHIA' — KLIO é o agente ativo em Olympus 1.0
               projectId:     event.projectId || '',
               interruptType,
               output:        (event as any).output,
@@ -309,7 +309,7 @@ export function useChat({
   /**
    * Retoma o grafo LangGraph após aprovação HITL.
    * Chama /stream/graph com isResuming=true — o backend injeta Command({resume}).
-   * Usado pelo botão "▶ Continuar → PYTHIA" no EventsPanel.
+   * Usado pelo botão "▶ Continuar" no EventsPanel e HitlDecisionCard.
    */
   const resumeGraph = async (userInstruction?: string) => {
     if (!hitlGate || loading) return;

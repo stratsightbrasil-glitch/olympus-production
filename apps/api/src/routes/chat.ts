@@ -193,8 +193,8 @@ chatRoutes.post('/stream/graph', async (c) => {
             : (event as any)['__interrupt__'];
           wasInterrupted = true;
           stopHb();
-          // Distingue interrupt de HITL (aprovação de eventos PYTHIA) de
-          // interrupt de fase (modo passos) — o frontend trata ambos via hitl_gate
+          // Ambos os tipos de interrupt (hitl_required e phase_complete)
+          // são enviados como hitl_gate — o frontend usa resumeGraph() para ambos
           await write({ ...iv, type: 'hitl_gate' });
           return;
         }
@@ -217,8 +217,34 @@ chatRoutes.post('/stream/graph', async (c) => {
 
     } catch (err: any) {
       stopHb();
-      const msg = err?.message || 'Erro interno no motor LangGraph.';
-      console.error('[Graph SSE] Erro:', msg);
+      const raw = err?.message || 'Erro interno no motor LangGraph.';
+
+      // ── Mensagens amigáveis para erros transitórios de API ────────────────
+      // Erros 503 (alta demanda) e 429 (rate limit) são temporários e recuperáveis.
+      // O status do checkpoint é preservado — o analista pode retomar após aguardar.
+      const is503 = raw.includes('high demand') || raw.includes('UNAVAILABLE') ||
+                    raw.includes('temporarily unavailable') || raw.includes('overloaded') ||
+                    err?.lastError?.statusCode === 503 ||
+                    (err?.errors ?? []).some((e: any) => e?.statusCode === 503);
+
+      const is429 = raw.includes('rate limit') || raw.includes('quota') ||
+                    raw.includes('RESOURCE_EXHAUSTED') ||
+                    err?.lastError?.statusCode === 429 ||
+                    (err?.errors ?? []).some((e: any) => e?.statusCode === 429);
+
+      // SDK lança isso quando o stream não produz saída (normalmente após 503)
+      const isNoOutput = raw === 'No output generated. Check the stream for errors.';
+
+      let msg = raw;
+      if (is503 || isNoOutput) {
+        msg = '⏳ O modelo de IA está temporariamente sobrecarregado (Google 503). '
+            + 'A análise foi preservada — aguarde 1-2 minutos e tente retomar.';
+      } else if (is429) {
+        msg = '⚠️ Limite de requisições da API atingido. '
+            + 'Aguarde alguns minutos e tente novamente.';
+      }
+
+      console.error('[Graph SSE] Erro:', raw);
       await write({ type: 'error', message: msg });
     }
   });

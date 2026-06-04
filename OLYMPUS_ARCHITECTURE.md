@@ -2,7 +2,7 @@
 **StratSight Brasil · Strategic Foresight · IA Agêntica**
 
 <!-- AUTO:versao:START -->
-**Versão:** `4.0.0` · **Atualizado:** 03 de junho de 2026 · Gerado automaticamente
+**Versão:** `4.0.0` · **Atualizado:** 04 de junho de 2026 · Gerado automaticamente
 
 | Dependência | Versão |
 |-------------|--------|

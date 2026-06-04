@@ -551,23 +551,15 @@ function App() {
         {mainView === 'chat' && isWaiting && (
           <HitlDecisionCard
             onConfirm={() => {
-              // LangGraph 'phase_complete': retomar grafo via Command({resume})
-              if (chat.hitlGate?.interruptType === 'phase_complete') {
-                chat.resumeGraph();
-              } else {
-                // Legado: orquestrador aguarda CONFIRMAR textual
-                chat.sendMessage('CONFIRMAR', [], undefined);
-              }
+              // Olympus 1.0: TODOS os interrupts (phase_complete e hitl_required)
+              // usam resumeGraph → Command({resume}) → isResuming=true.
+              // O branch legado ('CONFIRMAR' via sendMessage) foi removido — em v5
+              // não há mais HERMES como orquestrador aguardando texto.
+              chat.resumeGraph();
               setInput('');
             }}
             onRedirect={(instruction) => {
-              // Redirecionar: se for interrupt LangGraph, retomar com instrução no resume
-              // Se for legado, enviar como nova mensagem (comportamento anterior)
-              if (chat.hitlGate?.interruptType === 'phase_complete') {
-                chat.resumeGraph(instruction);
-              } else {
-                chat.sendMessage(instruction, [], undefined);
-              }
+              chat.resumeGraph(instruction);
               setInput('');
             }}
           />
