@@ -52,7 +52,7 @@
 <div id="content">
 <h1>OLYMPUS 1.0 — Histórico de Desenvolvimento e Estado Atual</h1>
 <p><strong>StratSight Brasil · Strategic Foresight · IA Agêntica</strong><br>
-<strong>Atualizado em:</strong> 02 Jun 2026 (Olympus 1.0 — Sprint 22 concluído)<br>
+<strong>Atualizado em:</strong> 04 Jun 2026 (Sprint 23 concluído — auditoria sec+perf+bugs)<br>
 <strong>Destinatário:</strong> Claude Chat / Claude Design — revisão de arquitetura e UI</p>
 <blockquote><p><strong>⚠️ Cuidado para Claude Code:</strong> este arquivo (<code>HISTORICO_DESENVOLVIMENTO.html</code>) e o correspondente <code>.md</code> são os registros canônicos da evolução do sistema. Sempre que uma mudança arquitetural relevante for implementada, <strong>ambos os arquivos devem ser atualizados no mesmo commit</strong>. O <code>.md</code> é a fonte da verdade; o <code>.html</code> é a versão de leitura amigável. Nunca divergir os dois.</p></blockquote>
 <hr>
@@ -875,13 +875,33 @@ Nenhum configurado       → erro explícito (não silencioso)
 </tr>
 <tr>
 <td>Backup corporativo</td>
-<td>pg_dump → .sql.gz autenticado</td>
-<td>✅</td>
+<td>pg_dump + <code>spawn()</code> (não <code>exec()</code>) — proteção contra shell injection</td>
+<td>✅ Sprint 23</td>
 </tr>
 <tr>
 <td>Anti-enumeração login</td>
 <td>setTimeout(70ms) timing mitigation</td>
 <td>✅</td>
+</tr>
+<tr>
+<td><strong>Role injection bloqueado</strong></td>
+<td>register ignora campo <code>role</code> do body; roles whitelistados em <code>users.ts</code></td>
+<td>✅ Sprint 23</td>
+</tr>
+<tr>
+<td><strong>Security headers</strong></td>
+<td>CSP + HSTS + X-Frame + Referrer-Policy em <code>nginx.conf</code> e Hono middleware</td>
+<td>✅ Sprint 23</td>
+</tr>
+<tr>
+<td><strong>JWT secret guard</strong></td>
+<td><code>index.ts</code>: ≥32 chars + não-óbvio; NODE_TLS_REJECT=0 bloqueado em produção</td>
+<td>✅ Sprint 23</td>
+</tr>
+<tr>
+<td><strong>Login rate limit Postgres</strong></td>
+<td><code>rateLimitLogs</code> table, 5 tentativas/15min por IP — funciona em múltiplas réplicas</td>
+<td>✅ Sprint 23</td>
 </tr>
 </tbody></table>
 <hr>
@@ -1076,10 +1096,18 @@ Nenhum configurado       → erro explícito (não silencioso)
 <td><strong>02 Jun 2026</strong></td>
 <td><strong>Olympus 1.0 — Migração arquitetural v4→v5:</strong> <code>phaseLoopNode</code> substitui 6 nós especializados · <code>PHASE_CONFIGS</code> em código · tabela <code>phase_outputs</code> (artefatos estruturados) · ATHENA determinística por fase (<code>athena-validator.ts</code>) · contexto ~268 tokens vs 40-60K · 5 agentes (remove SCOPUS/PYTHIA/MNEMOSYNE/THEMIS) · 12 metodologias (Bloco A/B, slugs corretos) · migration idempotente em <code>index.ts</code> · stress test 10/10 · TypeScript zero erros · Railway deploy + fix <code>clearCheckpointSql</code></td>
 </tr>
+<tr>
+<td><strong>Sprint 23</strong></td>
+<td><strong>03–04 Jun 2026</strong></td>
+<td><strong>Auditoria de segurança + performance + bugs de produção:</strong>
+Sec: role injection bloqueado no register · 2FA sem userId leak · <code>/health</code> minimal · backup <code>spawn()</code> vs <code>exec()</code> · validação de input em users/auth · JWT secret guard no startup · headers CSP/HSTS/X-Frame no nginx + Hono · login rate limit migrado para Postgres.
+Perf: 3 caches module-level em <code>phaseLoopNode</code> (KLIO/projectName/tools) · <code>buildPhaseSummary</code> O(1) · sessions list com colunas seletivas · <code>reloadCronJobs</code> → cirúrgico por projeto.
+Bugs: circular JSON no <code>EventsPanel</code> (onClick={handler} → onClick={() =&gt; handler()}) · PYTHIA removido de toda a UI · MPC condicional por metodologia (siex/alta/ceeex: alfanumérico; demais: semântico) · ATHENA message descritiva com instrução de ação · empty KLIO output fallback · fase 3 Grumbach com <code>tool_register_event</code> · guardrail fase-count no phase-configs e seed.</td>
+</tr>
 </tbody></table>
 <hr>
 <h2>PARTE 16 — BACKLOG</h2>
-<h3>✅ Todos os itens de alta/média prioridade concluídos (Sprints 1–22)</h3>
+<h3>✅ Todos os itens de alta/média prioridade concluídos (Sprints 1–23)</h3>
 <table>
 <thead>
 <tr>

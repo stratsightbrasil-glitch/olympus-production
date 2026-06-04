@@ -1,6 +1,6 @@
 # OLYMPUS 1.0 — Histórico de Desenvolvimento e Estado Atual
 **StratSight Brasil · Strategic Foresight · IA Agêntica**
-**Atualizado em:** 02 Jun 2026 (Olympus 1.0 — Sprint 22 concluído)
+**Atualizado em:** 04 Jun 2026 (Sprint 23 concluído — auditoria sec+perf+bugs)
 **Destinatário:** Claude Chat / Claude Design — revisão de arquitetura e UI
 
 > **⚠️ Cuidado para Claude Code:** este arquivo (`HISTORICO_DESENVOLVIMENTO.md`) e o correspondente `HISTORICO_DESENVOLVIMENTO.html` são os registros canônicos da evolução do sistema. Sempre que uma mudança arquitetural relevante for implementada, **ambos os arquivos devem ser atualizados no mesmo commit**. O `.md` é a fonte da verdade; o `.html` é gerado a partir dele para leitura amigável. Nunca divergir os dois.
@@ -418,10 +418,14 @@ services:
 | JWT + 2FA TOTP | auth.ts + speakeasy | ✅ |
 | Rate limiting API | rateLimit.ts (5 análises/h, 10 exports/h) | ✅ |
 | Rate limiting nginx | api_zone 30r/min + auth_zone 10r/min | ✅ |
+| **Rate limiting login** | **Postgres-backed (rateLimitLogs), 5/15min por IP — funciona em múltiplas réplicas** | ✅ Sprint 23 |
 | Hash-chain SHA-256 | utils/audit.ts — `_hash` + `_previousHash` no JSONB | ✅ Sprint 18 |
 | Marca d'água exports | CSS watermark opacity:0.06, texto = classificação do projeto | ✅ |
-| Backup corporativo | pg_dump → .sql.gz autenticado | ✅ |
+| Backup corporativo | pg_dump + spawn() (não exec()) — proteção contra shell injection | ✅ Sprint 23 |
 | Anti-enumeração login | setTimeout(70ms) timing mitigation | ✅ |
+| **Role injection bloqueado** | **register ignora campo `role` do body; roles whitelistados em users.ts** | ✅ Sprint 23 |
+| **Security headers** | **CSP + HSTS + X-Frame + Referrer-Policy em nginx.conf e Hono middleware** | ✅ Sprint 23 |
+| **JWT secret guard** | **index.ts: ≥32 chars + não-óbvio; NODE_TLS_REJECT=0 bloqueado em produção** | ✅ Sprint 23 |
 
 ---
 
@@ -472,6 +476,7 @@ services:
 | Deploy | 30 Mai | **Railway online** — olympus-api + olympus-web. Fixes: railway.toml, nginx SNI, pg_dump PGDG, PORT dinâmica |
 | Pós-deploy | 31 Mai | Bug A (tool loop guard Agent.ts), Bug B (fase no CONFIRMAR), watermark ACESSO RESTRITO, EventsPanel flicker, batch/status order, T-10c pg-boss KRATOS |
 | **Sprint 22** | **02 Jun 2026** | **Olympus 1.0 — Migração arquitetural v4→v5:** phaseLoopNode substitui 6 nós especializados · PHASE_CONFIGS em código · phase_outputs (artefatos estruturados) · ATHENA determinística por fase · contexto ~268 tokens vs 40-60K · 5 agentes (remove SCOPUS/PYTHIA/MNEMOSYNE/THEMIS) · 12 metodologias (Bloco A/B) · migration idempotente em index.ts · stress test 10/10 · TypeScript zero erros · Railway deploy + fix clearCheckpointSql |
+| **Sprint 23** | **03–04 Jun 2026** | **Auditoria de segurança + performance + bugs de produção:** Sec: role injection bloqueado no register, 2FA sem userId leak, /health minimal, backup spawn() vs exec(), validação de input em users/auth, JWT secret guard no startup, headers CSP/HSTS/X-Frame no nginx + Hono, login rate limit migrado para Postgres. Perf: 3 caches module-level em phaseLoopNode (KLIO/projectName/tools), buildToolsForPhase cached, buildPhaseSummary O(1), sessions list com colunas seletivas, reloadCronJobs → cirúrgico. Bugs: 8 observações do teste Grumbach corrigidas (circular JSON EventsPanel, PYTHIA legado removido, MPC condicional por metodologia, ATHENA message descritiva, empty KLIO output fallback, fase 3 tool_register_event adicionado, guardrail fase-count no phase-configs e seed). |
 
 ---
 
