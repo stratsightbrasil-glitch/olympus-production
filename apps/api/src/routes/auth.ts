@@ -76,7 +76,9 @@ authRoutes.post('/login', async (c) => {
 
   if (user.isTwoFactorEnabled) {
     if (!totpToken) {
-      return c.json({ requires2FA: true, userId: user.id });
+      // SEGURANÇA: não expor userId na resposta pública de 2FA.
+      // O frontend deve re-enviar email+password+totpToken em um único request.
+      return c.json({ requires2FA: true });
     }
     const isTotpValid = speakeasy.totp.verify({
       secret: user.twoFactorSecret!,
@@ -106,11 +108,23 @@ authRoutes.post('/register', async (c) => {
     return c.json({ error: 'Muitas tentativas. Tente novamente mais tarde.' }, 429);
   }
 
-  const { name, email, password, role } = (await c.req.json()) as any;
+  const { name, email, password } = (await c.req.json()) as any;
+  // SEGURANÇA: 'role' nunca é aceito do body em registro público.
+  // Primeiro usuário vira admin; todos os demais são 'analista'.
+  // Escalada de privilégio via role injection bloqueada aqui.
 
-  // Verifica duplicidade ANTES do hash para falhar rápido, mas retorna a
-  // mesma mensagem neutra de sucesso — impede distinguir "já existia" de "criado".
-  const existing = await db.query.users.findFirst({ where: eq(users.email, email) });
+  // Validação básica de entrada
+  if (!email || typeof email !== 'string' || !email.includes('@')) {
+    return c.json({ error: 'E-mail inválido.' }, 400);
+  }
+  if (!password || typeof password !== 'string' || password.length < 8) {
+    return c.json({ error: 'Senha deve ter no mínimo 8 caracteres.' }, 400);
+  }
+  if (!name || typeof name !== 'string' || name.trim().length < 2) {
+    return c.json({ error: 'Nome inválido.' }, 400);
+  }
+
+  const existing = await db.query.users.findFirst({ where: eq(users.email, email.toLowerCase().trim()) });
   if (existing) {
     // Simula latência do bcrypt para não vazar por timing (≈ 60–80 ms)
     await new Promise(r => setTimeout(r, 70));
@@ -118,10 +132,16 @@ authRoutes.post('/register', async (c) => {
   }
 
   const anyUser = await db.query.users.findFirst();
-  const finalRole = anyUser ? (role || 'analista') : 'admin';
+  // Primeiro usuário = admin; demais = analista. Role não pode ser informado pelo cliente.
+  const finalRole = anyUser ? 'analista' : 'admin';
 
   const passwordHash = await bcrypt.hash(password, 10);
-  const [newUser] = await db.insert(users).values({ name, email, passwordHash, role: finalRole }).returning();
+  const [newUser] = await db.insert(users).values({
+    name: name.trim(),
+    email: email.toLowerCase().trim(),
+    passwordHash,
+    role: finalRole,
+  }).returning();
   return c.json({ user: { id: newUser.id, name: newUser.name, role: newUser.role } });
 });
 

@@ -28,9 +28,30 @@ const REQUIRED_ENV = ['JWT_SECRET', 'ALLOWED_ORIGIN'] as const;
 for (const key of REQUIRED_ENV) {
   if (!process.env[key]) {
     console.error(`[STARTUP] ❌ Variável de ambiente obrigatória ausente: ${key}`);
-    console.error(`[STARTUP]    Adicione ${key} ao arquivo .env antes de iniciar.`);
     process.exit(1);
   }
+}
+
+// Validação de entropia do JWT_SECRET — segredos fracos são dictionary-atacáveis.
+// Mínimo 32 caracteres + alerta se parecer um valor de exemplo.
+const jwtSecret = process.env.JWT_SECRET!;
+const WEAK_SECRET_PATTERNS = ['secret', 'olympus', '2024', '2025', '2026', 'test', 'dev', 'local'];
+if (jwtSecret.length < 32) {
+  console.error('[STARTUP] ❌ JWT_SECRET muito curto (mínimo 32 caracteres). Gere com: openssl rand -hex 32');
+  if (process.env.NODE_ENV === 'production') process.exit(1);
+  else console.warn('[STARTUP] ⚠️  Continuando em modo não-produção com JWT_SECRET fraco.');
+} else if (WEAK_SECRET_PATTERNS.some(p => jwtSecret.toLowerCase().includes(p))) {
+  console.warn('[STARTUP] ⚠️  JWT_SECRET parece ser um valor de exemplo. Use: openssl rand -hex 32');
+}
+
+// NODE_TLS_REJECT_UNAUTHORIZED=0 desabilita verificação TLS globalmente.
+// Aceitável apenas em desenvolvimento local. Em produção, é vulnerabilidade MITM.
+if (process.env.NODE_TLS_REJECT_UNAUTHORIZED === '0') {
+  if (process.env.NODE_ENV === 'production') {
+    console.error('[STARTUP] ❌ NODE_TLS_REJECT_UNAUTHORIZED=0 PROIBIDO em produção (MITM risk). Remova do .env.');
+    process.exit(1);
+  }
+  console.warn('[STARTUP] ⚠️  TLS verification desabilitada (NODE_TLS_REJECT_UNAUTHORIZED=0) — DEV ONLY.');
 }
 
 import chatRoutes from './routes/chat';
@@ -71,31 +92,18 @@ app.use('*', cors({
 
 app.get('/ping', (c) => c.json({ status: 'ok', message: 'OLYMPUS API v2.0 rodando com Hono!' }));
 
+// /health: retorna apenas status mínimo sem autenticação (para load balancers e Railway).
+// Informações sensíveis (versão, provedor LLM, configuração de API keys) removidas —
+// qualquer detalhe de infra exposto sem auth auxilia reconhecimento de alvos.
 app.get('/health', async (c) => {
   const start = Date.now();
-  let dbStatus = 'disconnected';
+  let dbOk = false;
   try {
     await db.execute(sql`SELECT 1`);
-    dbStatus = 'connected';
+    dbOk = true;
   } catch { /* */ }
-  const anthropicConfigured = !!process.env.ANTHROPIC_API_KEY;
-  const tavilyConfigured    = !!process.env.TAVILY_API_KEY;
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
-  const pkg = require('../../../package.json');
-  let llmProvider = process.env.LLM_PROVIDER || 'anthropic';
-  try {
-    const { getLLMConfig } = await import('./routes/settings.js');
-    const cfg = await getLLMConfig();
-    llmProvider = cfg.provider;
-  } catch { /* não bloquear o health se a leitura falhar */ }
   return c.json({
-    status:    dbStatus === 'connected' ? 'ok' : 'degraded',
-    version:   pkg?.version || '4.0.0',
-    database:  dbStatus,
-    anthropic: anthropicConfigured ? 'configured' : 'not_configured',
-    tavily:    tavilyConfigured    ? 'configured' : 'not_configured',
-    llm:       llmProvider,
-    uptime:    Math.floor(process.uptime()),
+    status:    dbOk ? 'ok' : 'degraded',
     latencyMs: Date.now() - start,
     timestamp: new Date().toISOString(),
   });

@@ -1,11 +1,38 @@
 import { Hono } from "hono";
-import { exec } from "child_process";
+import { spawn } from "child_process";
 import fs from "fs";
 import path from "path";
-import util from "util";
 
-const execPromise = util.promisify(exec);
 const backupRoute = new Hono();
+
+/**
+ * Executa pg_dump + gzip via spawn() com array de argumentos — nunca via shell string.
+ * Usar exec() com interpolação de strings expõe injection se DATABASE_URL contiver
+ * metacaracteres de shell. spawn() com array não passa por /bin/sh.
+ */
+function runPgDump(pgDump: string, dbUrl: string, outPath: string): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const pg = spawn(pgDump, [dbUrl], { stdio: ['ignore', 'pipe', 'pipe'] });
+    const gz = spawn('gzip', [], { stdio: [pg.stdout as any, 'pipe', 'pipe'] });
+    const out = fs.createWriteStream(outPath);
+
+    gz.stdout.pipe(out);
+
+    let stderrPg = '', stderrGz = '';
+    pg.stderr.on('data', (d: Buffer) => { stderrPg += d.toString(); });
+    gz.stderr.on('data', (d: Buffer) => { stderrGz += d.toString(); });
+
+    out.on('finish', () => {
+      if (stderrPg) console.warn(`[Backup] pg_dump stderr: ${stderrPg}`);
+      if (stderrGz) console.warn(`[Backup] gzip stderr: ${stderrGz}`);
+      resolve();
+    });
+
+    pg.on('error', reject);
+    gz.on('error', reject);
+    out.on('error', reject);
+  });
+}
 
 // Apenas administradores podem gerar e listar backups
 backupRoute.use('*', async (c, next) => {
@@ -34,22 +61,14 @@ backupRoute.post("/generate", async (c) => {
     const filePath = path.join(BACKUP_DIR, fileName);
 
     console.log(`[Backup] Gerando backup: ${fileName}...`);
-
-    // Chama o binário real do PGDG (não o wrapper Perl /usr/bin/pg_dump).
-    // Railway: DATABASE_URL já inclui credenciais e sslmode.
     const pgDump = '/usr/lib/postgresql/18/bin/pg_dump';
-    const { stderr } = await execPromise(
-      `"${pgDump}" "${dbUrl}" | gzip > "${filePath}"`,
-      { env: { ...process.env, PGSSLMODE: 'require' } }
-    );
-    if (stderr) console.warn(`[Backup] pg_dump stderr: ${stderr}`);
+    await runPgDump(pgDump, dbUrl, filePath);
 
     // Arquivo vazio = pg_dump falhou (pipe oculta o exit code)
     const stat = fs.statSync(filePath);
     if (stat.size < 200) {
       fs.unlinkSync(filePath);
-      const hint = stderr || 'pg_dump retornou vazio. Verifique DATABASE_URL e conectividade.';
-      return c.json({ error: 'Backup falhou — arquivo vazio gerado.', details: hint }, 500);
+      return c.json({ error: 'Backup falhou — arquivo vazio gerado. Verifique DATABASE_URL e conectividade.' }, 500);
     }
 
     console.log(`[Backup] Concluído: ${filePath} (${stat.size} bytes)`);
