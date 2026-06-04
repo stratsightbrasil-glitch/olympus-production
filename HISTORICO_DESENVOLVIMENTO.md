@@ -32,9 +32,8 @@ OLYMPUS 1.0
 | Backend | Hono + Node.js + TypeScript |
 | IA | Vercel AI SDK v6 (`ai@6.0.168`) — agnóstico de provider |
 | Banco | PostgreSQL 15 + pgvector + Drizzle ORM |
-| Orquestração v1 | ReAct via Agent.ts (produção) |
-| Orquestração v2 | LangGraph JS (rota experimental `/stream/graph`) |
-| Embeddings | Ollama nomic-embed-text (padrão local) / Voyage AI (cloud, opcional) |
+| Orquestração | LangGraph JS — motor único desde Sprint 21 (`/stream/graph`) |
+| Embeddings | Ollama nomic-embed-text — vector(768). Voyage AI removido definitivamente. |
 | Containers | Docker Compose — api + web + db + ollama (auto-start Sprint 19) |
 
 ### Provider LLM ativo
@@ -161,20 +160,6 @@ Olympus/
 | `tool_tad_score_calculator` | KLIO | Cálculo score TAD paramétrico (6 subcritérios) |
 | `tool_unified_search_engine` | KLIO | Busca unificada Tavily + fallback |
 
-### Ferramentas analíticas (`analytical-engines.ts`)
-
-Todas criadas via `createAnalyticalEngineTools(projectId)` — projectId injetado via closure, não exposto ao LLM:
-
-| Ferramenta | Quem usa | Função |
-|-----------|----------|--------|
-| `tool_register_event` | KLIO (FIRST-STEP), SCOPUS | Registra FPF/tendência/incerteza com TAD |
-| `tool_register_impact_relation` | KLIO | Impacto direto entre variáveis (MICMAC) |
-| `tool_grumbach_expert_simulation` | OLYMPUS | 7 personas — projeção Grumbach |
-| `tool_mactor_analysis` | PYTHIA | Análise de atores |
-| `tool_mpo_backcasting` | THEMIS | Backcasting MPO |
-| `tool_esg_rii_calculator` | PYTHIA | RII = I×(6-G)×(6-C) |
-| `tool_mpc_source_evaluator` | KLIO | Avaliação MPC alfanumérica |
-| `tool_register_scenario` | PYTHIA, MNEMOSYNE | *(Sprint 18)* Cenário estruturado, substitui regex |
 
 ---
 
@@ -335,7 +320,7 @@ Injeção em `finalInputMsg` em produção. Parâmetro `body.reportLayout` (padr
 Ativo em **todos** os vizModes (exceto TEST_MODE). Garante que SATs avançadas não sejam ignoradas.
 
 ```
-Antes de acionar cada especialista:
+Antes de executar cada fase (KLIO):
 1. Ferramentas/SAT MANDATÓRIAS pela metodologia ativa para esta fase
 2. Ferramentas/SAT RECOMENDADAS dado o tema específico
 3. Proposta de abordagem (1-2 linhas)
@@ -744,7 +729,7 @@ Se Docker travar com `input/output error`: `wsl --shutdown` + *Clean/Purge data*
 - **HERMES_SIPLEX no banco:** deletado via seed.ts a partir do Sprint 20. Não recriado.
 - ~~**Mensagem duplicada (Bug #2/#3):**~~ ✅ Resolvido Sprint 21 — instrução de transcrição verbatim removida.
 - ~~**Páginas vazias PDF (Bug D):**~~ ✅ Resolvido Sprint 21 — filterAgentMessages threshold 800 chars.
-- **Normalização de slugs pendente:** `alta`→`otan`, `macroplan`→`ipea`, `futures`→`gbn`, `siplex`→`siplex_ceex`. Não afeta funcionamento (loadMethodology busca por nome E slug). Migração requer DROP+RECREATE ou UPDATE preservando FKs.
+- **Slugs canônicos atuais (ESTADO_REAL_SISTEMA.md):** `ceeex`, `gbn`, `ipea_buarque`, `alta`, `mpo`, `siex`, `grumbach`, `esg`, `godet` + stubs `siplex`, `grumbach_gestao`, `sped`. Os slugs legados `futures`, `macroplan`, `asplan`, `msef` foram removidos ou renomeados na migração para Olympus 1.0.
 - **OLYMPUS stubs pendentes:** grumbach_plj, siex_mpc, siplex_plj, asplan_sped (metodologias de planejamento estratégico — fases indefinidas, orquestrador OLYMPUS).
 
 ### 22.3 UI/UX — itens pendentes de design

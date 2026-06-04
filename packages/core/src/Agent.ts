@@ -82,27 +82,13 @@ function getModel(config?: { provider: string; model: string }) {
 //
 // REGRA CRITICA: ZOD NAO E USADO AQUI. Ver secao 3.4 do HISTORICO_MIGRACAO.md.
 
-// Schemas de ferramentas built-in (consultar_agente, web_search) e das ferramentas
+// Schemas de ferramentas built-in (web_search) e das ferramentas
 // carregadas via DB que ainda não têm schema próprio no seu arquivo de implementação.
 // Ferramentas com schema próprio em analytical-engines.ts (tool_register_event,
 // tool_register_impact_relation, tool_grumbach_expert_simulation, tool_mactor_analysis,
 // tool_mpo_backcasting, tool_unified_search_engine, tool_mpc_source_evaluator) são
 // resolvidas pelo fallback `t.schema` em Agent.run() — não precisam de entrada aqui.
 const TOOL_JSON_SCHEMAS: Record<string, object> = {
-  consultar_agente: {
-    type: "object",
-    properties: {
-      agent_name: {
-        type: "string",
-        description: "Nome do agente especialista a ser consultado.",
-      },
-      query: {
-        type: "string",
-        description: "A pergunta ou tarefa detalhada a ser resolvida pelo agente. MÁXIMO 300 CARACTERES. Seja objetivo e conciso.",
-      },
-    },
-    required: ["agent_name", "query"],
-  },
   web_search: {
     type: "object",
     properties: {
@@ -294,7 +280,6 @@ const FALLBACK_JSON_SCHEMA = {
 const TOOL_ICONS: Record<string, string> = {
   web_search:                      '🌐',
   buscar_dados_publicos:           '📊',
-  consultar_agente:                '🤖',
   buscar_documentos_internos:      '📚',
   registrar_sinal:                 '📡',
   buscar_sinais:                   '📡',
@@ -308,7 +293,6 @@ function stepLabel(toolName: string, args: any): string {
   const icon = TOOL_ICONS[toolName] || '🔧';
   if (toolName === 'web_search')                return `${icon} Buscando: "${(args.query || '').slice(0, 60)}"`;
   if (toolName === 'buscar_dados_publicos')      return `${icon} Dados: ${(args.indicadores || []).slice(0, 3).join(', ')}`;
-  if (toolName === 'consultar_agente')           return `${icon} Consultando ${args.agent_name}...`;
   if (toolName === 'buscar_documentos_internos') return `${icon} RAG: "${(args.query || '').slice(0, 50)}"`;
   if (toolName === 'avaliar_fonte')              return `${icon} Avaliando fonte...`;
   if (toolName === 'declarar_julgamento')        return `${icon} Emitindo julgamento analítico...`;
@@ -483,17 +467,11 @@ export class Agent {
     // "passagem": processo autônomo completo — maxTokens=16_000 (reduz custo)
     // "thinking": raciocínio estendido — instrução de profundidade em chat.ts
     // TEST_MODE: limita tokens e steps para completar em <30s/agente.
-    // Distingue orquestradores (têm consultar_agente) de especialistas:
-    //   • Especialistas: 3 steps × 4 000 tokens — resposta rápida e curta.
-    //   • Orquestradores: 15 steps × 8 000 tokens — ainda precisam chamar
-    //     todos os especialistas em sequência antes de sintetizar.
     const isTestMode = process.env.TEST_MODE === 'true';
-    // Olympus 1.0: consultar_agente foi removido de todos os agentes.
-    // Detectar orquestrador por nome explícito (HERMES, OLYMPUS) OU pela presença
-    // de consultar_agente (compat com código legado). Sem essa detecção correta,
-    // HERMES recebe maxSteps=12 (especialista) e pode truncar relatórios longos.
-    const isOrchestrator = this.name === 'HERMES' || this.name === 'OLYMPUS'
-      || this.tools.some((t: any) => t.name === 'consultar_agente');
+    // Olympus 1.0: orquestrador detectado exclusivamente por nome.
+    // HERMES (synthesisNode) e OLYMPUS (stub v2.0) recebem maxSteps/maxTokens maiores
+    // pois compilam relatórios longos a partir de múltiplos phase_outputs.
+    const isOrchestrator = this.name === 'HERMES' || this.name === 'OLYMPUS';
     const maxTokens = isTestMode
       ? (isOrchestrator ? 8_000 : 4_000)
       : vizMode === "thinking"  ? 32000

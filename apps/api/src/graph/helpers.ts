@@ -257,73 +257,6 @@ function adaptOlympusTool(ot: OlympusTool, projectId: string): Tool<any> {
 }
 
 /**
- * Cria a ferramenta consultar_agente com closure sobre projectId e llmConfig.
- * O sub-agente (ex: ATHENA) é instanciado via Agent.run() direto — não via LangGraph.
- * Sem ferramentas próprias: sub-agentes respondem com análise textual pura.
- * llmConfig herdado do agente pai — garante consistência de modelo na cadeia.
- */
-function createConsultarAgenteTool(
-  projectId: string,
-  llmConfig: { provider: string; model: string } | undefined,
-  llmTiers:  Record<string, string>,
-): Tool<any> {
-  return {
-    name: 'consultar_agente',
-    description:
-      'Delega uma tarefa para um agente especialista da equipe OLYMPUS. '
-      + 'Use agent_name="ATHENA" para auditoria de qualidade analítica (ATS). '
-      + 'Outros valores: SCOPUS, KLIO, PYTHIA, MNEMOSYNE, THEMIS.',
-    schema: {
-      type: 'object' as const,
-      properties: {
-        agent_name: {
-          type: 'string',
-          description: 'Nome do agente especialista a consultar.',
-        },
-        query: {
-          type: 'string',
-          description: 'Tarefa ou pergunta para o agente. Inclua o conteúdo a auditar.',
-        },
-      },
-      required: ['agent_name', 'query'],
-    },
-    execute: async (args: { agent_name: string; query: string }) => {
-      const dbAgent = await db.query.agents.findFirst({
-        where: eq(agentsTable.name, args.agent_name),
-      });
-      if (!dbAgent) return `[ERRO] Agente '${args.agent_name}' não encontrado.`;
-
-      const subAgent = new Agent(
-        dbAgent.name,
-        dbAgent.role,
-        dbAgent.systemPrompt,
-        [],  // sub-agentes sem ferramentas — evita chamadas recursivas
-        dbAgent.modelOverride ?? undefined,
-      );
-
-      const memory = await loadMemoryWindow(projectId);
-
-      const subCtx: AgentContext = {
-        projectId,
-        methodology:        '',
-        memory,
-        llmConfig:          llmConfig ?? { provider: 'anthropic', model: 'claude-haiku-4-5-20251001' },
-        llmTiers,
-        phases:             [],
-        agentMethodPrompts: {},
-        connectivityMode:   'ONLINE',
-      };
-
-      try {
-        return await subAgent.run(args.query, subCtx, 'etapa');
-      } catch (err: any) {
-        return `[ERRO ao consultar ${args.agent_name}]: ${err?.message ?? 'desconhecido'}`;
-      }
-    },
-  };
-}
-
-/**
  * Constrói a lista de ferramentas para um agente a partir de toolsConfig (JSON array de nomes).
  * Ferramentas ausentes são silenciosamente ignoradas (feature, não bug).
  *
@@ -347,8 +280,6 @@ export function buildToolsForAgent(
   );
 
   const available: Record<string, Tool<any>> = {
-    // ── Delegação intra-equipe ────────────────────────────────────────────────
-    consultar_agente: createConsultarAgenteTool(projectId, llmConfig, llmTiers ?? {}),
     // ── Ferramentas externas / RAG ─────────────────────────────────────────────
     web_search:                     tavilySearchTool,
     buscar_dados_publicos:          dadosPublicosTool,
