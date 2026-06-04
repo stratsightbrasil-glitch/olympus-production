@@ -39,6 +39,7 @@ interface SidebarProps {
   onModeChange: (m: string) => void;
   onVizModeChange: (v: string) => void;
   onNovaSessao: () => void;
+  onIniciarAnalise: () => void; // Inicia no projeto ATIVO já carregado (sem abrir modal)
   onOpenPainel: () => void;
   onGerarRelatorioKratos: () => void;
   onShowUsers: () => void;
@@ -63,13 +64,15 @@ function getCtaAction(
   projeto: SidebarProps['projeto'],
   step: number,
   steps: MethodologyStep[],
-  callbacks: Pick<SidebarProps, 'onNovaSessao' | 'onGerarRelatorioPadrao'>,
+  callbacks: Pick<SidebarProps, 'onNovaSessao' | 'onIniciarAnalise' | 'onGerarRelatorioPadrao'>,
 ): { label: string; hint: string; onClick: (() => void) | undefined } {
   if (!projeto.nome) {
-    return { label: 'Iniciar nova análise', hint: 'Configure o escopo do projeto.', onClick: callbacks.onNovaSessao };
+    // Sem projeto carregado → abre modal para configurar novo
+    return { label: 'Nova análise', hint: 'Configure o escopo do projeto.', onClick: callbacks.onNovaSessao };
   }
   if (step === 0) {
-    return { label: 'Iniciar análise', hint: 'Pronto para o primeiro agente.', onClick: callbacks.onNovaSessao };
+    // Projeto carregado, ainda sem análise → usa o ID do projeto ativo (sem modal)
+    return { label: 'Iniciar análise', hint: 'Pronto para o primeiro agente.', onClick: callbacks.onIniciarAnalise };
   }
   if (step < steps.length) {
     const next = steps[step]; // próxima etapa (0-indexed, step já aponta para o próximo)
@@ -139,7 +142,7 @@ export function Sidebar({
   open, user, projeto, sessoes, showSessoes, sessionSearch, filterStatus,
   analyticReview, sessionId, exportingPdf,
   currentMsefStep, currentStep, methodologySteps,
-  onNovaSessao, onShowUsers, onShowBackup, onShowAudit,
+  onNovaSessao, onIniciarAnalise, onShowUsers, onShowBackup, onShowAudit,
   onCopyClientLink, onShowReviewModal, onGerarRelatorioPadrao, onGerarRelatorioEstendido,
   onShowSettings, onToggleSessoes, onSessionSearchChange, onFilterChange,
   onCarregarSessao, onDeletarSessao, onLogout,
@@ -160,7 +163,7 @@ export function Sidebar({
   const isAdmin = user?.role === 'admin';
   const isCliente = user?.role === 'cliente';
 
-  const cta = getCtaAction(projeto, activeStep, steps, { onNovaSessao, onGerarRelatorioPadrao });
+  const cta = getCtaAction(projeto, activeStep, steps, { onNovaSessao, onIniciarAnalise, onGerarRelatorioPadrao });
 
   // Badge de status do projeto
   const STATUS_MAP: Record<string, { label: string; bg: string; color: string }> = {

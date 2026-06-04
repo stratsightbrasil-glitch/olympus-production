@@ -270,6 +270,23 @@ function App() {
     await chat.iniciarSessao({ newSessionId, initMsg, nome, metodologia, selectedTeamId, onDone: () => {} });
   };
 
+  /**
+   * Inicia a análise no projeto ATIVO já carregado — sem abrir modal, sem gerar novo ID.
+   * Usado pelo botão "Iniciar análise" quando um projeto já está selecionado no histórico.
+   * Diferente de handleStartSession (que cria nova sessão via modal).
+   */
+  const handleIniciarAnalise = async () => {
+    setMainView('chat');
+    await chat.iniciarSessao({
+      newSessionId:   projectState.sessionId,
+      initMsg:        'Iniciar',
+      nome:           projectState.projeto.nome || 'Análise',
+      metodologia:    projectState.projeto.metodologia,
+      selectedTeamId: projectState.projeto.teamId || '',
+      onDone:         () => {},
+    });
+  };
+
   const handleKratosMode = () => {
     setMode('monitoring');
     if (!projectState.projeto.nome || chat.messages.length < 3) {
@@ -363,6 +380,7 @@ function App() {
         onModeChange={setMode}
         onVizModeChange={setVizMode}
         onNovaSessao={openNewSession}
+        onIniciarAnalise={handleIniciarAnalise}
         onOpenPainel={openPainel}
         onGerarRelatorioKratos={chat.gerarRelatorioKratos}
         onShowUsers={() => setActiveModal('users')}
