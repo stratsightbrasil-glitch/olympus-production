@@ -7,36 +7,28 @@ import qrcode from 'qrcode';
 import speakeasy from 'speakeasy';
 import { randomUUID } from 'crypto';
 import { logAudit } from '../utils/audit';
+import { checkLoginRateLimitPg } from '../middleware/rateLimit';
 
-// ── Rate limit genérico (login + register) ───────────────────────────────────
-// Protege contra força bruta e enumeração de usuários via registro em massa.
-// Usa IP real (x-forwarded-for para proxy/nginx).
+// ── Rate limit de registro — in-process é suficiente (não precisa de cross-replica)
+// para registro já que o endpoint só funciona quando a conta não existe e é mais raro.
 interface RateBucket { count: number; resetAt: number; }
 
 function makeRateLimiter(maxAttempts: number, windowMs: number) {
   const buckets = new Map<string, RateBucket>();
   setInterval(() => {
     const now = Date.now();
-    for (const [k, v] of buckets) {
-      if (now > v.resetAt) buckets.delete(k);
-    }
+    for (const [k, v] of buckets) if (now > v.resetAt) buckets.delete(k);
   }, Math.min(windowMs, 5 * 60 * 1000));
-
   return function check(ip: string): boolean {
     const now = Date.now();
     const bucket = buckets.get(ip);
-    if (!bucket || now > bucket.resetAt) {
-      buckets.set(ip, { count: 1, resetAt: now + windowMs });
-      return true;
-    }
+    if (!bucket || now > bucket.resetAt) { buckets.set(ip, { count: 1, resetAt: now + windowMs }); return true; }
     if (bucket.count >= maxAttempts) return false;
     bucket.count++;
     return true;
   };
 }
 
-// Login: 5 tentativas / 15 min
-const checkLoginRateLimit    = makeRateLimiter(5, 15 * 60 * 1000);
 // Register: 3 tentativas / 60 min — dificulta enumeração de e-mails via cadastro
 const checkRegisterRateLimit = makeRateLimiter(3, 60 * 60 * 1000);
 
@@ -63,12 +55,20 @@ authRoutes.post('/login', async (c) => {
   const ip = c.req.header('x-forwarded-for')?.split(',')[0].trim()
     || c.req.header('x-real-ip')
     || 'unknown';
-  if (process.env.TEST_MODE !== 'true' && !checkLoginRateLimit(ip)) {
-    return c.json({ error: 'Muitas tentativas de login. Tente novamente em 15 minutos.' }, 429);
-  }
+
+  // Rate limit via Postgres — funciona corretamente com múltiplas instâncias/réplicas.
+  // O bucket in-process anterior era bypassável distribuindo requests entre réplicas.
+  const rl = await checkLoginRateLimitPg(ip);
+  if (!rl.allowed) return c.json({ error: rl.message }, 429);
 
   const { email, password, token: totpToken } = (await c.req.json()) as any;
-  const user = await db.query.users.findFirst({ where: eq(users.email, email) });
+
+  // Validação básica antes do DB — evita query desnecessária com entrada inválida
+  if (!email || typeof email !== 'string' || !email.includes('@') || !password) {
+    return c.json({ error: 'Credenciais inválidas' }, 401);
+  }
+
+  const user = await db.query.users.findFirst({ where: eq(users.email, email.toLowerCase().trim()) });
   if (!user || !user.passwordHash) return c.json({ error: 'Credenciais inválidas' }, 401);
 
   const isValid = await bcrypt.compare(password, user.passwordHash);

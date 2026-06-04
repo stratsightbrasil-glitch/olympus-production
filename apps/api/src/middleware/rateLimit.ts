@@ -8,8 +8,11 @@ import { sql } from 'drizzle-orm';
 const TEST_MODE = process.env.TEST_MODE === 'true';
 
 const LIMITS: Record<string, { max: number; windowMs: number; message: string }> = {
-  analysis: { max: 5,  windowMs: 60 * 60 * 1000, message: 'Limite de análises atingido (5/hora). Aguarde antes de iniciar nova análise.' },
-  export:   { max: 10, windowMs: 60 * 60 * 1000, message: 'Limite de exportações atingido (10/hora). Aguarde antes de exportar novamente.' },
+  analysis: { max: 5,  windowMs: 60 * 60 * 1000,       message: 'Limite de análises atingido (5/hora). Aguarde antes de iniciar nova análise.' },
+  export:   { max: 10, windowMs: 60 * 60 * 1000,       message: 'Limite de exportações atingido (10/hora). Aguarde antes de exportar novamente.' },
+  // Login: 5 tentativas / 15 min por IP. Substitui o bucket in-process de auth.ts,
+  // que não funciona com múltiplas instâncias. Usa 'ip:<addr>' como userId fictício.
+  login:    { max: 5,  windowMs: 15 * 60 * 1000,       message: 'Muitas tentativas de login. Tente novamente em 15 minutos.' },
 };
 
 async function checkRateLimit(userId: string, action: string): Promise<boolean> {
@@ -44,6 +47,30 @@ export async function rateLimitAnalysis(c: any, next: any) {
   const allowed = await checkRateLimit(userId, 'analysis');
   if (!allowed) return c.json({ error: LIMITS.analysis.message }, 429);
   return next();
+}
+
+/**
+ * Rate limit de login baseado em IP — Postgres-backed, funciona com múltiplas instâncias.
+ * Substitui o bucket in-process em auth.ts (Map) que era contornável com N replicas.
+ * Retorna false quando o limite é atingido; não persiste entrada (só verifica).
+ */
+export async function checkLoginRateLimitPg(ip: string): Promise<{ allowed: boolean; message?: string }> {
+  if (TEST_MODE) return { allowed: true };
+  const limit = LIMITS['login']!;
+  const windowStart = new Date(Date.now() - limit.windowMs);
+  const userId = `ip:${ip}`; // prefixo evita colisão com UUIDs reais de usuários
+
+  const [result] = await db
+    .select({ total: count() })
+    .from(rateLimitLogs)
+    .where(and(eq(rateLimitLogs.userId, userId), eq(rateLimitLogs.action, 'login'), gt(rateLimitLogs.createdAt, windowStart)));
+
+  if ((result?.total ?? 0) >= limit.max) {
+    return { allowed: false, message: limit.message };
+  }
+
+  await db.insert(rateLimitLogs).values({ userId, action: 'login' });
+  return { allowed: true };
 }
 
 export async function rateLimitExport(c: any, next: any) {

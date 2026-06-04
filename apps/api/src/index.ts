@@ -80,6 +80,21 @@ import { rateLimitAnalysis, rateLimitExport } from './middleware/rateLimit';
 
 const app = new Hono();
 
+// ── Security headers — aplicados em todas as respostas ──────────────────────
+// Duplica os headers do nginx.conf para garantir cobertura quando a API é
+// acessada diretamente (Railway, Railway Preview, testes). Belt-and-suspenders.
+app.use('*', async (c, next) => {
+  await next();
+  c.res.headers.set('X-Content-Type-Options', 'nosniff');
+  c.res.headers.set('X-Frame-Options', 'SAMEORIGIN');
+  c.res.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin');
+  c.res.headers.set('X-XSS-Protection', '0'); // deprecated — CSP é a proteção real
+  // HSTS apenas em HTTPS (Railway produção). Em HTTP local é ignorado pelos browsers.
+  if (c.req.header('x-forwarded-proto') === 'https' || process.env.NODE_ENV === 'production') {
+    c.res.headers.set('Strict-Transport-Security', 'max-age=15768000; includeSubDomains');
+  }
+});
+
 // Logger filtrado — suprime health-checks /ping do output para não poluir os logs
 const logMiddleware = logger();
 app.use('*', async (c, next) => {
