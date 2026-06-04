@@ -111,20 +111,14 @@ chatRoutes.post('/stream/graph', async (c) => {
         await db.insert(messages).values({ projectId, role: 'user', content: userInputStr });
       }
 
-      // Limpa checkpoint e phase_outputs anteriores ao iniciar NOVA análise.
+      // Limpa checkpoint e phase_outputs ao iniciar NOVA análise.
+      // SEMPRE usa clearCheckpointSql (SQL direto) — o método checkpointer.delete()
+      // do @langchain/langgraph-checkpoint-postgres@1.0.1 não limpa checkpoint_writes,
+      // deixando writes pendentes que causam replay indevido e crash (502 no SSE).
       if (!isResuming) {
-        try {
-          const checkpointerForClear = await getPostgresSaver();
-          if (typeof (checkpointerForClear as any).delete === 'function') {
-            await (checkpointerForClear as any).delete({
-              configurable: { thread_id: projectId },
-            });
-          } else {
-            await clearCheckpointSql(projectId);
-          }
-        } catch { /* idempotente */ }
-        // Limpa phase_outputs anteriores do projeto (nova análise começa do zero)
+        await clearCheckpointSql(projectId);  // limpa checkpoints + checkpoint_writes
         await db.delete(phaseOutputs).where(eq(phaseOutputs.projectId, projectId));
+        console.log(`[chat] Checkpoint e phase_outputs limpos para ${projectId}`);
       }
 
       const [llmConfig, llmTiers] = await Promise.all([getLLMConfig(), getLLMTiers()]);
