@@ -30,7 +30,7 @@ import {
   analyticalEngineTools,
   type OlympusTool,
 } from "../tools/analytical-engines";
-import { eq, and, asc } from "drizzle-orm";
+import { eq, and, asc, gte } from "drizzle-orm";
 
 // ── Janela de memória ─────────────────────────────────────────────────────────
 // Buffer de janela deslizante: mantém apenas as N mensagens mais recentes +
@@ -96,12 +96,27 @@ export async function loadMemoryWindow(projectId: string): Promise<any[]> {
 
 /**
  * Constrói a âncora de contexto com eventos aprovados.
- * Retorna string vazia se não há eventos aprovados.
+ *
+ * @param sinceDate - Se fornecido, inclui apenas eventos registrados APÓS esta data.
+ *   Usado pelo phaseLoopNode para filtrar eventos de análises anteriores falhadas,
+ *   prevenindo contaminação de tema (o guardrail de texto não é suficiente sozinho).
  */
 export async function buildAnchorCtx(
   projectId: string,
   connectivityMode: string,
+  sinceDate?: Date,
 ): Promise<string> {
+  const whereClause = sinceDate
+    ? and(
+        eq(projectEvents.projectId, projectId),
+        eq(projectEvents.status, "approved"),
+        gte(projectEvents.createdAt, sinceDate),
+      )
+    : and(
+        eq(projectEvents.projectId, projectId),
+        eq(projectEvents.status, "approved"),
+      );
+
   const approvedEvents = await db
     .select({
       id:               projectEvents.id,
@@ -111,12 +126,7 @@ export async function buildAnchorCtx(
       sourceEvaluation: projectEvents.sourceEvaluation,
     })
     .from(projectEvents)
-    .where(
-      and(
-        eq(projectEvents.projectId, projectId),
-        eq(projectEvents.status, "approved"),
-      ),
-    );
+    .where(whereClause);
 
   if (approvedEvents.length === 0) return "";
 

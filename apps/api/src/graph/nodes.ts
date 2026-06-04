@@ -82,9 +82,21 @@ export async function phaseLoopNode(
   }
 
   // ── Contexto: fases anteriores + eventos aprovados ────────────────────────
+  // sinceDate: data do primeiro phase_output da análise atual.
+  // buildAnchorCtx só carrega eventos posteriores a essa data, prevenindo
+  // contaminação por events de análises anteriores falhadas.
+  const firstPhaseOutput = currentIndex > 0
+    ? await db.query.phaseOutputs.findFirst({
+        where:   eq(phaseOutputs.projectId, state.projectId),
+        orderBy: [asc(phaseOutputs.phaseNum)],
+        columns: { createdAt: true },
+      })
+    : null;
+  const anchorSinceDate = firstPhaseOutput?.createdAt ?? undefined;
+
   const [phaseContext, anchorContext] = await Promise.all([
     loadPhaseContext(state.projectId),
-    buildAnchorCtx(state.projectId, state.connectivityMode),
+    buildAnchorCtx(state.projectId, state.connectivityMode, anchorSinceDate),
   ]);
   onStep?.(`[KLIO] Contexto: ${phaseContext.phaseCount} fase(s) ant. (~${phaseContext.estimatedTokens} tokens)`);
 

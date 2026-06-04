@@ -130,18 +130,18 @@
 <!-- AUTO:metodologias:START -->
 | Metodologia | Orquestrador | Fases | Categoria | Agentes |
 |-------------|-------------|-------|-----------|---------|
-| GBN — Global Business Network (Schwartz) | HERMES | ? | Cenários Prospectivos |  |
-| CEEEx: Cenários Prospectivos do Exército | HERMES | ? | Cenários Prospectivos |  |
-| SIPLEx: Sistema de Planejamento do Exército | HERMES | 7 | Planejamento Estratégico |  |
-| Grumbach: Produção de Cenários | HERMES | 9 | Cenários Prospectivos |  |
-| Godet: Escola Estrutural | HERMES | 7 | Cenários Prospectivos |  |
 | IPEA/Buarque — Metodologia de Cenários | HERMES | ? | Cenários Prospectivos |  |
 | SIEx: Conhecimento Estimativa EB | HERMES | 7 | Produção do Conhecimento |  |
-| Grumbach: Gestão Estratégica Completa | HERMES | ? | Planejamento Estratégico |  |
 | SPED/PESD: Planejamento Estratégico Setorial de Defesa | HERMES | ? | Planejamento Estratégico |  |
+| SIPLEx: Sistema de Planejamento do Exército | HERMES | 7 | Planejamento Estratégico |  |
+| CEEEx: Cenários Prospectivos do Exército | HERMES | ? | Cenários Prospectivos |  |
+| Godet: Escola Estrutural | HERMES | 7 | Cenários Prospectivos |  |
+| GBN — Global Business Network (Schwartz) | HERMES | ? | Cenários Prospectivos |  |
+| Grumbach: Gestão Estratégica Completa | HERMES | ? | Planejamento Estratégico |  |
+| Grumbach: Produção de Cenários | HERMES | 9 | Cenários Prospectivos |  |
 | ESG: Cenários Prospectivos | HERMES | 6 | Cenários Prospectivos |  |
-| OTAN — Alternative Analysis (AltA) | HERMES | 6 | Cenários Prospectivos |  |
 | MPO: Estratégia Brasil 2050 | HERMES | 8 | Planejamento Estratégico |  |
+| OTAN — Alternative Analysis (AltA) | HERMES | 6 | Cenários Prospectivos |  |
 <!-- AUTO:metodologias:END -->
 
 ---
@@ -160,8 +160,8 @@
 | 7 | PMI — Prós, Contras e Pontos Interessantes | Técnica rápida que avalia os aspectos positivos, negativos e interessantes de um |
 | 8 | Adversário Substituto | Modela o comportamento de atores externos (adversários, competidores, neutros) r |
 | 9 | Time A / Time B | Dois grupos debatem hipóteses ou posições opostas diante de um júri neutro, expo |
-| 10 | Pensamento de Fora para Dentro | Aborda um problema da perspectiva externa, mapeando forças externas que moldam a |
-| 11 | Identificação de Premissas-Chave | Identifica sistematicamente as premissas que sustentam o raciocínio e avalia qua |
+| 10 | Identificação de Premissas-Chave | Identifica sistematicamente as premissas que sustentam o raciocínio e avalia qua |
+| 11 | Pensamento de Fora para Dentro | Aborda um problema da perspectiva externa, mapeando forças externas que moldam a |
 | 12 | Futuros Alternativos | Explora sistematicamente múltiplas formas em que uma situação complexa e incerta |
 <!-- AUTO:tecnicas:END -->
 

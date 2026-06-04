@@ -11,7 +11,7 @@
 import { Hono } from 'hono';
 import { streamSSE } from 'hono/streaming';
 import { db, projects, messages, phaseOutputs, projectEvents, projectScenarios } from '@olympus/db';
-import { eq } from 'drizzle-orm';
+import { eq, lt, asc, and } from 'drizzle-orm';
 import { Command } from '@langchain/langgraph';
 import { getOlympusGraph, graphConfig } from '../graph';
 import { getPostgresSaver, clearCheckpointSql } from '../graph/postgresSaver';
@@ -116,14 +116,35 @@ chatRoutes.post('/stream/graph', async (c) => {
       // do @langchain/langgraph-checkpoint-postgres@1.0.1 não limpa checkpoint_writes,
       // deixando writes pendentes que causam replay indevido e crash (502 no SSE).
       if (!isResuming) {
-        // Limpa TODOS os dados da análise anterior para começar do zero.
-        // project_events e project_scenarios são críticos: se não limpos,
-        // buildAnchorCtx() os carrega como contexto e KLIO continua o tema errado.
+        // Início de NOVA análise: limpa TUDO do projeto.
+        // project_events crítico: buildAnchorCtx() os carrega e contamina o tema.
         await clearCheckpointSql(projectId);
         await db.delete(phaseOutputs).where(eq(phaseOutputs.projectId, projectId));
         await db.delete(projectEvents).where(eq(projectEvents.projectId, projectId));
         await db.delete(projectScenarios).where(eq(projectScenarios.projectId, projectId));
-        console.log(`[chat] Análise anterior limpa para ${projectId} (checkpoints, phase_outputs, events, scenarios)`);
+        console.log(`[chat] Análise anterior limpa para ${projectId}`);
+      } else {
+        // RESUME (HITL ou retomada): apaga events anteriores ao primeiro phase_output
+        // para eliminar contaminação de runs anteriores falhadas.
+        const firstOutput = await db.query.phaseOutputs.findFirst({
+          where:   eq(phaseOutputs.projectId, projectId),
+          orderBy: [asc(phaseOutputs.phaseNum)],
+          columns: { createdAt: true },
+        });
+        if (firstOutput) {
+          // Deleta events DO PROJETO mais antigos que o início da análise atual
+          await db.delete(projectEvents).where(
+            and(
+              eq(projectEvents.projectId, projectId),
+              lt(projectEvents.createdAt, firstOutput.createdAt)
+            )
+          );
+          console.log(`[chat] Resume: events anteriores a ${firstOutput.createdAt.toISOString()} removidos para ${projectId}`);
+        } else {
+          // Sem phase_outputs: análise nunca completou uma fase — limpa tudo
+          await db.delete(projectEvents).where(eq(projectEvents.projectId, projectId));
+          console.log(`[chat] Resume sem phase_outputs: todos os events removidos para ${projectId}`);
+        }
       }
 
       const [llmConfig, llmTiers] = await Promise.all([getLLMConfig(), getLLMTiers()]);
