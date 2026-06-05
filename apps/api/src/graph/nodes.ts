@@ -96,7 +96,8 @@ export async function phaseLoopNode(
   const onStep        = config?.configurable?.onStep        as ((msg: string) => void) | undefined;
   const onToken       = config?.configurable?.onToken       as ((delta: string) => void) | undefined;
   const onAgent       = config?.configurable?.onAgent       as ((name: string) => void) | undefined;
-  const onAthena      = config?.configurable?.onAthena      as ((data: { verdict: string; phaseNum: number; label: string; usedLlm: boolean }) => void) | undefined;
+  type AthenaCallback = (data: { verdict: string; phaseNum: number; label: string; usedLlm: boolean; checks: Array<{ atsCode: string; passed: boolean; finding: string }> }) => void;
+  const onAthena      = config?.configurable?.onAthena      as AthenaCallback | undefined;
   const onPhaseOutput = config?.configurable?.onPhaseOutput as ((data: { text: string; phaseNum: number; label: string }) => void) | undefined;
 
   const methodology  = state.methodology ?? "grumbach";
@@ -307,7 +308,7 @@ export async function phaseLoopNode(
   );
   onStep?.(`[ATHENA] Veredicto: ${athenaVerdict.verdict} (LLM: ${athenaVerdict.usedLLM})`);
   // ATHENA emite APÓS o interrupt — o analista vê o veredicto ao retomar.
-  onAthena?.({ verdict: athenaVerdict.verdict, phaseNum: phaseConfig.phaseNum, label: phaseConfig.label, usedLlm: athenaVerdict.usedLLM });
+  onAthena?.({ verdict: athenaVerdict.verdict, phaseNum: phaseConfig.phaseNum, label: phaseConfig.label, usedLlm: athenaVerdict.usedLLM, checks: athenaVerdict.checks });
 
   // ── Summary + persistência do phase_output ────────────────────────────────
   const summary = buildPhaseSummary(

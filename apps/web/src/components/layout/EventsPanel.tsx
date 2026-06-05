@@ -28,6 +28,19 @@ const TYPE_COLORS: Record<string, string> = {
   fpf:               'bg-green-100 text-green-800',
 };
 
+/** Detecta o tipo semântico pelo nome do evento para labels mais descritivos. */
+function getSemanticLabel(event: ProjectEvent): string {
+  const n = event.name.toLowerCase();
+  if (n.startsWith('p(i)'))               return 'Delphi P(i)';
+  if (n.startsWith('impacto '))           return 'Impacto Cruzado';
+  if (n.startsWith('cena ') || n.startsWith('cena a') || n.startsWith('cena b') ||
+      n.startsWith('cena c') || n.startsWith('cena d')) return 'Cena';
+  if (n.startsWith('narrativa '))         return 'Narrativa';
+  if (n.startsWith('se ') && n.includes('então')) return 'Signpost';
+  if (n.startsWith('premissa-linchpin:')) return 'Linchpin';
+  return TYPE_LABELS[event.type] ?? event.type;
+}
+
 interface EventCardProps {
   event: ProjectEvent;
   onApprove: (id: string) => void;
@@ -44,7 +57,7 @@ function EventCard({ event, onApprove, onReject, busy }: EventCardProps) {
       {/* Header */}
       <div className="flex items-start gap-2">
         <span className={`text-xs font-semibold px-2 py-0.5 rounded-full shrink-0 ${TYPE_COLORS[event.type] ?? 'bg-gray-100 text-gray-700'}`}>
-          {TYPE_LABELS[event.type] ?? event.type}
+          {getSemanticLabel(event)}
         </span>
         <button
           className="text-sm font-medium text-gray-800 text-left leading-tight flex-1 hover:underline"

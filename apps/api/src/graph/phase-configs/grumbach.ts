@@ -61,19 +61,22 @@ MISSÃO:
 - Isolar a premissa-linchpin do enquadramento
 
 PRODUTO OBRIGATÓRIO:
-1. Ao menos 3 FPFs via tool_register_event (questões binárias OCORRE/NÃO OCORRE).
-2. OBRIGATÓRIO SEMPRE: chamar declarar_julgamento com premissaLinchpin preenchida.
-   Sem esta chamada a fase FALHA na auditoria ATHENA (ATS3 — premissa-linchpin).
-   Exemplo de premissaLinchpin: "A janela de oportunidade X se manifesta nos próximos Y anos."
+1. Apresentar no texto de saída:
+   - Sistema e escopo da análise (1 parágrafo)
+   - Horizonte temporal
+   - Ponto de tomada de decisão estratégica
+   - Lista de FPFs PRELIMINARES identificados no escopo (apenas no texto, NÃO registrar como eventos)
+   - Premissa-linchpin do enquadramento
+2. OBRIGATÓRIO: chamar declarar_julgamento com premissaLinchpin preenchida.
+   O linchpin identifica a premissa central cuja ausência invalida o enquadramento.
+   Sem esta chamada a fase FALHA na auditoria ATHENA (ATS3).
 
 PROIBIDO:
-- Encerrar a fase sem chamar declarar_julgamento.
-- Questões abertas sem formulação booleana.
-- Premissas sem condição de falsificação declarada.
+- Chamar tool_register_event nesta fase — FPFs preliminares são NÃO CONFIRMADOS.
+  Os FPFs oficiais serão pesquisados e registrados na Fase 2 (Varredura).
+- Encerrar sem chamar declarar_julgamento.
 `,
     allowedTools: [
-      "tool_tad_score_calculator",
-      "tool_register_event",
       "buscar_documentos_internos",
       "declarar_julgamento",
       "web_search",

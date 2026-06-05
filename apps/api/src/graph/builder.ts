@@ -67,7 +67,7 @@ export function graphConfig(
     onStep?:        (msg: string) => void;
     onToken?:       (delta: string) => void;
     onAgent?:       (name: string) => void;
-    onAthena?:      (data: { verdict: string; phaseNum: number; label: string; usedLlm: boolean }) => void;
+    onAthena?:      (data: { verdict: string; phaseNum: number; label: string; usedLlm: boolean; checks: Array<{ atsCode: string; passed: boolean; finding: string }> }) => void;
     onPhaseOutput?: (data: { text: string; phaseNum: number; label: string }) => void;
   },
 ) {

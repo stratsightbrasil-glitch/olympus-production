@@ -151,13 +151,25 @@ export function useChat({
             const verdict: string = (event as any).verdict ?? '';
             const phaseNum: number = (event as any).phaseNum ?? 0;
             const label: string = (event as any).label ?? '';
+            const checks: Array<{ atsCode: string; passed: boolean; finding: string }> = (event as any).checks ?? [];
             const emoji = verdict === 'APROVADO' ? '✅' : verdict === 'RESSALVAS' ? '⚠️' : '❌';
-            if (phaseNum > 0) setCurrentPhaseNum(phaseNum); // atualiza step counter autoritativamente
+            if (phaseNum > 0) setCurrentPhaseNum(phaseNum);
+            // Veredicto + checks reprovados (para REQUER_REVISAO e RESSALVAS)
+            const failedChecks = checks.filter(c => !c.passed);
+            const pendingChecks = checks.filter(c => c.passed && c.finding.toLowerCase().includes('pendente'));
+            let content = `${emoji} **Fase ${phaseNum} — ${label}** · ATHENA: **${verdict}**`;
+            if (failedChecks.length > 0) {
+              content += '\n\n**Verificações reprovadas:**\n' +
+                failedChecks.map(c => `- \`${c.atsCode}\` ${c.finding}`).join('\n');
+            } else if (pendingChecks.length > 0) {
+              content += '\n\n**Ressalvas:**\n' +
+                pendingChecks.map(c => `- \`${c.atsCode}\` ${c.finding}`).join('\n');
+            }
             setMessages(prev => [...prev, {
               role:        'assistant' as const,
               agentName:   'ATHENA',
               messageType: 'athena',
-              content:     `${emoji} **Fase ${phaseNum} — ${label}** · ATHENA: **${verdict}**`,
+              content,
             }]);
           } else if (event.type === 'hitl_gate') {
             const interruptType = (event as any).interruptType || 'hitl_required';
