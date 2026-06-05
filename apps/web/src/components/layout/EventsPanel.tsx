@@ -198,8 +198,9 @@ export function EventsPanel({ proposedEvents, loading, onApprove, onReject, onAp
             )}
           </div>
 
-          {/* Botão de retomada HITL — visível quando o motor pausou E não há mais eventos pendentes */}
-          {hitlGate && proposedEvents.length === 0 && onResume && (
+          {/* Botão de retomada — apenas para hitl_required (gate de FPFs).
+              Para phase_complete o analista usa HitlDecisionCard (Confirmar/Redirecionar). */}
+          {hitlGate?.interruptType === 'hitl_required' && proposedEvents.length === 0 && onResume && (
             <div className="px-3 py-3 border-t border-purple-200 bg-purple-50">
               <p className="text-[11px] text-purple-700 mb-2 leading-snug">
                 ✅ Todos os eventos foram revisados. Clique para continuar para a próxima fase.

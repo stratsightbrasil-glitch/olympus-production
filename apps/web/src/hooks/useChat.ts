@@ -161,8 +161,10 @@ export function useChat({
             }]);
           } else if (event.type === 'hitl_gate') {
             const interruptType = (event as any).interruptType || 'hitl_required';
-            const gatePhaseNum: number = (event as any).phaseNum ?? 0;
-            if (gatePhaseNum > 0) setCurrentPhaseNum(gatePhaseNum);
+            // NÃO atualizar currentPhaseNum aqui:
+            //   phase_complete → athena já o atualizou (fase que acabou de correr)
+            //   hitl_required  → phaseNum é da fase que VAI rodar, não da que completou
+            // Fonte autoritativa: apenas eventos 'athena' (disparam APÓS a fase completar)
             // phase_complete: mostrar output do especialista como mensagem no chat
             if (interruptType === 'phase_complete' && (event as any).output) {
               setMessages(prev => [...prev, {

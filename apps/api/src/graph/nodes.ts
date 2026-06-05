@@ -118,8 +118,14 @@ export async function phaseLoopNode(
   onStep?.(`[KLIO] Iniciando fase ${phaseConfig.phaseNum}: ${phaseConfig.label}`);
 
   // ── Portão HITL antes da fase (se requerido) ──────────────────────────────
-  // passagem = totalmente autônomo — sem portões, sem intervenção humana.
-  if (phaseConfig.requiresHitlBefore && process.env.TEST_MODE !== "true" && state.vizMode !== "passagem") {
+  // etapa: fase_complete após cada fase já garante revisão — hitl_required seria gate duplo.
+  // passagem: totalmente autônomo — sem portões.
+  // passos: mantido para retrocompatibilidade.
+  const hitlRequiredActive = phaseConfig.requiresHitlBefore
+    && process.env.TEST_MODE !== "true"
+    && state.vizMode !== "passagem"
+    && state.vizMode !== "etapa";
+  if (hitlRequiredActive) {
     interrupt({
       interruptType: "hitl_required",
       agent:         "KLIO",

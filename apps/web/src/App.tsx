@@ -214,9 +214,13 @@ function App() {
     if (chat.loading) return false;
 
     // LangGraph interrupts — caminho principal (sem scan de mensagens)
-    if (chat.hitlGate?.interruptType === 'hitl_required') return true;
-    // etapa = confirmação por fase (analista aprova eventos + confirma/redireciona output)
-    // passos = legado (mantido como alias de etapa no backend)
+    //
+    // hitl_required: EventsPanel "▶ Continuar" é o control primário.
+    //   HitlDecisionCard NÃO aparece — o analista revisa eventos e clica ▶ Continuar.
+    //
+    // phase_complete: HitlDecisionCard é o control primário (Confirmar/Redirecionar).
+    //   EventsPanel mostra eventos propostos para aprovação, mas sem "▶ Continuar".
+    if (chat.hitlGate?.interruptType === 'hitl_required') return false;
     if (chat.hitlGate?.interruptType === 'phase_complete') return vizMode === 'etapa' || vizMode === 'passos';
 
     // Legado: scan da última mensagem de assistente. Limitado à última mensagem
