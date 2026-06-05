@@ -93,9 +93,10 @@ export async function phaseLoopNode(
   state:  OlympusState,
   config: RunnableConfig,
 ): Promise<Partial<OlympusState>> {
-  const onStep  = config?.configurable?.onStep  as ((msg: string) => void) | undefined;
-  const onToken = config?.configurable?.onToken as ((delta: string) => void) | undefined;
-  const onAgent = config?.configurable?.onAgent as ((name: string) => void) | undefined;
+  const onStep   = config?.configurable?.onStep   as ((msg: string) => void) | undefined;
+  const onToken  = config?.configurable?.onToken  as ((delta: string) => void) | undefined;
+  const onAgent  = config?.configurable?.onAgent  as ((name: string) => void) | undefined;
+  const onAthena = config?.configurable?.onAthena as ((data: { verdict: string; phaseNum: number; label: string; usedLlm: boolean }) => void) | undefined;
 
   const methodology  = state.methodology ?? "grumbach";
   // loadPhaseConfigs lê do banco (com cache 5min) — lança erro descritivo se
@@ -243,6 +244,9 @@ export async function phaseLoopNode(
     phaseConfig.label,
   );
   onStep?.(`[ATHENA] Veredicto: ${athenaVerdict.verdict} (LLM: ${athenaVerdict.usedLLM})`);
+  // Emitir veredicto ATHENA via canal dedicado — persiste no chat como mensagem ATHENA.
+  // onStep é efémero (aparece só no AgentWorking durante loading); onAthena é permanente.
+  onAthena?.({ verdict: athenaVerdict.verdict, phaseNum: phaseConfig.phaseNum, label: phaseConfig.label, usedLlm: athenaVerdict.usedLLM });
 
   // ── Summary determinístico ────────────────────────────────────────────────
   const summary = buildPhaseSummary(

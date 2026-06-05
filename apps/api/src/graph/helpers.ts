@@ -142,6 +142,9 @@ export async function buildAnchorCtx(
         eq(projectEvents.status, "approved"),
       );
 
+  // Limitar a 20 eventos aprovados — acima disso o anchorContext infla o system
+  // prompt de KLIO além do necessário e contribui para OOM nas fases tardias.
+  // Grumbach recomenda 10-15 FPFs finais; 20 cobre com folga qualquer metodologia.
   const approvedEvents = await db
     .select({
       id:               projectEvents.id,
@@ -151,7 +154,8 @@ export async function buildAnchorCtx(
       sourceEvaluation: projectEvents.sourceEvaluation,
     })
     .from(projectEvents)
-    .where(whereClause);
+    .where(whereClause)
+    .limit(20);
 
   if (approvedEvents.length === 0) return "";
 

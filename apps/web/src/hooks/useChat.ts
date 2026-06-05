@@ -80,7 +80,8 @@ export function useChat({
     tokenBufferRef.current = '';
     setStreamingText('');
     setStepLog([]);
-    setHitlGate(null); // limpa gate anterior
+    setProgressAgent(''); // reset agente anterior — evita mostrar "HERMES raciocinando" no início
+    setHitlGate(null);    // limpa gate anterior
     const res = await fetch(streamEndpoint, {
       method: 'POST',
       headers: reqHeaders,
@@ -120,6 +121,18 @@ export function useChat({
             setStreamingText('');
             setStepLog([]);
             onDone({ text: event.text, agentName: event.agentName, thinking: event.thinking || '', messageType: event.messageType || 'parcial' });
+          } else if (event.type === 'athena') {
+            // Veredicto ATHENA após cada fase — persiste no chat como mensagem AT
+            const verdict: string = (event as any).verdict ?? '';
+            const phaseNum: number = (event as any).phaseNum ?? 0;
+            const label: string = (event as any).label ?? '';
+            const emoji = verdict === 'APROVADO' ? '✅' : verdict === 'RESSALVAS' ? '⚠️' : '❌';
+            setMessages(prev => [...prev, {
+              role:        'assistant' as const,
+              agentName:   'ATHENA',
+              messageType: 'athena',
+              content:     `${emoji} **Fase ${phaseNum} — ${label}** · ATHENA: **${verdict}**`,
+            }]);
           } else if (event.type === 'hitl_gate') {
             const interruptType = (event as any).interruptType || 'hitl_required';
             // phase_complete: mostrar output do especialista como mensagem no chat

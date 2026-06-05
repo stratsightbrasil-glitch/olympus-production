@@ -64,9 +64,10 @@ export async function getOlympusGraph() {
 export function graphConfig(
   projectId: string,
   callbacks?: {
-    onStep?:  (msg: string) => void;
-    onToken?: (delta: string) => void;
-    onAgent?: (name: string) => void;
+    onStep?:   (msg: string) => void;
+    onToken?:  (delta: string) => void;
+    onAgent?:  (name: string) => void;
+    onAthena?: (data: { verdict: string; phaseNum: number; label: string; usedLlm: boolean }) => void;
   },
 ) {
   return {
@@ -75,6 +76,7 @@ export function graphConfig(
       onStep:    callbacks?.onStep,
       onToken:   callbacks?.onToken,
       onAgent:   callbacks?.onAgent,
+      onAthena:  callbacks?.onAthena,
     },
   };
 }

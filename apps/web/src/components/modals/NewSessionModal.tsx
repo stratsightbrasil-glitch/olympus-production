@@ -21,13 +21,13 @@ const ACCEPTED_TYPES = '.txt,.md,.csv,.json,.rtf,.pdf,.doc,.docx,.xlsx,.xls,.png
 
 const EMPTY_SCOPE: ScopeForm = { tema: '', horizonte: '', elaborador: '', cliente: '', questaoEstrategica: '', mudancaIdentificada: '', instrucoes: '' };
 
-// Sprint 21 — motor LangGraph único: os 4 modos diferem pelo nível de supervisão
-// do analista, não pelo motor (todos usam /stream/graph internamente).
+// Três níveis de análise — o modo "Passo a Passo" foi removido porque se confundia
+// com "Etapa Completa + portões HITL" (que já pausam nas etapas obrigatórias).
+// A supervisão granular permanece via portões HITL configurados por metodologia.
 const VIZ_MODES = [
-  { id: 'passos',   label: '👣 Passo a Passo',        desc: 'Pausa após cada fase — analista revisa e confirma antes de avançar' },
-  { id: 'etapa',    label: '📋 Etapa Completa',        desc: 'KLIO entrega cada fase completa (Padrão). Portão HITL aguarda aprovação dos eventos antes de avançar.' },
-  { id: 'passagem', label: '⚡ Processo Completo',     desc: 'Todas as fases encadeadas de forma autônoma, sem interrupções' },
-  { id: 'thinking', label: '🧠 Raciocínio Estendido',  desc: 'Raciocínio profundo antes de cada resposta — maior profundidade analítica' },
+  { id: 'etapa',    label: '📋 Etapa Completa',       desc: 'KLIO entrega cada fase completa. Portões HITL obrigatórios pausam para aprovação humana.' },
+  { id: 'passagem', label: '⚡ Processo Completo',    desc: 'Todas as fases encadeadas de forma autônoma. Sem interrupções.' },
+  { id: 'thinking', label: '🧠 Raciocínio Estendido', desc: 'Raciocínio profundo antes de cada resposta — maior profundidade analítica.' },
 ];
 
 export function NewSessionModal({ onClose, onStart, cenariosMethodologies, teams, token, defaultMetodologia, defaultVizMode }: Props) {

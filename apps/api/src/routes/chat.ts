@@ -176,9 +176,10 @@ chatRoutes.post('/stream/graph', async (c) => {
 
       const graph  = await getOlympusGraph();
       const config = graphConfig(projectId, {
-        onStep:  (msg)   => write({ type: 'step',  text: msg }),
-        onToken: (delta) => write({ type: 'token', text: delta }),
-        onAgent: (name)  => write({ type: 'agent', agent: name }),
+        onStep:   (msg)  => write({ type: 'step',   text: msg }),
+        onToken:  (delta)=> write({ type: 'token',  text: delta }),
+        onAgent:  (name) => write({ type: 'agent',  agent: name }),
+        onAthena: (data) => write({ type: 'athena', ...data }),
       });
 
       const initialState = {
