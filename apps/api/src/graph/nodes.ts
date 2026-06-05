@@ -246,9 +246,6 @@ export async function phaseLoopNode(
     phaseConfig.label,
   );
   onStep?.(`[ATHENA] Veredicto: ${athenaVerdict.verdict} (LLM: ${athenaVerdict.usedLLM})`);
-  // Emitir veredicto ATHENA via canal dedicado — persiste no chat como mensagem ATHENA.
-  // onStep é efémero (aparece só no AgentWorking durante loading); onAthena é permanente.
-  onAthena?.({ verdict: athenaVerdict.verdict, phaseNum: phaseConfig.phaseNum, label: phaseConfig.label, usedLlm: athenaVerdict.usedLLM });
 
   // ── Summary determinístico ────────────────────────────────────────────────
   const summary = buildPhaseSummary(
@@ -298,10 +295,12 @@ export async function phaseLoopNode(
       + `Consulte o painel de eventos para revisar os FPFs e dados coletados.`
     : rawOutput;
 
-  // Emitir output da fase como evento permanente no chat (independente do vizMode).
+  // Emitir output KLIO ANTES de ATHENA: o analista vê o trabalho da fase antes do veredicto.
   // Em etapa/passagem mode não há interrupt phase_complete, então o streaming bubble
   // desaparece quando a fase termina sem deixar mensagem permanente (Bug B3).
   onPhaseOutput?.({ text: phaseOutput, phaseNum: phaseConfig.phaseNum, label: phaseConfig.label });
+  // Veredicto ATHENA após o output — persiste no chat como mensagem permanente AT.
+  onAthena?.({ verdict: athenaVerdict.verdict, phaseNum: phaseConfig.phaseNum, label: phaseConfig.label, usedLlm: athenaVerdict.usedLLM });
 
   // ── Modo passos: interromper para revisão do analista ────────────────────
   if (state.vizMode === "passos" && process.env.TEST_MODE !== "true") {

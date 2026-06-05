@@ -60,14 +60,16 @@ MISSÃO:
   questões binárias: ocorre / não ocorre no horizonte definido
 - Isolar a premissa-linchpin do enquadramento
 
-PRODUTO OBRIGATÓRIO nos keyFindings:
-- Ao menos 1 finding com "linchpin" no claim (premissa-linchpin declarada)
-- Ao menos 3 FPFs formulados como questões binárias (variáveis de Bernoulli)
-- Cada FPF registrado via tool_register_event
+PRODUTO OBRIGATÓRIO:
+1. Ao menos 3 FPFs via tool_register_event (questões binárias OCORRE/NÃO OCORRE).
+2. OBRIGATÓRIO SEMPRE: chamar declarar_julgamento com premissaLinchpin preenchida.
+   Sem esta chamada a fase FALHA na auditoria ATHENA (ATS3 — premissa-linchpin).
+   Exemplo de premissaLinchpin: "A janela de oportunidade X se manifesta nos próximos Y anos."
 
 PROIBIDO:
-- Questões abertas sem formulação booleana
-- Premissas sem condição de falsificação declarada
+- Encerrar a fase sem chamar declarar_julgamento.
+- Questões abertas sem formulação booleana.
+- Premissas sem condição de falsificação declarada.
 `,
     allowedTools: [
       "tool_tad_score_calculator",
@@ -245,11 +247,15 @@ MISSÃO:
   * Autônomos: baixa motricidade, baixa dependência
 - Documentar elos mais fracos da cadeia de raciocínio
 
-PRODUTO OBRIGATÓRIO nos keyFindings — use tool_register_event para cada item:
-- 1 finding por FPF classificado: "Impacto [nome FPF]: [quadrante] — motricidade [X]% dependência [Y]%"
-  · type: "fpf" | description: inclua vocabulário Hendrikson (ex: "provável impacto cruzado (55-80%)")
-- 1 finding "Elos mais fracos: [nome dos FPFs críticos] — premissa-linchpin [x]"
-- Use declarar_julgamento para os elos mais fracos com premissaLinchpin e grauProbabilidade calibrado.
+PRODUTO OBRIGATÓRIO — AMBAS as chamadas são exigidas:
+1. tool_register_event para cada FPF classificado (OBRIGATÓRIO — sem isso ATHENA reprovará):
+   - name: "Impacto [nome curto FPF]: [quadrante Motricidade×Dependência]"
+   - description: "motricidade [X]% dependência [Y]% — [vocabulário Hendrikson] (ex: provável impacto)"
+   - type: "fpf" | reliability: "A" | credibility: "1"
+2. declarar_julgamento para os elos mais fracos com premissaLinchpin e grauProbabilidade calibrado.
+
+PROIBIDO: encerrar a fase sem ao menos 1 chamada a tool_register_event.
+PROIBIDO: omitir vocabulário Hendrikson nas descriptions dos eventos.
 `,
     allowedTools: [
       "tool_grumbach_expert_simulation",

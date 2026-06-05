@@ -87,7 +87,10 @@ export function useChat({
     setStepLog([]);
     setProgressAgent(''); // reset agente anterior — evita mostrar "HERMES raciocinando" no início
     setHitlGate(null);    // limpa gate anterior
-    setCurrentPhaseNum(0); // reset fase — será atualizado pelos eventos 'athena'/'hitl_gate'
+    // Reset currentPhaseNum apenas para análises novas — em resumes preservar o número
+    // da última fase para não causar salto do counter para a fase errada via message scan.
+    const isResuming = (payload as any).isResuming;
+    if (!isResuming) setCurrentPhaseNum(0);
     const res = await fetch(streamEndpoint, {
       method: 'POST',
       headers: reqHeaders,
