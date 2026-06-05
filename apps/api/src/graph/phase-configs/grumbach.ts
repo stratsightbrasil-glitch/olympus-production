@@ -411,15 +411,18 @@ MISSÃO:
   Formato: "SE [condição específica] > [limiar] ENTÃO [cenário se aproxima]"
   Exemplo: "SE gastos em P&D / PIB > 2,5% ENTÃO Cena C +20%"
 
-PRODUTO OBRIGATÓRIO nos keyFindings:
-- Medidas pré-ativas: ao menos 5 findings (mp_01 a mp_N)
-- Medidas proativas: ao menos 3 findings (mpro_01 a mpro_N)
-- Ao menos 3 signposts com limiar quantificável
-- Indicações com fonte rastreável
+PRODUTO OBRIGATÓRIO — USE tool_register_event para CADA item abaixo:
+1. Medidas pré-ativas (ao menos 5): name "mp_01 — [ação]", description com análise comparativa
+2. Medidas proativas (ao menos 3): name "mpro_01 — [ação]", description com FPF alvo
+3. Signposts (ao menos 3) — USE tool_register_event com o padrão EXATO no nome:
+   - name: "SE [indicador] > [limiar] ENTÃO Cena [X] +[N]%"
+   - description: URL rastreável + frequência de revisão
+   - type: "fpf" | reliability: "A" | credibility: "1"
 
 PROIBIDO:
-- Signposts sem limiar específico ("monitorar a situação" é inválido)
-- Indicações sem vínculo a cena ou FPF específico
+- Signposts apenas no texto narrativo sem chamada a tool_register_event.
+- Signposts sem limiar específico e quantificável.
+- Indicações sem vínculo a cena ou FPF específico.
 `,
     allowedTools: [
       "registrar_sinal",

@@ -21,7 +21,7 @@ import {
   projectEvents,
   projects,
 } from "@olympus/db";
-import { eq, asc, gte, and, sql } from "drizzle-orm";
+import { eq, asc, gte, and, sql, inArray } from "drizzle-orm";
 import { athenaAuditPhase }           from "./athena-validator";
 import type { KeyFinding }            from "./athena-validator";
 import { loadPhaseContext, buildPhaseSummary, loadPhaseConfigs } from "./phase-context";
@@ -234,6 +234,25 @@ export async function phaseLoopNode(
     tadScore:    (e.sourceEvaluation as any)?.alphanumericScore as string | undefined,
     source:      (e.sourceEvaluation as any)?.sourceType as string | undefined,
   }));
+
+  // Auto-aprovação de eventos pós-HITL: eventos criados a partir da fase HITL (inclusive)
+  // são artefatos analíticos do KLIO (P(i), impactos, cenários, narrativas, signposts),
+  // não FPFs para o analista revisar. Aprová-los automaticamente:
+  //  a) os inclui no buildAnchorCtx de fases seguintes (contexto entre fases)
+  //  b) evita que o analista receba dezenas de aprovações ao final da análise
+  // Fases pré-HITL (ex: grumbach_p1, _p2) ficam como 'proposed' para revisão no gate.
+  const hitlPhaseIdx = phaseConfigs.findIndex(p => p.requiresHitlBefore);
+  const isPostHitlPhase = hitlPhaseIdx >= 0 && currentIndex >= hitlPhaseIdx;
+  if (isPostHitlPhase && recentEvents.length > 0) {
+    const proposedIds = recentEvents
+      .filter(e => e.status === 'proposed')
+      .map(e => e.id);
+    if (proposedIds.length > 0) {
+      await db.update(projectEvents)
+        .set({ status: 'approved' as any })
+        .where(inArray(projectEvents.id, proposedIds));
+    }
+  }
 
   const toolCallIds = recentEvents.map(e => e.id);
 
