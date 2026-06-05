@@ -227,7 +227,8 @@ chatRoutes.post('/stream/graph', async (c) => {
 
       stopHb();
       if (!wasInterrupted) {
-        await write({ type: 'agent', agent: finalAgent });
+        // Não emitir 'agent' antes de 'done' — causava flash de HERMES no bubble
+        // antes de o agente correto aparecer. agentName no 'done' é suficiente.
         await write({ type: 'done', text: finalOutput, agentName: finalAgent, messageType: finalMsgType });
       }
 

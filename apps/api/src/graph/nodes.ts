@@ -224,7 +224,7 @@ export async function phaseLoopNode(
   const rawOutput = await agent.run(phaseInput, agentCtx, state.vizMode);
   onStep?.(`[KLIO] Fase ${phaseConfig.phaseNum} concluída — extraindo artefatos...`);
 
-  // ── Extrair keyFindings dos eventos criados nesta fase ────────────────────
+  // ── Eventos criados por KLIO nesta fase ──────────────────────────────────
   const recentEvents = await db.query.projectEvents.findMany({
     where:   and(
       eq(projectEvents.projectId, state.projectId),
@@ -234,20 +234,25 @@ export async function phaseLoopNode(
     limit:   100,
   });
 
-  const keyFindings: KeyFinding[] = recentEvents.map(e => ({
-    claim:       e.name ?? "evento sem descrição",
-    description: e.description ?? undefined,  // inclui qualificadores Hendrikson, P(i) etc. para ATHENA
-    factStatus:  ((e.sourceEvaluation as any)?.factStatus ?? "INDICIO") as KeyFinding["factStatus"],
-    tadScore:    (e.sourceEvaluation as any)?.alphanumericScore as string | undefined,
-    source:      (e.sourceEvaluation as any)?.sourceType as string | undefined,
-  }));
+  // ── Output legível para o analista ───────────────────────────────────────
+  // Detecta rawOutput mínimo ("KLIO ·", vazio, etc.) e substitui por resumo informativo.
+  const isMinimalOutput = !rawOutput
+    || rawOutput.trim() === ''
+    || rawOutput.trim() === 'Análise concluída.'
+    || /^\*\*KLIO\*\*\s*·?\s*$/.test(rawOutput.trim());
 
-  // Processo Completo (passagem): auto-aprova todos os eventos sem intervenção humana.
-  // etapa/passos: o analista revê e aprova eventos no EventsPanel antes de confirmar a fase.
+  const phaseOutput = isMinimalOutput
+    ? `**KLIO** · Fase ${phaseConfig.phaseNum} — ${phaseConfig.label} concluída.\n\n`
+      + `${recentEvents.length} artefato(s) proposto(s) nesta fase. `
+      + `Revise e aprove os eventos no painel lateral.`
+    : rawOutput;
+
+  // Emitir output de KLIO como mensagem permanente (Bug B3 fix).
+  onPhaseOutput?.({ text: phaseOutput, phaseNum: phaseConfig.phaseNum, label: phaseConfig.label });
+
+  // ── Processo Completo: auto-aprovação imediata (sem intervenção humana) ──
   if (state.vizMode === "passagem" && recentEvents.length > 0) {
-    const proposedIds = recentEvents
-      .filter(e => e.status === 'proposed')
-      .map(e => e.id);
+    const proposedIds = recentEvents.filter(e => e.status === 'proposed').map(e => e.id);
     if (proposedIds.length > 0) {
       await db.update(projectEvents)
         .set({ status: 'approved' as any })
@@ -255,10 +260,45 @@ export async function phaseLoopNode(
     }
   }
 
-  const toolCallIds = recentEvents.map(e => e.id);
+  // ── Etapa Completa / Passos: interrupt ANTES de ATHENA ───────────────────
+  // Fluxo correto: KLIO propõe → usuário aprova/rejeita → ATHENA audita aprovados.
+  // O interrupt dispara aqui; ao retomar, ATHENA roda sobre eventos com status='approved'.
+  if ((state.vizMode === "etapa" || state.vizMode === "passos") && process.env.TEST_MODE !== "true") {
+    interrupt({
+      interruptType: "phase_complete",
+      agent:         "KLIO",
+      phaseSlug:     phaseConfig.phaseSlug,
+      phaseNum:      phaseConfig.phaseNum,
+      message:       `Fase ${phaseConfig.phaseNum} — ${phaseConfig.label} concluída. `
+                   + `Aprove os eventos no painel lateral e clique em "Confirmar e Avançar" `
+                   + `para ir à próxima fase, ou "Redirecionar" para ajustar o foco.`,
+    });
+    // Execução continua aqui após o usuário clicar "Confirmar e Avançar".
+    // Os eventos aprovados já estão com status='approved' no banco.
+  }
 
-  // ── ATHENA: auditoria determinística ─────────────────────────────────────
+  // ── ATHENA: auditoria determinística sobre eventos APROVADOS ─────────────
+  // Em etapa/passos: roda após aprovação humana (eventos já filtrados pelo analista).
+  // Em passagem: roda após auto-aprovação.
   onStep?.(`[ATHENA] Auditando fase ${phaseConfig.phaseNum}...`);
+  const approvedEvents = await db.query.projectEvents.findMany({
+    where: and(
+      eq(projectEvents.projectId, state.projectId),
+      eq(projectEvents.status, 'approved' as any),
+      gte(projectEvents.createdAt, phaseStartedAt),
+    ),
+    orderBy: [asc(projectEvents.createdAt)],
+    limit: 100,
+  });
+  const keyFindings: KeyFinding[] = approvedEvents.map(e => ({
+    claim:       e.name ?? "evento sem descrição",
+    description: e.description ?? undefined,
+    factStatus:  ((e.sourceEvaluation as any)?.factStatus ?? "INDICIO") as KeyFinding["factStatus"],
+    tadScore:    (e.sourceEvaluation as any)?.alphanumericScore as string | undefined,
+    source:      (e.sourceEvaluation as any)?.sourceType as string | undefined,
+  }));
+  const toolCallIds = approvedEvents.map(e => e.id);
+
   const athenaVerdict = await athenaAuditPhase(
     keyFindings,
     phaseConfig.nodeSlug,
@@ -266,8 +306,10 @@ export async function phaseLoopNode(
     phaseConfig.label,
   );
   onStep?.(`[ATHENA] Veredicto: ${athenaVerdict.verdict} (LLM: ${athenaVerdict.usedLLM})`);
+  // ATHENA emite APÓS o interrupt — o analista vê o veredicto ao retomar.
+  onAthena?.({ verdict: athenaVerdict.verdict, phaseNum: phaseConfig.phaseNum, label: phaseConfig.label, usedLlm: athenaVerdict.usedLLM });
 
-  // ── Summary determinístico ────────────────────────────────────────────────
+  // ── Summary + persistência do phase_output ────────────────────────────────
   const summary = buildPhaseSummary(
     phaseConfig.label,
     phaseConfig.phaseNum,
@@ -275,8 +317,6 @@ export async function phaseLoopNode(
     toolCallIds,
     athenaVerdict.verdict,
   );
-
-  // ── Persistir phase_output (upsert) ───────────────────────────────────────
   onStep?.(`[phaseLoopNode] Persistindo phase_output: ${phaseConfig.phaseSlug} (${keyFindings.length} findings, ATHENA: ${athenaVerdict.verdict})`);
   await db.insert(phaseOutputs)
     .values({
@@ -303,53 +343,13 @@ export async function phaseLoopNode(
         athenaUsedLlm: athenaVerdict.usedLLM,
       },
     });
-
   onStep?.(`[phaseLoopNode] phase_output persistido ✅ — ${phaseConfig.phaseSlug}`);
-
-  // ── Garantir output legível para o analista ───────────────────────────────
-  // Quando KLIO produz apenas tool calls (sem texto narrativo), o output fica
-  // vazio ou "Análise concluída." — substituir por resumo informativo.
-  const phaseOutput = (!rawOutput || rawOutput.trim() === '' || rawOutput.trim() === 'Análise concluída.')
-    ? `**KLIO** · \n\nFase ${phaseConfig.phaseNum} — ${phaseConfig.label} concluída.\n\n`
-      + `${keyFindings.length} artefato(s) registrado(s) nesta fase. `
-      + `Consulte o painel de eventos para revisar os FPFs e dados coletados.`
-    : rawOutput;
-
-  // Emitir output KLIO ANTES de ATHENA: o analista vê o trabalho da fase antes do veredicto.
-  // Em etapa/passagem mode não há interrupt phase_complete, então o streaming bubble
-  // desaparece quando a fase termina sem deixar mensagem permanente (Bug B3).
-  onPhaseOutput?.({ text: phaseOutput, phaseNum: phaseConfig.phaseNum, label: phaseConfig.label });
-  // Veredicto ATHENA após o output — persiste no chat como mensagem permanente AT.
-  onAthena?.({ verdict: athenaVerdict.verdict, phaseNum: phaseConfig.phaseNum, label: phaseConfig.label, usedLlm: athenaVerdict.usedLLM });
-
-  // Etapa Completa (etapa) e Passos: interromper após cada fase para revisão do analista.
-  // O analista aprova eventos no EventsPanel e confirma/redireciona no HitlDecisionCard.
-  // Processo Completo (passagem): sem interrupção — análise corre até o relatório final.
-  if ((state.vizMode === "etapa" || state.vizMode === "passos") && process.env.TEST_MODE !== "true") {
-    const verdictDisplay = athenaVerdict.verdict === "APROVADO"
-      ? "✅ Rigor analítico aprovado"
-      : athenaVerdict.verdict === "RESSALVAS"
-      ? "⚠️ Aprovado com ressalvas"
-      : "❌ Requer revisão";
-    interrupt({
-      interruptType: "phase_complete",
-      agent:         "KLIO",
-      phaseSlug:     phaseConfig.phaseSlug,
-      phaseNum:      phaseConfig.phaseNum,
-      verdict:       athenaVerdict.verdict,
-      message:       `Fase ${phaseConfig.phaseNum} — ${phaseConfig.label} concluída. `
-                   + `${verdictDisplay} por ATHENA. `
-                   + `Aprove os eventos no painel lateral e clique em "Confirmar e Avançar" `
-                   + `para ir à próxima fase, ou "Redirecionar" para ajustar o foco.`,
-      // output omitido: já foi enviado via onPhaseOutput antes do interrupt
-    });
-  }
 
   // ── Avançar cursor ────────────────────────────────────────────────────────
   return {
     currentPhaseIndex: currentIndex + 1,
-    totalPhases:       phaseConfigs.length,    // atualiza total para o roteador
-    currentNodeSlug:   phaseConfig.phaseSlug,  // compat SSE chat.ts
+    totalPhases:       phaseConfigs.length,
+    currentNodeSlug:   phaseConfig.phaseSlug,
     lastOutput:        phaseOutput,
     agentName:         "KLIO",
     messageType:       "parcial",

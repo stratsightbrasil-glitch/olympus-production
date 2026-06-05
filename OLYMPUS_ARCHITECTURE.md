@@ -131,11 +131,11 @@
 <!-- AUTO:metodologias:START -->
 | Metodologia | Orquestrador | Fases | Categoria | Agentes |
 |-------------|-------------|-------|-----------|---------|
+| SIEx: Conhecimento Estimativa EB | HERMES | 7 | Produção do Conhecimento |  |
 | Grumbach: Produção de Cenários | HERMES | 9 | Cenários Prospectivos |  |
 | Godet: Escola Estrutural | HERMES | 7 | Cenários Prospectivos |  |
-| GBN — Global Business Network (Schwartz) | HERMES | ? | Cenários Prospectivos |  |
-| SIEx: Conhecimento Estimativa EB | HERMES | 7 | Produção do Conhecimento |  |
 | SIPLEx: Sistema de Planejamento do Exército | HERMES | 7 | Planejamento Estratégico |  |
+| GBN — Global Business Network (Schwartz) | HERMES | ? | Cenários Prospectivos |  |
 | SPED/PESD: Planejamento Estratégico Setorial de Defesa | HERMES | ? | Planejamento Estratégico |  |
 | CEEEx: Cenários Prospectivos do Exército | HERMES | ? | Cenários Prospectivos |  |
 | IPEA/Buarque — Metodologia de Cenários | HERMES | ? | Cenários Prospectivos |  |
@@ -152,11 +152,11 @@
 <!-- AUTO:tecnicas:START -->
 | # | Nome | Descrição |
 |---|------|-----------|
-| 1 | Análise SWOT | Avalia forças, fraquezas, oportunidades e ameaças de um projeto, decisão ou estr |
-| 2 | Cinco Porquês | Identifica a causa-raiz de um problema perguntando "por quê?" cinco vezes, quebr |
-| 3 | Advocacia do Diabo | Um analista assume o papel de crítico e constrói o melhor argumento possível con |
-| 4 | Análise Pré-Mortem | Simula mentalmente o fracasso de um plano ou análise e trabalha retrospectivamen |
-| 5 | Análise E-Se | Assume que um evento (positivo ou negativo) já ocorreu e explora como poderia te |
+| 1 | Análise Pré-Mortem | Simula mentalmente o fracasso de um plano ou análise e trabalha retrospectivamen |
+| 2 | Análise E-Se | Assume que um evento (positivo ou negativo) já ocorreu e explora como poderia te |
+| 3 | Análise SWOT | Avalia forças, fraquezas, oportunidades e ameaças de um projeto, decisão ou estr |
+| 4 | Cinco Porquês | Identifica a causa-raiz de um problema perguntando "por quê?" cinco vezes, quebr |
+| 5 | Advocacia do Diabo | Um analista assume o papel de crítico e constrói o melhor argumento possível con |
 | 6 | Verificação de Qualidade da Informação | Avalia a completude, precisão, credibilidade e confiabilidade das fontes de info |
 | 7 | PMI — Prós, Contras e Pontos Interessantes | Técnica rápida que avalia os aspectos positivos, negativos e interessantes de um |
 | 8 | Adversário Substituto | Modela o comportamento de atores externos (adversários, competidores, neutros) r |

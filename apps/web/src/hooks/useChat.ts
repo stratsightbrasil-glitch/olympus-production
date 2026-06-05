@@ -361,6 +361,7 @@ export function useChat({
    */
   const resumeGraph = async (userInstruction?: string) => {
     if (!hitlGate || loading) return;
+    const savedGate = hitlGate; // preserva para restaurar em caso de erro transitório
     setHitlGate(null);
     setLoading(true);
     try {
@@ -371,8 +372,6 @@ export function useChat({
           metodologia: projeto.metodologia,
           vizMode,
           isResuming:  true,
-          // Se analista forneceu instrução, incluir como última mensagem
-          // para que chat.ts extraia como userInputStr e passe no Command({resume})
           messages: userInstruction
             ? [{ role: 'user', content: userInstruction }]
             : [],
@@ -385,7 +384,19 @@ export function useChat({
       );
     } catch (error: any) {
       console.error('Erro ao retomar grafo:', error);
-      setMessages(prev => [...prev, { role: 'assistant', content: `⚠️ Erro ao retomar análise: ${error.message}` }]);
+      // Erros transitórios (503/sobrecarga): restaura o gate para que o analista
+      // possa clicar "Confirmar" novamente sem reiniciar a análise do zero.
+      const isTransient = error.message?.includes('sobrecarregado')
+        || error.message?.includes('tente retomar')
+        || error.message?.includes('rate limit')
+        || error.message?.includes('503');
+      if (isTransient && savedGate) setHitlGate(savedGate);
+      setMessages(prev => [...prev, {
+        role: 'assistant' as const,
+        content: `⚠️ ${error.message}\n\n${isTransient
+          ? '→ **Clique em "Confirmar e Avançar"** para retomar quando o modelo estiver disponível.'
+          : 'Use "Confirmar e Avançar" para tentar retomar, ou crie uma nova sessão.'}`,
+      }]);
     } finally {
       setLoading(false);
       setStreamingText('');
