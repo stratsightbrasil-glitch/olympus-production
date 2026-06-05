@@ -34,10 +34,12 @@ export function NewSessionModal({ onClose, onStart, cenariosMethodologies, teams
   const [scopeForm, setScopeForm] = useState<ScopeForm>(EMPTY_SCOPE);
   const [scopeFiles, setScopeFiles] = useState<{ name: string; text: string }[]>([]);
   const [scopeExtracting, setScopeExtracting] = useState(false);
+  const [scopeImporting, setScopeImporting] = useState(false);
   const [selectedTeamId, setSelectedTeamId] = useState('');
   const [metodologia, setMetodologia] = useState(defaultMetodologia);
   const [vizMode, setVizMode] = useState(defaultVizMode);
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const fileInputRef    = useRef<HTMLInputElement>(null);
+  const scopeFileRef    = useRef<HTMLInputElement>(null);
 
   const authHeader = { 'Authorization': `Bearer ${token}` };
 
@@ -67,6 +69,52 @@ export function NewSessionModal({ onClose, onStart, cenariosMethodologies, teams
   const set = (field: keyof ScopeForm) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
     setScopeForm(f => ({ ...f, [field]: e.target.value }));
 
+  // Importar escopo: carrega arquivo, extrai texto via /extract, depois
+  // chama /sessions/parse-scope para auto-preencher os campos do formulário.
+  const handleScopeImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !token) return;
+    setScopeImporting(true);
+    try {
+      // 1. Extrair texto do arquivo
+      const fd = new FormData();
+      fd.append('files', file);
+      const extractRes = await fetch('/api/v1/extract', { method: 'POST', headers: { Authorization: `Bearer ${token}` }, body: fd });
+      if (!extractRes.ok) throw new Error(`Extração falhou: HTTP ${extractRes.status}`);
+      const extractData = await extractRes.json() as any;
+      const fileText: string = extractData.files?.[0]?.text || '';
+      if (!fileText.trim()) throw new Error('Não foi possível extrair texto do arquivo.');
+
+      // 2. Parsear campos de escopo via LLM
+      const parseRes = await fetch('/api/v1/sessions/parse-scope', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ text: fileText }),
+      });
+      if (!parseRes.ok) {
+        const err = await parseRes.json().catch(() => ({})) as any;
+        throw new Error(err.error || `Parse falhou: HTTP ${parseRes.status}`);
+      }
+      const fields = await parseRes.json() as any;
+
+      // 3. Auto-preencher apenas campos não-vazios
+      setScopeForm(f => ({
+        tema:                fields.tema                || f.tema,
+        horizonte:           fields.horizonte           || f.horizonte,
+        elaborador:          fields.elaborador          || f.elaborador,
+        cliente:             fields.cliente             || f.cliente,
+        questaoEstrategica:  fields.questaoEstrategica  || f.questaoEstrategica,
+        mudancaIdentificada: fields.mudancaIdentificada || f.mudancaIdentificada,
+        instrucoes:          f.instrucoes,
+      }));
+    } catch (err: any) {
+      alert('Erro ao importar escopo: ' + err.message);
+    } finally {
+      setScopeImporting(false);
+      if (scopeFileRef.current) scopeFileRef.current.value = '';
+    }
+  };
+
   return (
     <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[92vh] flex flex-col">
@@ -82,6 +130,20 @@ export function NewSessionModal({ onClose, onStart, cenariosMethodologies, teams
         <div className="overflow-y-auto flex-1 p-6 space-y-4">
           <div className="bg-stratsight-light border border-stratsight-medium/30 rounded-xl p-4 text-sm text-stratsight-dark leading-relaxed">
             <strong>Como preencher:</strong> Informe ao menos o <em>tema/objeto</em> e o sistema sugere as demais opções. Você pode carregar documentos de contexto ou deixar todos os campos em branco e deixar o HERMES conduzir a sessão.
+          </div>
+
+          {/* Importar escopo via arquivo */}
+          <div className="flex items-center gap-2">
+            <input ref={scopeFileRef} type="file" accept=".pdf,.doc,.docx,.txt,.md" className="hidden" onChange={handleScopeImport} />
+            <button
+              onClick={() => scopeFileRef.current?.click()}
+              disabled={scopeImporting}
+              className="flex items-center gap-2 px-4 py-2 bg-stratsight-dark text-white text-xs font-bold rounded-xl hover:bg-stratsight-medium transition-colors shadow disabled:opacity-50"
+              title="Carregue um arquivo com os dados de escopo — os campos serão preenchidos automaticamente"
+            >
+              {scopeImporting ? '⏳ Extraindo campos...' : '📋 Importar escopo do arquivo'}
+            </button>
+            <span className="text-[10px] text-gray-400">PDF, DOCX, TXT · auto-preenche os campos abaixo</span>
           </div>
 
           <div className="grid grid-cols-1 gap-4">

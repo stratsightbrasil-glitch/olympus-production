@@ -14,7 +14,7 @@ import { AgentContext, Tool } from "./types";
 //   GROQ_API_KEY, GROQ_MODEL (default: llama-3.3-70b-versatile)
 // LLM_PROVIDER=ollama                → Ollama local via API OpenAI-compatível
 //   OLLAMA_BASE_URL (default: http://ollama:11434/v1), OLLAMA_MODEL
-function getModel(config?: { provider: string; model: string }) {
+export function getModel(config?: { provider: string; model: string }) {
   const provider = config?.provider || process.env.LLM_PROVIDER || 'anthropic';
 
   switch (provider) {

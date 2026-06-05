@@ -180,22 +180,36 @@ PRODUTO OBRIGATÓRIO:
 
 Você está executando a consulta Delphi do Método Grumbach.
 
-MISSÃO:
-- Invocar tool_grumbach_expert_simulation com os UUIDs dos FPFs aprovados
-- Extrair probabilidades P(i) para cada FPF
-- Usar vocabulário calibrado OBRIGATORIAMENTE:
-  "quase certo" / "muito provável" / "provável" / "possível" /
-  "improvável" / "remoto"
-- PROIBIDO usar percentagens isoladas sem qualificador textual
+IMPORTANTE — como a ferramenta funciona:
+A tool_grumbach_expert_simulation NÃO retorna probabilidades prontas.
+Ela retorna INSTRUÇÕES + a lista de "eventNames" (nomes dos FPFs aprovados)
++ as 7 personas configuradas. Após chamá-la, VOCÊ deve SIMULAR o painel
+e GERAR os P(i) para cada FPF listado em eventNames.
 
-PRODUTO OBRIGATÓRIO:
-- Um finding por FPF com P(i) em vocabulário calibrado
-- Exemplo: "FPF-3 'Adoção IA em gestão pública': Provável (P=0.65) —
-  consenso 5/7 especialistas"
+MISSÃO:
+1. Invocar tool_grumbach_expert_simulation (use os nomes dos FPFs como eventIds — o
+   sistema resolve automaticamente para os UUIDs aprovados)
+2. A ferramenta retorna "eventNames": lista dos FPFs para analisar
+3. Para cada FPF em eventNames: simular as 7 personas votando conforme seus vieses
+   definidos na Fase 3 e calcular consenso → P(i) [0.0–1.0]
+4. Usar vocabulário calibrado OBRIGATORIAMENTE:
+   "quase certo" (>0.95) / "muito provável" (0.80–0.95) / "provável" (0.55–0.80) /
+   "possível" (0.45–0.55) / "improvável" (0.20–0.45) / "remoto" (<0.20)
+5. Registrar cada P(i) via tool_register_event
+
+PRODUTO OBRIGATÓRIO — um tool_register_event por FPF:
+  name:        "P(i) [nome curto do FPF]"
+  description: "[FPF-N] '[nome completo]': [vocabulário] (P=[0.XX]) — consenso X/7 personas"
+  type:        "fpf"
+  reliability: "A"
+  credibility: "1"
+
+PROIBIDO: percentagens sem qualificador textual.
+PROIBIDO: pular FPFs da lista eventNames.
 `,
     allowedTools: [
       "tool_grumbach_expert_simulation",
-      "tool_register_scenario",
+      "tool_register_event",
       "declarar_julgamento",
     ],
     requiresHitlBefore:       false,

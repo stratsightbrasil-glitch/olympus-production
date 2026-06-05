@@ -3,6 +3,9 @@ import { db, projects, messages, phaseOutputs, projectEvents, projectScenarios }
 import { clearCheckpointSql } from '../graph/postgresSaver';
 import { eq, desc, asc, isNull, and, ilike, sql } from 'drizzle-orm';
 import { reloadCronJobs, updateCronJob, removeCronJob } from '../cron';
+import { getLLMConfig, getLLMTiers }   from './settings';
+import { generateText }                from 'ai';
+import { getModel }                    from '@olympus/core';
 
 const sessionsRoutes = new Hono();
 
@@ -183,6 +186,76 @@ sessionsRoutes.post('/:id/webhook', async (c) => {
 
     return c.json({ ok: true, message: 'Webhook disparado' });
   } catch (e: any) { return c.json({ error: e.message }, 500); }
+});
+
+// ── POST /parse-scope — extrai campos de escopo de um arquivo de texto ────────
+// Recebe o texto extraído de um PDF/DOCX/TXT e retorna os 6 campos do formulário
+// de nova sessão como JSON. Usa Gemini flash-lite para extração — chamada rápida
+// e de baixo custo (~200 tokens de entrada + ~150 de saída).
+sessionsRoutes.post('/parse-scope', async (c) => {
+  const jwtPayload = c.get('jwtPayload') as any;
+  if (!jwtPayload) return c.json({ error: 'Não autenticado.' }, 401);
+
+  const body = await c.req.json() as any;
+  const text: string = body.text || '';
+  if (!text.trim()) return c.json({ error: 'Campo "text" obrigatório.' }, 400);
+  if (text.length > 30_000) return c.json({ error: 'Texto muito longo (máx 30k chars).' }, 400);
+
+  try {
+    const [llmConfig, llmTiers] = await Promise.all([getLLMConfig(), getLLMTiers()]);
+    const economyModel = getModel({
+      provider: llmConfig.provider,
+      model: llmTiers?.['economy'] ?? llmConfig.model,
+    });
+
+    const prompt = `Analise o documento abaixo e extraia os campos de escopo analítico.
+Retorne APENAS um objeto JSON válido com exatamente estas chaves (strings, sem markdown):
+
+{
+  "tema": "tema/objeto da análise",
+  "horizonte": "horizonte temporal",
+  "elaborador": "quem elabora / organização responsável",
+  "cliente": "usuário ou cliente da análise",
+  "questaoEstrategica": "questão estratégica central",
+  "mudancaIdentificada": "mudança específica já identificada"
+}
+
+Mapeamento de campos (case-insensitive):
+- "Tema", "Tema / objeto", "Objeto" → tema
+- "Horizonte", "Horizonte temporal" → horizonte
+- "Quem elabora", "Elaborador", "Organização" → elaborador
+- "Usuário", "Cliente", "Público-alvo", "Destinatário" → cliente
+- "Questão estratégica", "Questão central", "Pergunta focal" → questaoEstrategica
+- "Mudança", "Mudança identificada", "Mudança específica" → mudancaIdentificada
+
+Se um campo não for encontrado, deixe a string vazia.
+Responda APENAS com o JSON, sem comentários, sem markdown.
+
+DOCUMENTO:
+${text.slice(0, 8000)}`;
+
+    const { text: llmOutput } = await generateText({
+      model:          economyModel,
+      prompt,
+      maxOutputTokens: 400,
+    });
+
+    // Extrair JSON da resposta (pode ter markdown ```json ou texto em volta)
+    const jsonMatch = llmOutput.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) return c.json({ error: 'LLM não retornou JSON válido.' }, 500);
+
+    const parsed = JSON.parse(jsonMatch[0]);
+    return c.json({
+      tema:                parsed.tema               || '',
+      horizonte:           parsed.horizonte          || '',
+      elaborador:          parsed.elaborador         || '',
+      cliente:             parsed.cliente            || '',
+      questaoEstrategica:  parsed.questaoEstrategica || '',
+      mudancaIdentificada: parsed.mudancaIdentificada || '',
+    });
+  } catch (e: any) {
+    return c.json({ error: `Erro ao extrair escopo: ${e.message}` }, 500);
+  }
 });
 
 export default sessionsRoutes;
