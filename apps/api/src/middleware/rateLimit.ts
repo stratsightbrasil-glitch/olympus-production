@@ -8,9 +8,9 @@ import { sql } from 'drizzle-orm';
 const TEST_MODE = process.env.TEST_MODE === 'true';
 
 const LIMITS: Record<string, { max: number; windowMs: number; message: string }> = {
-  // Grumbach 9 fases em passos mode = ~10 POSTs por análise completa.
-  // Limite 20/hora permite 2 análises completas por hora para analistas.
-  analysis: { max: 20, windowMs: 60 * 60 * 1000,       message: 'Limite de análises atingido (20/hora). Aguarde antes de iniciar nova análise.' },
+  // Grumbach 9 fases em etapa mode = ~19 POSTs (1 inicial + 2×9 resumes).
+  // Limite 30/hora permite 1 análise completa com folga por hora.
+  analysis: { max: 30, windowMs: 60 * 60 * 1000,       message: 'Limite de análises atingido (30/hora). Aguarde antes de iniciar nova análise.' },
   export:   { max: 10, windowMs: 60 * 60 * 1000,       message: 'Limite de exportações atingido (10/hora). Aguarde antes de exportar novamente.' },
   // Login: 5 tentativas / 15 min por IP. Substitui o bucket in-process de auth.ts,
   // que não funciona com múltiplas instâncias. Usa 'ip:<addr>' como userId fictício.
