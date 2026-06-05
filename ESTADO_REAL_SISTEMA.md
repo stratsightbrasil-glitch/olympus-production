@@ -1,7 +1,7 @@
 # ESTADO REAL DO SISTEMA — OLYMPUS 1.0
-**Gerado em:** 05/06/2026 — Sprint 24 concluído · testagem end-to-end Grumbach 9 fases
-**Commit HEAD:** `0539c70` (OOM+ATHENA+vizMode) · `b711d95` (Fase4+parse-scope) · `a6aab5d` (Sprint24 motor genérico)
-**Método:** queries SQL reais no banco ativo + inspeção do código-fonte + containers
+**Gerado em:** 05/06/2026 — Sprint 25 concluído · HITL state machine validado · 12 bugs resolvidos · 4 novos identificados
+**Commit HEAD:** `4484711` (Sprint 25i — ATHENA checks + fase1 sem FPFs + labels semanticos)
+**Método:** queries SQL reais no banco ativo + inspeção do código-fonte + containers + teste end-to-end
 **Containers:** olympus_api ✅ healthy · olympus_db ✅ healthy · olympus_web ✅ up · olympus_ollama ✅ healthy
 
 ---
@@ -192,35 +192,47 @@ stress test: 10/10 ✅ (CP-9: banco, CP-10: erro descritivo)
 
 ## SEÇÃO 7 — DIAGNÓSTICO: ESTADO ATUAL
 
-### ✅ Funcionando (05/Jun/2026 — Sprint 25)
+### ✅ Funcionando (05/Jun/2026 — Sprint 25 concluído)
 
 | Item | Verificação |
 |------|-------------|
 | TypeScript API + Web | Zero erros ✅ |
 | Stress test | 10/10 ✅ (CP-9 banco grumbach, CP-10 erro descritivo esg) |
-| Grumbach end-to-end | 9 fases executadas com sucesso em localhost |
-| ATHENA visível no chat | Canal onAthena → mensagem permanente ✅/⚠️/❌ por fase |
+| **Grumbach end-to-end** | **9 fases executadas com sucesso (teste geopolítica Brasil)** |
+| **HITL state machine** | **etapa mode: KLIO propõe → usuário aprova → ATHENA audita aprovados** |
+| ATHENA visível no chat | Canal onAthena → mensagem permanente ✅/⚠️/❌ por fase + checks array com ATS codes |
+| **ATHENA timing correto** | **Audit APÓS interrupt (pós-resumeGraph), não antes** |
+| Fase 1 — linchpin | declarar_julgamento cria project_event "Premissa-Linchpin" |
+| Fase 2 — FPFs únicos | Fase 1 sem tool_register_event, fase 2 é única a registrar FPFs |
 | Fase 4 Delphi | Prompt corrigido — KLIO gera P(i) após tool retorna instruções |
+| Fases 5-9 eventos | KeyFinding.description opcional + mapeado, ATS2 checks funcionam |
+| **Event panel labels** | **Semânticas: Delphi P(i), Cenário, Narrativa, Signpost, Linchpin em vez de "FPF"** |
 | Phase configs no banco | loadPhaseConfigs('grumbach') ✅ 9 fases, prompts OK |
 | nginx auto-healing | resolver 127.0.0.11 valid=300s — auto-heals após restart Docker |
-| Rate limit analysis | 20/hora (era 5 — insuficiente para 9 fases passos mode) |
+| **Rate limit analysis** | **30/hora (etapa mode ≈19 POSTs por análise completa)** |
 | Fix resume (isResuming) | sendMessage() bloqueado durante hitlGate |
 | Importar escopo via arquivo | POST /sessions/parse-scope + botão no modal |
-| vizMode default | 'etapa' (era 'passos' — removido do UI no Sprint 24) |
+| **vizMode default** | **'etapa' (per-fase com aprovação)** |
+| **vizMode alternativa** | **'passagem' (totalmente autônoma, auto-aprova todos)** |
 | tier mismatch | PATCH /settings/llm upserta llm_tiers automaticamente |
 | Railway seed | Executado em 05/Jun/2026 — banco Railway sincronizado |
-| **ATHENA ATS3 linchpin** | **declarar_julgamento cria project_event com "Premissa-Linchpin" — Sprint 25** |
-| **Phase counter SSE** | **currentPhaseNum rastreado via eventos athena/hitl_gate — Sprint 25** |
+| **Phase counter SSE** | **Rastreado APENAS via 'athena' event, nunca via hitl_gate** |
 
-### 🔲 Pendências
+### 🔲 Pendências — Sprint 25+
 
 | # | Item | Prioridade | Observação |
 |---|------|-----------|-----------|
-| P1 | **HERMES compilar relatório final** | 🔴 | 9 fases validadas; HERMES não chegou a rodar (OOM antes do synthesisNode; fix 8k tokens deve resolver) |
-| P2 | **PHASE_CONFIGS para ceeex** | 🟡 | 2ª prioridade após Grumbach com HERMES validado; 70% da estrutura Grumbach |
-| P3 | **ATHENA LLM qualitativo** | 🟡 | `runQualitativeAudit()` retorna stub; implementar em 1.1 |
-| P4 | **PHASE_CONFIGS demais metodologias** | 🟢 | godet, esg, mpo, alta, siex, gbn, ipea_buarque |
-| P5 | **Paginação sessions list** | 🟢 | Hard cap 200 itens |
+| **P1-A** | **ATHENA reprova fase 1 com dados incompletos (mesmo pós-fix)** | 🔴 CRÍTICO | Investigar: status='approved' setado no PATCH? |
+| **P1-B** | **Varredura FPF fracionada em fase 2** | 🔴 CRÍTICO | KLIO emitindo `tool_register_event` incrementalmente vs. em batch? |
+| **P1-C** | **Visualização gráfica Delphi P(i)** | 🔴 CRÍTICO | Matriz FPFs × P(i) com qualificadores Hendrikson |
+| **P1-D** | **Visualização gráfica Impactos Cruzados** | 🔴 CRÍTICO | Heatmap 5×5 Motricidade × Dependência |
+| **P1-E** | **Fase 6 reprovações cascata Fase 7** | 🔴 CRÍTICO | buildAnchorCtx deve filtrar scenarios reprovados? |
+| P2 | **HERMES compilar relatório final** | 🟡 | 9 fases validadas; falta testar synthesisNode com fase_outputs completos |
+| P3 | **PHASE_CONFIGS para ceeex** | 🟡 | 2ª prioridade após bugs Sprint 25 resolvidos; 70% estrutura Grumbach reutilizável |
+| P4 | **ATHENA LLM qualitativo** | 🟢 | `runQualitativeAudit()` retorna stub; implementar em 1.1 |
+| P5 | **PHASE_CONFIGS demais metodologias** | 🟢 | godet, esg, mpo, alta, siex, gbn, ipea_buarque — template reutilizável após bugs P1 resolvidos |
+| P6 | **Paginação sessions list** | 🟢 | Hard cap 200 itens |
+| P7 | **Renomear "Cena" → "Cenário"** | 🟢 | Correção terminológica em systemPromptInject fase 6-7 |
 
 ### ⚠️ Bugs conhecidos
 
@@ -231,5 +243,6 @@ stress test: 10/10 ✅ (CP-9: banco, CP-10: erro descritivo)
 
 ---
 
-*Gerado por Claude Sonnet 4.6 — 05/06/2026 — Sprint 25 · Olympus 1.0*
-*Containers inspecionados via `docker exec` · TypeScript zero erros · 3 bugs corrigidos*
+*Gerado por Claude Sonnet 4.6 — 05/06/2026 — Sprint 25 concluído · Olympus 1.0*
+*Grumbach 9 fases validado end-to-end · HITL state machine sólido · TypeScript zero erros · 12 bugs resolvidos*
+*4 bugs novos identificados via teste geopolítica Brasil; diagnóstico e roadmap em SPRINT_25_DIAGNOSTICO_FINAL.md*

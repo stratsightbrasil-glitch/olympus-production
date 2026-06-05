@@ -1,1803 +1,388 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>OLYMPUS 1.0 — Histórico de Desenvolvimento e Estado Atual</title>
-<style>
-  :root{--dark:#1B3A2D;--medium:#2E7D52;--light:#E8F5E9;--gold:#C9A84C;--text:#1a1a1a;--bg:#fafafa;--code-bg:#f4f4f4;--border:#d0d0d0}
-  *{box-sizing:border-box;margin:0;padding:0}
-  body{font-family:'Segoe UI',system-ui,sans-serif;font-size:14px;line-height:1.7;color:var(--text);background:var(--bg);display:flex;min-height:100vh}
-  #toc{width:260px;min-width:260px;background:var(--dark);color:#e0e0e0;padding:20px 16px;position:sticky;top:0;height:100vh;overflow-y:auto;font-size:12px}
-  #toc h2{color:var(--gold);font-size:11px;letter-spacing:2px;text-transform:uppercase;margin-bottom:12px;padding-bottom:8px;border-bottom:1px solid rgba(255,255,255,.15)}
-  #toc ul{list-style:none}
-  #toc li{margin:2px 0}
-  #toc a{color:#b0c4b0;text-decoration:none;display:block;padding:3px 6px;border-radius:4px;transition:.15s}
-  #toc a:hover,#toc a.active{background:rgba(255,255,255,.1);color:#fff}
-  #toc .toc-h2{font-weight:700;color:#c8e6c9;margin-top:8px}
-  #toc .toc-h3{padding-left:16px;font-size:11px}
-  #content{flex:1;max-width:900px;padding:40px 48px;overflow-x:hidden}
-  h1{font-size:22px;color:var(--dark);border-bottom:3px solid var(--gold);padding-bottom:10px;margin:0 0 6px}
-  h2{font-size:16px;color:var(--dark);background:var(--light);border-left:4px solid var(--medium);padding:8px 14px;margin:32px 0 14px;border-radius:0 4px 4px 0}
-  h3{font-size:14px;color:var(--medium);margin:20px 0 8px;font-weight:700}
-  h4{font-size:13px;color:#555;margin:14px 0 6px}
-  p{margin:0 0 10px}
-  a{color:var(--medium)}
-  strong{color:var(--dark)}
-  em{color:#555}
-  code{background:var(--code-bg);border:1px solid var(--border);border-radius:3px;padding:1px 5px;font-family:'Cascadia Code','Consolas',monospace;font-size:12px}
-  pre{background:var(--dark);color:#d4e6d4;border-radius:6px;padding:16px 20px;overflow-x:auto;margin:10px 0 16px;font-size:12px;line-height:1.6}
-  pre code{background:transparent;border:none;padding:0;color:inherit;font-size:inherit}
-  table{border-collapse:collapse;width:100%;margin:10px 0 16px;font-size:13px}
-  thead th{background:var(--dark);color:#fff;padding:7px 12px;text-align:left;font-size:12px;letter-spacing:.3px}
-  td{border:1px solid var(--border);padding:6px 12px;vertical-align:top}
-  tr:nth-child(even) td{background:#f0f9f2}
-  blockquote{border-left:4px solid var(--gold);background:#fffde7;padding:10px 16px;margin:10px 0 16px;border-radius:0 4px 4px 0;font-size:13px}
-  blockquote p{margin:0}
-  hr{border:none;border-top:1px solid var(--border);margin:24px 0}
-  ul,ol{margin:6px 0 12px 22px}
-  li{margin-bottom:3px}
-  del{color:#999}
-  .meta{color:#777;font-size:13px;margin-bottom:24px}
-  @media(max-width:768px){body{flex-direction:column}#toc{width:100%;height:auto;position:static}#content{padding:24px 20px}}
-</style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>OLYMPUS 1.0 — Histórico de Desenvolvimento — Sprint 25</title>
+  <style>
+    :root {
+      --dark: #1B3A2D;
+      --medium: #2E7D52;
+      --light: #E8F5E9;
+      --gold: #C9A84C;
+      --text: #1a1a1a;
+      --bg: #fafafa;
+      --code-bg: #2d2d2d;
+      --border: #d0d0d0;
+    }
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+    body {
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      font-size: 14px;
+      line-height: 1.7;
+      color: var(--text);
+      background: var(--bg);
+    }
+    .container {
+      max-width: 1000px;
+      margin: 0 auto;
+      padding: 40px;
+    }
+    h1 {
+      font-size: 28px;
+      color: var(--dark);
+      border-bottom: 4px solid var(--gold);
+      padding-bottom: 12px;
+      margin: 0 0 8px;
+    }
+    .meta {
+      color: #666;
+      font-size: 13px;
+      margin-bottom: 24px;
+      padding: 12px;
+      background: #f0f9f2;
+      border-left: 4px solid var(--medium);
+      border-radius: 4px;
+    }
+    h2 {
+      font-size: 18px;
+      color: white;
+      background: var(--dark);
+      border-left: 5px solid var(--gold);
+      padding: 12px 16px;
+      margin: 40px 0 16px;
+      border-radius: 4px;
+    }
+    h3 {
+      font-size: 15px;
+      color: var(--medium);
+      margin: 20px 0 10px;
+      font-weight: 700;
+    }
+    h4 {
+      font-size: 13px;
+      color: #555;
+      margin: 14px 0 6px;
+    }
+    p {
+      margin-bottom: 10px;
+    }
+    a {
+      color: var(--medium);
+      text-decoration: none;
+    }
+    a:hover {
+      text-decoration: underline;
+    }
+    code {
+      background: var(--code-bg);
+      color: #d4e6d4;
+      border-radius: 3px;
+      padding: 2px 6px;
+      font-family: 'Cascadia Code', 'Consolas', monospace;
+      font-size: 12px;
+    }
+    pre {
+      background: var(--code-bg);
+      color: #d4e6d4;
+      border-radius: 6px;
+      padding: 16px;
+      overflow-x: auto;
+      margin: 12px 0 16px;
+      font-size: 12px;
+      line-height: 1.6;
+    }
+    pre code {
+      background: transparent;
+      color: inherit;
+      padding: 0;
+      border: none;
+    }
+    table {
+      border-collapse: collapse;
+      width: 100%;
+      margin: 12px 0 16px;
+      font-size: 13px;
+    }
+    thead th {
+      background: var(--dark);
+      color: white;
+      padding: 8px 12px;
+      text-align: left;
+      font-size: 12px;
+    }
+    td {
+      border: 1px solid var(--border);
+      padding: 8px 12px;
+      vertical-align: top;
+    }
+    tr:nth-child(even) td {
+      background: #f5f5f5;
+    }
+    blockquote {
+      border-left: 4px solid var(--gold);
+      background: #fffde7;
+      padding: 12px 16px;
+      margin: 12px 0 16px;
+      border-radius: 4px;
+      font-size: 13px;
+    }
+    blockquote p {
+      margin: 0;
+    }
+    .highlight {
+      background: #fff3cd;
+      padding: 12px;
+      border-left: 4px solid var(--gold);
+      margin: 12px 0;
+      border-radius: 4px;
+    }
+    .success {
+      background: #d4edda;
+      color: #155724;
+      padding: 12px;
+      border-left: 4px solid #28a745;
+      margin: 12px 0;
+      border-radius: 4px;
+    }
+    .warning {
+      background: #fff3cd;
+      color: #856404;
+      padding: 12px;
+      border-left: 4px solid #ffc107;
+      margin: 12px 0;
+      border-radius: 4px;
+    }
+    ul, ol {
+      margin: 8px 0 12px 24px;
+    }
+    li {
+      margin-bottom: 4px;
+    }
+    hr {
+      border: none;
+      border-top: 2px solid var(--border);
+      margin: 32px 0;
+    }
+    .footer {
+      margin-top: 60px;
+      padding-top: 20px;
+      border-top: 2px solid var(--border);
+      font-size: 12px;
+      color: #666;
+    }
+    strong {
+      color: var(--dark);
+    }
+    em {
+      color: #666;
+    }
+    @media (max-width: 768px) {
+      .container {
+        padding: 20px;
+      }
+      h1 {
+        font-size: 22px;
+      }
+      h2 {
+        font-size: 16px;
+      }
+    }
+  </style>
 </head>
 <body>
 
-<nav id="toc">
-  <h2>Índice</h2>
-  <ul id="toc-list"></ul>
-</nav>
+<div class="container">
 
-<div id="content">
 <h1>OLYMPUS 1.0 — Histórico de Desenvolvimento e Estado Atual</h1>
-<p><strong>StratSight Brasil · Strategic Foresight · IA Agêntica</strong><br>
-<strong>Atualizado em:</strong> 05 Jun 2026 (Sprint 24 concluído — motor genérico + testagem end-to-end Grumbach)<br>
-<strong>Destinatário:</strong> Claude Chat / Claude Design — revisão de arquitetura e UI</p>
-<blockquote><p><strong>⚠️ Cuidado para Claude Code:</strong> este arquivo (<code>HISTORICO_DESENVOLVIMENTO.html</code>) e o correspondente <code>.md</code> são os registros canônicos da evolução do sistema. Sempre que uma mudança arquitetural relevante for implementada, <strong>ambos os arquivos devem ser atualizados no mesmo commit</strong>. O <code>.md</code> é a fonte da verdade; o <code>.html</code> é a versão de leitura amigável. Nunca divergir os dois.</p></blockquote>
-<hr>
-<h2>PARTE 1 — CONTEXTO E STACK</h2>
-<h3>O que é o OLYMPUS</h3>
-<p>Plataforma soberana de análise prospectiva estruturada — agnóstica de metodologia, adaptável a cada cliente, executável sem dependência de infraestrutura externa. O analista humano está no centro; a IA é o motor que garante rigor.</p>
-<pre><code>OLYMPUS 1.0
-├── Motor analítico   → phaseLoopNode (KLIO) + synthesisNode (HERMES)
-│                       12 metodologias Bloco A/B · 5 agentes · PHASE_CONFIGS
-├── Motor KRATOS      → monitoramento contínuo (indicadores, alertas, cron pg-boss)
-├── ATHENA            → auditora determinística por fase (ATS 1-9 ICD 203 + EB70)
-├── Painel Cliente    → URL compartilhável com JWT, dashboard de indicadores
-└── API OLYMPUS       → webhooks n8n, integração com parceiros
-</code></pre>
-<p><strong>Premissas de negócio:</strong> operação solo · custo &lt; R$1.500/mês · clientes defesa/governo (air-gapped, CONFIDENCIAL, auditoria) · produto-âncora R$80K–250K · meta Ano 1: R$300K · exit Big Tech em 8 anos · O Playbook de metodologias verificadas é o principal ativo de PI.</p>
-<h3>Stack tecnológica</h3>
-<table>
-<thead>
-<tr>
-<th>Camada</th>
-<th>Tecnologia</th>
-</tr>
-</thead>
-<tbody><tr>
-<td>Frontend</td>
-<td>React 18 + Vite + TypeScript</td>
-</tr>
-<tr>
-<td>Backend</td>
-<td>Hono + Node.js + TypeScript</td>
-</tr>
-<tr>
-<td>IA</td>
-<td>Vercel AI SDK v6 (<code>ai@6.0.168</code>) — agnóstico de provider</td>
-</tr>
-<tr>
-<td>Banco</td>
-<td>PostgreSQL 15 + pgvector + Drizzle ORM</td>
-</tr>
-<tr>
-<td>Orquestração v1</td>
-<td>ReAct via Agent.ts (produção)</td>
-</tr>
-<tr>
-<td>Orquestração v2</td>
-<td>LangGraph JS (rota experimental <code>/stream/graph</code>)</td>
-</tr>
-<tr>
-<td>Embeddings</td>
-<td>Ollama nomic-embed-text (padrão local) / Voyage AI (cloud, opcional)</td>
-</tr>
-<tr>
-<td>Containers</td>
-<td>Docker Compose — api + web + db + ollama (auto-start Sprint 19)</td>
-</tr>
-</tbody></table>
-<h3>Provider LLM ativo</h3>
-<ul>
-<li><strong>Google Gemini 2.5 Flash</strong> (plano profissional)</li>
-<li><code>platform_settings.llm</code> → <code>{ &quot;provider&quot;: &quot;google&quot;, &quot;model&quot;: &quot;gemini-2.5-flash-lite&quot; }</code></li>
-<li><code>platform_settings.llm_tiers</code> → <code>{ &quot;economy&quot;: &quot;gemini-2.5-flash-lite&quot;, &quot;premium&quot;: &quot;gemini-2.5-flash&quot; }</code></li>
-</ul>
-<hr>
-<h2>PARTE 2 — ESTRUTURA DE ARQUIVOS</h2>
-<pre><code>Olympus/
-├── apps/
-│   ├── api/src/
-│   │   ├── index.ts                # Entry point, startup, CORS, JWT
-│   │   ├── cron.ts                 # KratosOrchestrator — cron jobs
-│   │   ├── graph/
-│   │   │   ├── builder.ts          # getOlympusGraph() async — PostgresSaver
-│   │   │   ├── postgresSaver.ts    # Singleton async — 4 tabelas checkpoint
-│   │   │   ├── nodes.ts            # 6 nós LangGraph
-│   │   │   ├── helpers.ts          # buildMemoryWindow(), buildAnchorCtx()
-│   │   │   └── router.ts           # routeFromState()
-│   │   ├── routes/
-│   │   │   ├── chat.ts             # Motor principal — loadMethodology(), runAnalysis()
-│   │   │   │                       # + PROTOCOLO DE PLANEJAMENTO DE FASE
-│   │   │   │                       # + Strategic Slate Compiler
-│   │   │   ├── events.ts           # HITL API — CRUD project_events
-│   │   │   ├── export.ts           # Exportação DOCX/PDF/HTML
-│   │   │   ├── settings.ts         # Config LLM — GET/PATCH, getLLMTiers()
-│   │   │   └── audit.ts / sessions / kratos / indicators / signals / ...
-│   │   ├── services/
-│   │   │   └── report-compiler.ts  # Strategic Slate Compiler — 9 metodologias
-│   │   ├── utils/
-│   │   │   └── audit.ts            # logAudit() — hash-chain SHA-256
-│   │   └── tools/
-│   │       ├── analytical-engines.ts  # 8 ferramentas analíticas (JSON Schema puro)
-│   │       ├── analytic-standards.ts  # ICD 203 (declarar_julgamento, etc.)
-│   │       ├── technique-engine.ts    # SAT Engine
-│   │       └── signals.ts / rag.ts
-│   │
-│   └── web/src/
-│       ├── App.tsx                 # Componente raiz (~1700 linhas)
-│       ├── hooks/useLlmConfig.ts   # Estado LLM — default: gemini-2.5-flash-lite
-│       ├── components/
-│       │   ├── layout/
-│       │   │   ├── CommandBar.tsx  # Seletor LLM + Tiers
-│       │   │   ├── KratosPanel.tsx # Dashboard KRATOS (~630 linhas)
-│       │   │   └── Sidebar.tsx     # Histórico + sessões
-│       │   ├── chat/               # MessageBubble, InputZone, AgentWorking
-│       │   └── canvas/artifacts/   # Matriz2x2, PestelScatter
-│       └── data/methodologySteps.ts
-│
-└── packages/
-    ├── core/src/
-    │   ├── Agent.ts        # Executa agentes — tier→model, Prompt Cache
-    │   ├── Orchestrator.ts # Roteamento entre agentes
-    │   ├── types.ts        # AgentContext completo
-    │   └── nodeRouter.ts   # nodeSlug→agentName
-    ├── db/src/schema.ts    # Todas as tabelas Drizzle
-    └── tools/src/
-        ├── embed.ts        # Roteador Voyage→Ollama automático
-        ├── tavily.ts       # Guard connectivityMode
-        └── dados-publicos.ts  # ~62 indicadores públicos
-</code></pre>
-<hr>
-<h2>PARTE 3 — BANCO DE DADOS</h2>
-<table>
-<thead>
-<tr>
-<th>Tabela</th>
-<th>Descrição</th>
-<th>Notas</th>
-</tr>
-</thead>
-<tbody><tr>
-<td><code>users</code></td>
-<td>Usuários</td>
-<td>role: analista/admin/cliente</td>
-</tr>
-<tr>
-<td><code>methodologies</code></td>
-<td>11 metodologias</td>
-<td>agentsConfig JSONB (agents[] + steps[])</td>
-</tr>
-<tr>
-<td><code>methodology_phases</code></td>
-<td>Fases por metodologia</td>
-<td>slug, node_slug (mapeamento LangGraph)</td>
-</tr>
-<tr>
-<td><code>agents</code></td>
-<td>9 agentes</td>
-<td>systemPrompt, toolsConfig, modelOverride (tier label)</td>
-</tr>
-<tr>
-<td><code>agent_method_prompts</code></td>
-<td>Instruções agente×metodologia</td>
-<td>extraInstructions injetado em runtime</td>
-</tr>
-<tr>
-<td><code>techniques</code></td>
-<td>12 técnicas SAT (AltA)</td>
-<td>—</td>
-</tr>
-<tr>
-<td><code>projects</code></td>
-<td>Projetos/sessões</td>
-<td>methodology, kratosCron, alertEmails, deletedAt</td>
-</tr>
-<tr>
-<td><code>messages</code></td>
-<td>Histórico de mensagens</td>
-<td>role, content, agentName</td>
-</tr>
-<tr>
-<td><code>embeddings</code></td>
-<td>Vetores RAG (pgvector)</td>
-<td>vector(512) Voyage / vector(768) Ollama</td>
-</tr>
-<tr>
-<td><code>project_events</code></td>
-<td>Eventos analíticos (TAD)</td>
-<td>sourceEvaluation JSONB (reliability A-F, credibility 1-6)</td>
-</tr>
-<tr>
-<td><code>project_scenarios</code></td>
-<td>Cenários prospectivos</td>
-<td>probability, matrixValue JSONB</td>
-</tr>
-<tr>
-<td><code>matrix_direct_impacts</code></td>
-<td>MICMAC</td>
-<td>fromEventId, toEventId, impactScore 0-3</td>
-</tr>
-<tr>
-<td><code>technique_execution_outputs</code></td>
-<td>Saídas matemáticas SAT</td>
-<td>techniqueType, outputData JSONB</td>
-</tr>
-<tr>
-<td><code>audit_logs</code></td>
-<td>Logs de auditoria</td>
-<td>metadata._hash + ._previousHash (hash-chain SHA-256)</td>
-</tr>
-<tr>
-<td><code>platform_settings</code></td>
-<td>Config plataforma</td>
-<td>llm, llm_tiers, anthropic_models</td>
-</tr>
-<tr>
-<td><code>checkpoints</code> + 3 tabelas</td>
-<td>LangGraph</td>
-<td><strong>Gerenciadas pelo PostgresSaver.setup() — NÃO no schema Drizzle</strong></td>
-</tr>
-</tbody></table>
-<hr>
-<h2>PARTE 4 — AGENTES</h2>
-<h3>Orquestradores</h3>
-<table>
-<thead>
-<tr>
-<th>Agente</th>
-<th>Metodologias</th>
-<th>Observação</th>
-</tr>
-</thead>
-<tbody><tr>
-<td><strong>HERMES</strong></td>
-<td>MSEF, Godet, Grumbach/Cenários, OTAN/AltA, SIEx/Estimativa, SIPLEx/CEEEx, IPEA/FGV, MPO, ASPLAN/Cenários, GBN, ESG</td>
-<td>Orquestrador universal de cenários prospectivos e estimativas</td>
-</tr>
-<tr>
-<td><strong>OLYMPUS</strong></td>
-<td>Grumbach/Planejamento Estratégico, SIEx-MPC, SIPLEx/Planejamento, SPED</td>
-<td>Planejamento Estratégico e Produção do Conhecimento — <strong>fases não implementadas</strong></td>
-</tr>
-</tbody></table>
-<blockquote>
-<p><strong>Regra crítica (Sprint 21):</strong> HERMES é orquestrador para TODAS as metodologias de cenários implementadas no LangGraph. OLYMPUS reservado para variantes de Planejamento Estratégico ainda não implementadas (slugs: <code>grumbach_plj</code>, <code>siex_mpc</code>, <code>siplex_plj</code>, <code>asplan_sped</code>). Não confundir Grumbach/Produção de Cenários (HERMES, slug <code>grumbach</code>) com Grumbach/Planejamento (OLYMPUS, slug futuro <code>grumbach_plj</code>).</p>
-<p><strong>Sprint 17:</strong> HERMES_SIPLEX foi removido como anti-padrão. SIPLEx/CEEEx usa HERMES + <code>agentMethodPrompts/siplex</code>.</p>
-</blockquote>
-<h3>Especialistas</h3>
-<table>
-<thead>
-<tr>
-<th>Agente</th>
-<th>Tier</th>
-<th>Ferramentas analíticas principais</th>
-<th>ATS ICD 203</th>
-</tr>
-</thead>
-<tbody><tr>
-<td><strong>SCOPUS</strong></td>
-<td>economy</td>
-<td>tool_register_event</td>
-<td>ATS 5 (KIQ) + ATS 3 (linchpin)</td>
-</tr>
-<tr>
-<td><strong>KLIO</strong></td>
-<td>premium</td>
-<td><strong>tool_register_event</strong> (FIRST-STEP), tool_register_impact_relation, tool_mpc_source_evaluator</td>
-<td>ATS 1 (TAD) + ATS 7 (trajetória)</td>
-</tr>
-<tr>
-<td><strong>PYTHIA</strong></td>
-<td>premium</td>
-<td>tool_mactor_analysis, tool_esg_rii_calculator, tool_register_scenario</td>
-<td>ATS 2 (Hendrikson) + ATS 8 + ATS 4</td>
-</tr>
-<tr>
-<td><strong>MNEMOSYNE</strong></td>
-<td>premium</td>
-<td>tool_register_scenario</td>
-<td>ATS 6 (lógica causal) + ATS 8</td>
-</tr>
-<tr>
-<td><strong>THEMIS</strong></td>
-<td>premium</td>
-<td>tool_mpo_backcasting</td>
-<td>ATS 5 (Bet vs. Hedge) + ATS 9</td>
-</tr>
-<tr>
-<td><strong>KRATOS</strong></td>
-<td>economy</td>
-<td>buscar_dados_publicos, atualizar_sentinela</td>
-<td>Relatório monitoramento</td>
-</tr>
-<tr>
-<td><strong>ATHENA</strong></td>
-<td>premium</td>
-<td><em>(sem ferramentas — auditora pura)</em></td>
-<td>ATS 1-9 por macroetapa (ICD 203 + EB70)</td>
-</tr>
-</tbody></table>
-<h3>Ferramentas analíticas (<code>analytical-engines.ts</code>)</h3>
-<p>Todas criadas via <code>createAnalyticalEngineTools(projectId)</code> — projectId injetado via closure, não exposto ao LLM:</p>
-<table>
-<thead>
-<tr>
-<th>Ferramenta</th>
-<th>Quem usa</th>
-<th>Função</th>
-</tr>
-</thead>
-<tbody><tr>
-<td><code>tool_register_event</code></td>
-<td>KLIO (FIRST-STEP), SCOPUS</td>
-<td>Registra FPF/tendência/incerteza com TAD</td>
-</tr>
-<tr>
-<td><code>tool_register_impact_relation</code></td>
-<td>KLIO</td>
-<td>Impacto direto entre variáveis (MICMAC)</td>
-</tr>
-<tr>
-<td><code>tool_grumbach_expert_simulation</code></td>
-<td>OLYMPUS</td>
-<td>7 personas — projeção Grumbach</td>
-</tr>
-<tr>
-<td><code>tool_mactor_analysis</code></td>
-<td>PYTHIA</td>
-<td>Análise de atores</td>
-</tr>
-<tr>
-<td><code>tool_mpo_backcasting</code></td>
-<td>THEMIS</td>
-<td>Backcasting MPO</td>
-</tr>
-<tr>
-<td><code>tool_esg_rii_calculator</code></td>
-<td>PYTHIA</td>
-<td>RII = I×(6-G)×(6-C)</td>
-</tr>
-<tr>
-<td><code>tool_mpc_source_evaluator</code></td>
-<td>KLIO</td>
-<td>Avaliação MPC alfanumérica</td>
-</tr>
-<tr>
-<td><code>tool_register_scenario</code></td>
-<td>PYTHIA, MNEMOSYNE</td>
-<td><em>(Sprint 18)</em> Cenário estruturado, substitui regex</td>
-</tr>
-</tbody></table>
-<hr>
-<h2>PARTE 5 — METODOLOGIAS</h2>
-<p><strong>Fonte canônica:</strong> <code>D:\Pessoais\DEV\_Diversos\_contexto\Design\REVISAO_ARQUITETURA\metodologias.txt</code>
-<strong>Fonte canônica:</strong> <code>D:\Pessoais\DEV\_Diversos\_contexto\Design\REVISAO_ARQUITETURA\orquestradores.txt</code></p>
-<h3>Metodologias de Cenários Prospectivos e Estimativas — Implementadas ✅</h3>
-<table>
-<thead>
-<tr>
-<th>Nome Canônico</th>
-<th>Slug canônico</th>
-<th>Slug atual no banco</th>
-<th>Orquestrador</th>
-<th>Fases</th>
-</tr>
-</thead>
-<tbody><tr>
-<td>MSEF v3 (8 etapas ENAP)</td>
-<td><code>msef</code></td>
-<td><code>msef</code> ✅</td>
-<td>HERMES</td>
-<td>8</td>
-</tr>
-<tr>
-<td>Godet: Escola Estrutural</td>
-<td><code>godet</code></td>
-<td><code>godet</code> ✅</td>
-<td>HERMES</td>
-<td>7</td>
-</tr>
-<tr>
-<td>Grumbach: Produção de Cenários</td>
-<td><code>grumbach</code></td>
-<td><code>grumbach</code> ✅</td>
-<td>HERMES</td>
-<td>9</td>
-</tr>
-<tr>
-<td>OTAN/AltA</td>
-<td><code>otan</code></td>
-<td><code>alta</code> ⚠️</td>
-<td>HERMES</td>
-<td>6</td>
-</tr>
-<tr>
-<td>SIEx: Conhecimento Estimativa EB</td>
-<td><code>siex</code></td>
-<td><code>siex</code> ✅</td>
-<td>HERMES</td>
-<td>5</td>
-</tr>
-<tr>
-<td>SIPLEx/CEEEx: Cenários da Força Terrestre</td>
-<td><code>siplex_ceex</code></td>
-<td><code>siplex</code> ⚠️</td>
-<td>HERMES</td>
-<td>7</td>
-</tr>
-<tr>
-<td>IPEA/FGV: Cenários Estreitados</td>
-<td><code>ipea</code></td>
-<td><code>macroplan</code> ⚠️</td>
-<td>HERMES</td>
-<td>7</td>
-</tr>
-<tr>
-<td>MPO: Estratégia Brasil 2050</td>
-<td><code>mpo</code></td>
-<td><code>mpo</code> ✅</td>
-<td>HERMES</td>
-<td>8</td>
-</tr>
-<tr>
-<td>ASPLAN/MD: Produção de Cenários</td>
-<td><code>asplan</code></td>
-<td><code>asplan</code> ✅</td>
-<td>HERMES</td>
-<td>7</td>
-</tr>
-<tr>
-<td>GBN (Global Business Network)</td>
-<td><code>gbn</code></td>
-<td><code>futures</code> ⚠️</td>
-<td>HERMES</td>
-<td>8</td>
-</tr>
-<tr>
-<td>ESG: Cenários Prospectivos</td>
-<td><code>esg</code></td>
-<td><code>esg</code> ✅</td>
-<td>HERMES</td>
-<td>6</td>
-</tr>
-</tbody></table>
-<h3>Metodologias de Planejamento Estratégico e Produção do Conhecimento — Não implementadas 🔲</h3>
-<table>
-<thead>
-<tr>
-<th>Nome Canônico</th>
-<th>Slug canônico</th>
-<th>Orquestrador</th>
-<th>Status</th>
-</tr>
-</thead>
-<tbody><tr>
-<td>Grumbach: Planejamento Estratégico</td>
-<td><code>grumbach_plj</code></td>
-<td>OLYMPUS</td>
-<td>🔲 Fases não definidas</td>
-</tr>
-<tr>
-<td>SIEx: Metodologia de Produção do Conhecimento</td>
-<td><code>siex_mpc</code></td>
-<td>OLYMPUS</td>
-<td>🔲 Fases não definidas</td>
-</tr>
-<tr>
-<td>SIPLEx: Sistema de Planejamento Estratégico do Exército</td>
-<td><code>siplex_plj</code></td>
-<td>OLYMPUS</td>
-<td>🔲 Fases não definidas</td>
-</tr>
-<tr>
-<td>SPED: Sistema de Planejamento Estratégico de Defesa</td>
-<td><code>asplan_sped</code></td>
-<td>OLYMPUS</td>
-<td>🔲 Fases não definidas</td>
-</tr>
-</tbody></table>
-<blockquote>
-<p><strong>⚠️ Slugs divergentes</strong> (<code>alta</code>, <code>macroplan</code>, <code>futures</code>, <code>siplex</code>): slugs históricos no banco que diferem dos canônicos. Não afetam o funcionamento (loadMethodology busca por nome E slug). Migração requer UPDATE com preservação de FKs de <code>agent_method_prompts</code>.</p>
-</blockquote>
-<h3>Fluxo de execução (Sprint 21 — Motor único LangGraph)</h3>
-<pre><code>POST /api/v1/chat/stream/graph          ← único endpoint (runAnalysis() eliminado)
-  ├─ loadMethodology()                  → banco (lança exceção se ausente)
-  ├─ getLLMConfig()+getLLMTiers()       → paralelo, de platform_settings
-  └─ getOlympusGraph().stream()         → LangGraph StateGraph
-       ├─ routeFromState()              → determinístico via currentNodeSlug+phaseSlug
-       ├─ scopusNode  → runAgentForPhase(SCOPUS,  phaseSlug)
-       ├─ klioNode    → runAgentForPhase(KLIO,    phaseSlug)   ← pode repetir (fases múltiplas)
-       ├─ pythiaNode  → HITL gate (interrupt se sem eventos aprovados)
-       │               runAgentForPhase(PYTHIA,   phaseSlug)
-       ├─ mnemosyeNode→ runAgentForPhase(MNEMOSYNE,phaseSlug)
-       ├─ integrationNode→runAgentForPhase(THEMIS/KRATOS,phaseSlug)
-       └─ synthesisNode → Agent(HERMES/OLYMPUS).run() com token streaming
-            └─ Salva mensagem final (relatorio_final) no banco
 
-vizMode como configuração do grafo:
-  passos   → interrupt() após cada nó especialista (analista confirma cada fase)
-  etapa    → interrupt() apenas no HITL obrigatório de PYTHIA
-  passagem → sem interrupts (totalmente autônomo)
-  thinking → sem interrupts + extended thinking nos agentes
-</code></pre>
-<p>KRATOS (pg-boss): usa <code>runDirectAgent()</code> de <code>graph/helpers.ts</code> — execução direta sem grafo.</p>
-<hr>
-<h2>PARTE 6 — ATHENA v3 (ICD 203 + EB70-MT-10.401)</h2>
-<p>Auditora pura — <code>toolsConfig: []</code>. Combina ICD 203 (ODNI 2022) + EB70-MT-10.401 (Exército Brasileiro).</p>
-<h3>Diretrizes EB70-MT-10.401</h3>
-<ul>
-<li><strong>Nexo Temporal:</strong> reprova &quot;saltos quânticos&quot; — cenários PYTHIA sem ancoragem na trajetória KLIO</li>
-<li><strong>Segregação Epistemológica:</strong> valida <code>[FATO]</code> / <code>[INDÍCIO]</code> / <code>[SUPOSIÇÃO]</code> no scanning</li>
-</ul>
-<h3>ATS por macroetapa</h3>
-<table>
-<thead>
-<tr>
-<th>node_slug</th>
-<th>ATS auditados</th>
-</tr>
-</thead>
-<tbody><tr>
-<td>node_framing</td>
-<td>ATS 3 (premissas linchpin) + ATS 5 (relevância)</td>
-</tr>
-<tr>
-<td>node_scanning_*</td>
-<td>ATS 1 (TAD condicional) + ATS 7 (trajetória histórica)</td>
-</tr>
-<tr>
-<td>node_modeling</td>
-<td>ATS 2 (Hendrikson) + ATS 4 (ACH condicional)</td>
-</tr>
-<tr>
-<td>node_matrix_design / node_narrative</td>
-<td>ATS 6 (lógica causal) + ATS 8 (exatidão)</td>
-</tr>
-<tr>
-<td>node_integration</td>
-<td>ATS 5 (Hedges vs. Bets) + ATS 9 (signposts)</td>
-</tr>
-</tbody></table>
-<h3>Validação específica SIPLEx/CEEEx</h3>
-<ul>
-<li>Seção 4: exatamente <strong>20 Oportunidades + 20 Ameaças + 10 Temas de Interesse</strong></li>
-<li>Seção 5.1: tabela Markdown 10 eventos binários × 4 cenários normativos</li>
-<li>Seção 5.2: 4 narrativas isomórficas com a tabela 5.1</li>
-<li>Seção 6: 6 campos obrigatórios por Folha Anexa</li>
-</ul>
-<hr>
-<h2>PARTE 7 — TAD (Técnica de Avaliação de Dados)</h2>
-<table>
-<thead>
-<tr>
-<th>Código</th>
-<th>Idoneidade da Fonte</th>
-<th>Código</th>
-<th>Credibilidade do Dado</th>
-</tr>
-</thead>
-<tbody><tr>
-<td>A</td>
-<td>Totalmente idônea</td>
-<td>1</td>
-<td>Verdadeira (sem reservas)</td>
-</tr>
-<tr>
-<td>B</td>
-<td>Habitualmente idônea</td>
-<td>2</td>
-<td>Provavelmente verdadeira</td>
-</tr>
-<tr>
-<td>C</td>
-<td>Regularmente idônea</td>
-<td>3</td>
-<td>Possivelmente verdadeira</td>
-</tr>
-<tr>
-<td>D</td>
-<td>Habitualmente suspeita</td>
-<td>4</td>
-<td>Duvidosa</td>
-</tr>
-<tr>
-<td>E</td>
-<td>Totalmente suspeita</td>
-<td>5</td>
-<td>Improvável/inverdadeira</td>
-</tr>
-<tr>
-<td>F</td>
-<td>Sem condições de julgar</td>
-<td>6</td>
-<td>Não se pode julgar</td>
-</tr>
-</tbody></table>
-<h3>Padrão condicional (KLIO)</h3>
-<ul>
-<li><strong>SIEx / OTAN:</strong> alfanumérico colado → <code>&quot;PIB cresceu 3,2% — IBGE B2&quot;</code></li>
-<li><strong>Demais:</strong> semântico → <code>&quot;(Habitualmente idônea / Provavelmente verdadeira)&quot;</code></li>
-</ul>
-<h3>Segregação epistemológica (KLIO)</h3>
-<ul>
-<li><code>[FATO]</code> — confirmado e corroborado</li>
-<li><code>[INDÍCIO]</code> — plausível, sem corroboração completa</li>
-<li><code>[SUPOSIÇÃO]</code> — hipótese para preencher lacuna</li>
-</ul>
-<hr>
-<h2>PARTE 8 — STRATEGIC SLATE COMPILER</h2>
-<p><strong>Arquivo:</strong> <code>apps/api/src/services/report-compiler.ts</code> <em>(Sprint 16)</em></p>
-<p><strong>Função:</strong> <code>generateReportTemplateInstructions(methodologyRaw, layout)</code></p>
-<p>Modos: <code>standard</code> (seções com conteúdo obrigatório) · <code>extended</code> (+ Raciocínio Analítico e Lastro Cognitivo)</p>
-<p>Injeção em <code>finalInputMsg</code> em produção. Parâmetro <code>body.reportLayout</code> (padrão: <code>&quot;standard&quot;</code>).</p>
-<table>
-<thead>
-<tr>
-<th>Slug</th>
-<th>Destaques das seções</th>
-</tr>
-</thead>
-<tbody><tr>
-<td>msef</td>
-<td>Enquadramento → PESTEL → FPFs → Matriz 2×2 → 4 Narrativas → Hedges/Bets</td>
-</tr>
-<tr>
-<td>godet</td>
-<td>Escopo → MICMAC/MACTOR → Dinâmica → MORPHOL → Estratégias</td>
-</tr>
-<tr>
-<td>gbn</td>
-<td>Questão Focal → STEEP → Incertezas → Matriz 2×2 → Narrativas → Early Warning</td>
-</tr>
-<tr>
-<td>esg</td>
-<td>Soberania → Conjuntura → Sementes → MICMAC → RII → Cenários → Backcasting</td>
-</tr>
-<tr>
-<td>otan</td>
-<td>Focus Issue → Structuring → Creative → Diagnostic → Challenge</td>
-</tr>
-<tr>
-<td>ipea</td>
-<td>Marco Teórico → Diagnóstico → Triagem → Hipóteses → Narrativas → Normativo</td>
-</tr>
-<tr>
-<td>grumbach</td>
-<td>Sistema → Diagnóstico → KIQs → Delphi → Monte Carlo → 4 Cenários → BSC</td>
-</tr>
-<tr>
-<td>mpo</td>
-<td>9 etapas com MICMAC, MORPHOL, Narrativas, Quantificação</td>
-</tr>
-<tr>
-<td>eb70_mt_10401</td>
-<td>Estimativa de Inteligência: Dados Conhecidos → Fatores → Hipóteses → Conclusão</td>
-</tr>
-<tr>
-<td>siplex</td>
-<td>Alinhamento PND/END/PMiD/EMiD → TAD → Fatores → 20+20+10 → Cenários → Folhas</td>
-</tr>
-</tbody></table>
-<hr>
-<h2>PARTE 9 — PROTOCOLO DE PLANEJAMENTO DE FASE</h2>
-<p>Ativo em <strong>todos</strong> os vizModes (exceto TEST_MODE). Garante que SATs avançadas não sejam ignoradas.</p>
-<pre><code>Antes de acionar cada especialista:
-1. Ferramentas/SAT MANDATÓRIAS pela metodologia ativa para esta fase
-2. Ferramentas/SAT RECOMENDADAS dado o tema específico
-3. Proposta de abordagem (1-2 linhas)
-</code></pre>
-<table>
-<thead>
-<tr>
-<th>vizMode</th>
-<th>Comportamento</th>
-</tr>
-</thead>
-<tbody><tr>
-<td><code>passos</code></td>
-<td>Apresenta plano ao usuário → aguarda confirmação/orientação</td>
-</tr>
-<tr>
-<td><code>etapa</code> / <code>passagem</code> / <code>thinking</code></td>
-<td>Registra <code>[PLANO fase X]</code> → prossegue imediatamente</td>
-</tr>
-</tbody></table>
-<hr>
-<h2>PARTE 10 — PROVIDER LLM E TIER SYSTEM</h2>
-<h3>Providers suportados</h3>
-<table>
-<thead>
-<tr>
-<th>Provider</th>
-<th>SDK</th>
-<th>Env var</th>
-</tr>
-</thead>
-<tbody><tr>
-<td><code>anthropic</code></td>
-<td><code>@ai-sdk/anthropic</code></td>
-<td><code>ANTHROPIC_API_KEY</code></td>
-</tr>
-<tr>
-<td><code>google</code></td>
-<td><code>@ai-sdk/google</code></td>
-<td><code>GOOGLE_GENERATIVE_AI_API_KEY</code></td>
-</tr>
-<tr>
-<td><code>groq</code></td>
-<td><code>@ai-sdk/groq</code></td>
-<td><code>GROQ_API_KEY</code></td>
-</tr>
-<tr>
-<td><code>ollama</code></td>
-<td><code>@ai-sdk/openai</code> compat</td>
-<td><code>OLLAMA_BASE_URL</code></td>
-</tr>
-<tr>
-<td><code>deepseek</code></td>
-<td><code>@ai-sdk/openai</code> compat</td>
-<td><code>DEEPSEEK_API_KEY</code></td>
-</tr>
-</tbody></table>
-<h3>Modelos Google disponíveis na UI <em>(Sprint 19 — gemini-2.0-flash removido)</em></h3>
-<table>
-<thead>
-<tr>
-<th>ID</th>
-<th>Label</th>
-<th>Status</th>
-</tr>
-</thead>
-<tbody><tr>
-<td><code>gemini-2.5-flash</code></td>
-<td>Gemini 2.5 Flash (premium)</td>
-<td>✅ Ativo</td>
-</tr>
-<tr>
-<td><code>gemini-2.5-flash-lite</code></td>
-<td>Gemini 2.5 Flash Lite</td>
-<td>✅ Ativo (padrão)</td>
-</tr>
-<tr>
-<td><code>gemini-2.5-pro</code></td>
-<td>Gemini 2.5 Pro</td>
-<td>✅ Ativo</td>
-</tr>
-</tbody></table>
-<h3>Tier System</h3>
-<table>
-<thead>
-<tr>
-<th>Tier</th>
-<th>Agentes</th>
-<th>Google</th>
-<th>Anthropic</th>
-</tr>
-</thead>
-<tbody><tr>
-<td><code>economy</code></td>
-<td>SCOPUS, KRATOS</td>
-<td>gemini-2.5-flash-lite</td>
-<td>claude-sonnet-4-6</td>
-</tr>
-<tr>
-<td><code>premium</code></td>
-<td>KLIO, PYTHIA, MNEMOSYNE, THEMIS, ATHENA</td>
-<td>gemini-2.5-flash</td>
-<td>claude-opus-4-7</td>
-</tr>
-<tr>
-<td><em>(global)</em></td>
-<td>HERMES, OLYMPUS</td>
-<td>gemini-2.5-flash-lite</td>
-<td>via <code>llm.model</code></td>
-</tr>
-</tbody></table>
-<p><strong>Anthropic Prompt Cache:</strong> <code>cacheControl: ephemeral</code> quando <code>provider === &#39;anthropic&#39;</code> (~84% economia tokens em chamadas repetidas).</p>
-<hr>
-<h2>PARTE 11 — EMBEDDINGS / RAG</h2>
-<h3>Roteamento automático <em>(Sprint 19 — Ollama como padrão, Voyage AI opcional)</em></h3>
-<pre><code>VOYAGE_API_KEY presente  → Voyage AI voyage-3-lite (512 dims, cloud)
-OLLAMA_BASE_URL presente → Ollama nomic-embed-text (768 dims, local) ← PADRÃO ATUAL
-Nenhum configurado       → erro explícito (não silencioso)
-</code></pre>
-<p><strong>Vantagens Ollama:</strong> sem limite mensal, sem API key, funciona air-gapped, latência menor.</p>
-<blockquote>
-<p>⚠️ <strong>Incompatibilidade de dimensões:</strong> índices Voyage (512 dims) e Ollama (768 dims) são incompatíveis. Ao trocar provider, <strong>reindexar todos os embeddings</strong>.</p>
-</blockquote>
-<hr>
-<h2>PARTE 12 — INFRAESTRUTURA DOCKER</h2>
-<pre><code class="language-yaml">services:
-  postgres:    # PostgreSQL 15 + pgvector — healthcheck pg_isready
-  api:         # Node.js/Hono 3333 — depends_on: postgres + ollama (service_started)
-  web:         # Nginx + React build 80
-  ollama:      # Sempre ativo (sem profile, Sprint 19) — healthcheck: ollama list
-  ollama-init: # One-shot: baixa nomic-embed-text na primeira inicialização
-</code></pre>
-<p><strong>LangGraph:</strong> PostgresSaver substitui BoundedMemorySaver. 4 tabelas checkpoint auto-criadas pelo <code>setup()</code>, <strong>fora do schema Drizzle</strong>.</p>
-<hr>
-<h2>PARTE 13 — SEGURANÇA</h2>
-<table>
-<thead>
-<tr>
-<th>Feature</th>
-<th>Arquivo</th>
-<th>Status</th>
-</tr>
-</thead>
-<tbody><tr>
-<td>JWT + 2FA TOTP</td>
-<td>auth.ts + speakeasy</td>
-<td>✅</td>
-</tr>
-<tr>
-<td>Rate limiting API</td>
-<td>rateLimit.ts (5 análises/h, 10 exports/h)</td>
-<td>✅</td>
-</tr>
-<tr>
-<td>Rate limiting nginx</td>
-<td>api_zone 30r/min + auth_zone 10r/min</td>
-<td>✅</td>
-</tr>
-<tr>
-<td>Hash-chain SHA-256</td>
-<td>utils/audit.ts — <code>_hash</code> + <code>_previousHash</code> no JSONB</td>
-<td>✅ Sprint 18</td>
-</tr>
-<tr>
-<td>Marca d&#39;água exports</td>
-<td>CSS watermark opacity:0.06, texto = classificação do projeto</td>
-<td>✅</td>
-</tr>
-<tr>
-<td>Backup corporativo</td>
-<td>pg_dump + <code>spawn()</code> (não <code>exec()</code>) — proteção contra shell injection</td>
-<td>✅ Sprint 23</td>
-</tr>
-<tr>
-<td>Anti-enumeração login</td>
-<td>setTimeout(70ms) timing mitigation</td>
-<td>✅</td>
-</tr>
-<tr>
-<td><strong>Role injection bloqueado</strong></td>
-<td>register ignora campo <code>role</code> do body; roles whitelistados em <code>users.ts</code></td>
-<td>✅ Sprint 23</td>
-</tr>
-<tr>
-<td><strong>Security headers</strong></td>
-<td>CSP + HSTS + X-Frame + Referrer-Policy em <code>nginx.conf</code> e Hono middleware</td>
-<td>✅ Sprint 23</td>
-</tr>
-<tr>
-<td><strong>JWT secret guard</strong></td>
-<td><code>index.ts</code>: ≥32 chars + não-óbvio; NODE_TLS_REJECT=0 bloqueado em produção</td>
-<td>✅ Sprint 23</td>
-</tr>
-<tr>
-<td><strong>Login rate limit Postgres</strong></td>
-<td><code>rateLimitLogs</code> table, 5 tentativas/15min por IP — funciona em múltiplas réplicas</td>
-<td>✅ Sprint 23</td>
-</tr>
-</tbody></table>
-<hr>
-<h2>PARTE 14 — SUITE DE TESTES (31/05/2026)</h2>
-<p><strong>Score local: 42/42 ✅ · Potencial com LLM real: 65/65</strong></p>
-<table>
-<thead>
-<tr>
-<th>Suite</th>
-<th>Resultado</th>
-<th>Tipo</th>
-</tr>
-</thead>
-<tbody><tr>
-<td>banco</td>
-<td><strong>5/5 ✅</strong></td>
-<td>Sem LLM</td>
-</tr>
-<tr>
-<td>arquitetura</td>
-<td><strong>6/6 ✅</strong></td>
-<td>Sem LLM — DB state</td>
-</tr>
-<tr>
-<td>segurança</td>
-<td><strong>6/6 ✅</strong></td>
-<td>Sem LLM</td>
-</tr>
-<tr>
-<td>kratos</td>
-<td><strong>3/3 ✅</strong></td>
-<td>LLM (~20s)</td>
-</tr>
-<tr>
-<td>artefatos</td>
-<td><strong>5/5 ✅</strong></td>
-<td>LLM (~1040s)</td>
-</tr>
-<tr>
-<td>exportação</td>
-<td><strong>4/4 ✅</strong></td>
-<td>LLM</td>
-</tr>
-<tr>
-<td>sat</td>
-<td><strong>7/7 ✅</strong></td>
-<td>LLM (~1208s)</td>
-</tr>
-<tr>
-<td>metodologias</td>
-<td><strong>10/10 (script)</strong></td>
-<td>MSEF, Godet, Grumbach, IPEA, OTAN, GBN + siplex, mpo, asplan, esg (Sprint 20)</td>
-</tr>
-<tr>
-<td>plano</td>
-<td>Para stress test</td>
-<td>LLM — [PLANO] no orquestrador</td>
-</tr>
-<tr>
-<td>tad</td>
-<td>Para stress test</td>
-<td>LLM — segregação, TAD, nexo temporal</td>
-</tr>
-</tbody></table>
-<hr>
-<h2>PARTE 15 — HISTÓRICO DE SPRINTS</h2>
-<table>
-<thead>
-<tr>
-<th>Sprint</th>
-<th>Data</th>
-<th>O que foi feito</th>
-</tr>
-</thead>
-<tbody><tr>
-<td>1–2</td>
-<td>Abr 2026</td>
-<td>Monolito: 7 agentes, exportação, autenticação, retry com backoff</td>
-</tr>
-<tr>
-<td>3</td>
-<td>Abr 2026</td>
-<td>Migração monorepo, Docker, JWT+2FA, backup</td>
-</tr>
-<tr>
-<td>4</td>
-<td>Abr 2026</td>
-<td>Resolução de 5 bugs críticos do SDK v6 (Zod, inputSchema, stopWhen, toolChoice, CMD)</td>
-</tr>
-<tr>
-<td>5</td>
-<td>25 Abr</td>
-<td>51 indicadores em 9 fontes, pgvector RAG, streaming real</td>
-</tr>
-<tr>
-<td>6</td>
-<td>25 Abr</td>
-<td>GRUMBACH, GODET, Painel Cliente v2, Link do Cliente</td>
-</tr>
-<tr>
-<td>7</td>
-<td>Mai 2026</td>
-<td>Railway Deploy scripts, PoC offline, scripts USB</td>
-</tr>
-<tr>
-<td>8</td>
-<td>19 Mai</td>
-<td>ICD 203 (3 ferramentas), TechniqueEngine, NATO AltA (12 SAT), step streaming</td>
-</tr>
-<tr>
-<td>9</td>
-<td>21 Mai</td>
-<td>Stepper dinâmico, Provider Factory Ollama, Gauge SVG fix</td>
-</tr>
-<tr>
-<td>10</td>
-<td>23 Mai</td>
-<td>FRED+Câmara+Senado, Playbook DOCX, audit_logs, rate limit, seed demo</td>
-</tr>
-<tr>
-<td>Final A</td>
-<td>26 Mai</td>
-<td>LangGraph schema, 7 ferramentas analíticas, anchorContext, seed declarativo</td>
-</tr>
-<tr>
-<td>Final B</td>
-<td>26 Mai</td>
-<td>OLYMPUS criado, 4 orquestradores legado removidos, Tier System, KRONOS→KRATOS, HERMES_REVISOR→ATHENA</td>
-</tr>
-<tr>
-<td>11</td>
-<td>28 Mai</td>
-<td>ATHENA pura, loops eliminados. Suite: <strong>6/6 ✅ 848s</strong></td>
-</tr>
-<tr>
-<td>12</td>
-<td>29 Mai</td>
-<td>ATHENA ICD 203 v2 (9 ATS), Shift-Left 5 especialistas. Suite: <strong>6/6 ✅ 985s</strong></td>
-</tr>
-<tr>
-<td>13</td>
-<td>29 Mai</td>
-<td>Fix atualizar_sentinela enum (&quot;string&quot;), Anthropic Prompt Cache</td>
-</tr>
-<tr>
-<td>14</td>
-<td>29 Mai</td>
-<td>PostgresSaver (substitui BoundedMemorySaver), 4 tabelas checkpoint</td>
-</tr>
-<tr>
-<td>15</td>
-<td>29 Mai</td>
-<td>Suite 42/36→42: fixes toolsConfig, MNEMOSYNE 4 narrativas, regex, campo</td>
-</tr>
-<tr>
-<td>16</td>
-<td>29 Mai</td>
-<td>ATHENA v3 (EB70), KLIO TAD+segregação, PYTHIA nexo temporal, report-compiler</td>
-</tr>
-<tr>
-<td>17</td>
-<td>30 Mai</td>
-<td>CEEEx/SIPLEx 6 seções, <strong>HERMES_SIPLEX removido</strong>, Protocolo Planejamento de Fase</td>
-</tr>
-<tr>
-<td>18</td>
-<td>30 Mai</td>
-<td>Suites arquitetura/plano/tad, hash-chain SHA-256, tool_register_scenario</td>
-</tr>
-<tr>
-<td>19</td>
-<td>30 Mai</td>
-<td><strong>Voyage AI → Ollama</strong> (auto-roteamento), Ollama sempre ativo, <strong>Gemini 2.0 removido</strong></td>
-</tr>
-<tr>
-<td>20</td>
-<td>30 Mai</td>
-<td>18 tarefas: IDOR 6 rotas, JWT jti+revogação, rate limit PG, JOIN loadMethodology, HNSW, cache UI, AuditModal, AnalysisService, reportLayout UI</td>
-</tr>
-<tr>
-<td>Deploy</td>
-<td>30 Mai</td>
-<td><strong>Railway online</strong> — olympus-api + olympus-web. Fixes: railway.toml, nginx SNI, pg_dump PGDG, PORT dinâmica</td>
-</tr>
-<tr>
-<td>Pós-deploy</td>
-<td>31 Mai</td>
-<td>Bug A (tool loop guard Agent.ts), Bug B (fase no CONFIRMAR), watermark ACESSO RESTRITO, EventsPanel flicker, batch/status order, T-10c pg-boss KRATOS</td>
-</tr>
-<tr>
-<td><strong>Sprint 22</strong></td>
-<td><strong>02 Jun 2026</strong></td>
-<td><strong>Olympus 1.0 — Migração arquitetural v4→v5:</strong> <code>phaseLoopNode</code> substitui 6 nós especializados · <code>PHASE_CONFIGS</code> em código · tabela <code>phase_outputs</code> (artefatos estruturados) · ATHENA determinística por fase (<code>athena-validator.ts</code>) · contexto ~268 tokens vs 40-60K · 5 agentes (remove SCOPUS/PYTHIA/MNEMOSYNE/THEMIS) · 12 metodologias (Bloco A/B, slugs corretos) · migration idempotente em <code>index.ts</code> · stress test 10/10 · TypeScript zero erros · Railway deploy + fix <code>clearCheckpointSql</code></td>
-</tr>
-<tr>
-<td><strong>Sprint 23</strong></td>
-<td><strong>03–04 Jun 2026</strong></td>
-<td><strong>Auditoria de segurança + performance + bugs de produção:</strong>
-Sec: role injection bloqueado no register · 2FA sem userId leak · <code>/health</code> minimal · backup <code>spawn()</code> vs <code>exec()</code> · validação de input em users/auth · JWT secret guard no startup · headers CSP/HSTS/X-Frame no nginx + Hono · login rate limit migrado para Postgres.
-Perf: 3 caches module-level em <code>phaseLoopNode</code> (KLIO/projectName/tools) · <code>buildPhaseSummary</code> O(1) · sessions list com colunas seletivas · <code>reloadCronJobs</code> → cirúrgico por projeto.
-Bugs: circular JSON no <code>EventsPanel</code> · PYTHIA removido da UI · MPC condicional por metodologia · ATHENA message descritiva · empty KLIO output fallback · fase 3 Grumbach com <code>tool_register_event</code> · guardrail fase-count.</td>
-</tr>
-<tr>
-<td><strong>Sprint 24</strong></td>
-<td><strong>04–05 Jun 2026</strong></td>
-<td><strong>Motor genérico + testagem end-to-end Grumbach:</strong>
-(1) <strong>PHASE_CONFIGS → banco:</strong> 5 novas colunas em <code>methodology_phases</code>; <code>loadPhaseConfigs(slug)</code> em <code>phase-context.ts</code> substitui objeto em código; <code>builder.ts</code> usa <code>state.totalPhases</code>; stress test 10/10 ✅.
-(2) <strong>Fix root cause "KLIO volta à fase 1":</strong> <code>sendMessage()</code> bloqueado durante <code>hitlGate</code>; <code>streamingText</code> limpo no <code>hitl_gate</code>.
-(3) <strong>toolTadScoreCalculator</strong> commitada (score TAD paramétrico 6 subcritérios).
-(4) <strong><code>consultar_agente</code> removido</strong> de todo o código (resíduo ReAct — <code>helpers.ts</code> + <code>Agent.ts</code>).
-(5) <strong>Tier mismatch cross-provider:</strong> PATCH <code>/settings/llm</code> upserta <code>llm_tiers</code> com defaults do novo provider.
-(6) <strong>nginx auto-healing:</strong> <code>resolver 127.0.0.11 valid=300s</code> — auto-heals em ≤5min após restart Docker Desktop.
-(7) <strong>Rate limit analysis</strong> 5→20/hora (9 fases passos ≈ 10 POSTs).
-(8) <strong>UUID fallback</strong> em <code>tool_grumbach_expert_simulation</code> (UUID→nome→todos aprovados).
-(9) <strong>maxOutputTokens KLIO</strong> 32k→12k→8k + <code>anchorContext</code> limitado a 20 eventos (fix OOM exit 137).
-(10) <strong>HERMES streaming bubble</strong> usa <code>progressAgent</code> em vez de "HERMES" hardcoded.
-(11) <strong>Fase 4 Delphi</strong> prompt reescrito: ferramenta retorna instruções, KLIO gera P(i); <code>tool_register_event</code> em allowedTools.
-(12) <strong>POST /sessions/parse-scope:</strong> extrai 6 campos de escopo de PDF/DOCX via Gemini; botão "Importar escopo" no NewSessionModal.
-(13) <strong>Canal ATHENA:</strong> <code>onAthena</code> → SSE <code>athena</code> → mensagem permanente no chat ✅/⚠️/❌ por fase.
-(14) <strong>progressAgent</strong> resetado no início de <code>callChatStream</code> (impedia "HERMES raciocinando" inicial).
-(15) <strong>vizMode</strong> reduzido de 4 para 3 níveis (removido passos; supervisão via HITL gates).
-(16) <strong>Grumbach 9 fases</strong> validadas end-to-end em localhost.</td>
-</tr>
-</tbody></table>
-<hr>
-<h2>PARTE 16 — BACKLOG</h2>
-<h3>✅ Todos os itens de alta/média prioridade concluídos (Sprints 1–23)</h3>
-<table>
-<thead>
-<tr>
-<th>Item</th>
-<th>Sprint</th>
-</tr>
-</thead>
-<tbody><tr>
-<td>PostgresSaver LangGraph</td>
-<td>14</td>
-</tr>
-<tr>
-<td>Anthropic Prompt Cache</td>
-<td>13</td>
-</tr>
-<tr>
-<td>Fix atualizar_sentinela enum Gemini</td>
-<td>13</td>
-</tr>
-<tr>
-<td>Suite completa 42/42</td>
-<td>15–18</td>
-</tr>
-<tr>
-<td>tool_register_event Gemini</td>
-<td>15–16</td>
-</tr>
-<tr>
-<td>MNEMOSYNE narrativas=1</td>
-<td>15</td>
-</tr>
-<tr>
-<td>Hash-chain audit_logs SHA-256</td>
-<td>18</td>
-</tr>
-<tr>
-<td>Strategic Slate Compiler (report-compiler.ts)</td>
-<td>16</td>
-</tr>
-<tr>
-<td>Harmonized Scenario Schema (tool_register_scenario)</td>
-<td>18</td>
-</tr>
-<tr>
-<td>Voyage AI → Ollama nomic-embed-text</td>
-<td>19</td>
-</tr>
-<tr>
-<td>HERMES_SIPLEX removido (anti-padrão)</td>
-<td>17</td>
-</tr>
-<tr>
-<td>Gemini 2.0 Flash removido (descontinuado)</td>
-<td>19</td>
-</tr>
-<tr>
-<td>IDOR corrigido em 6 rotas JWT</td>
-<td>20</td>
-</tr>
-<tr>
-<td>JWT jti + revoked_tokens + logout</td>
-<td>20</td>
-</tr>
-<tr>
-<td>Rate limit PostgreSQL sliding window</td>
-<td>20</td>
-</tr>
-<tr>
-<td>JOIN único loadMethodology</td>
-<td>20</td>
-</tr>
-<tr>
-<td>Índice HNSW pgvector</td>
-<td>20</td>
-</tr>
-<tr>
-<td>Cache invalidation UI + badge</td>
-<td>20</td>
-</tr>
-<tr>
-<td>AuditModal + hash-chain verify</td>
-<td>20</td>
-</tr>
-<tr>
-<td>AnalysisService extraído de chat.ts</td>
-<td>20</td>
-</tr>
-<tr>
-<td>reportLayout Standard/Estendido na UI</td>
-<td>20</td>
-</tr>
-<tr>
-<td><strong>Deploy Railway</strong> ✅ Online 30 Mai 2026</td>
-<td>20</td>
-</tr>
-<tr>
-<td>PoC Presencial USB — pacote gerado (401 MB tar)</td>
-<td>20</td>
-</tr>
-<tr>
-<td><strong>Audit Frontend Modal</strong> ✅ implementado</td>
-<td>20</td>
-</tr>
-<tr>
-<td><strong>Rate Limiting Redis</strong> → PostgreSQL sliding window</td>
-<td>20</td>
-</tr>
-<tr>
-<td>Bug A — tool loop guard (Agent.ts)</td>
-<td>Pós-deploy</td>
-</tr>
-<tr>
-<td>Bug B — fase no CONFIRMAR (vizMode=passos)</td>
-<td>Pós-deploy</td>
-</tr>
-<tr>
-<td>Watermark CONFIDENCIAL → ACESSO RESTRITO</td>
-<td>Pós-deploy</td>
-</tr>
-<tr>
-<td>pg-boss KRATOS — isolamento de jobs</td>
-<td>T-10c</td>
-</tr>
-<tr><td>toolTadScoreCalculator (score TAD paramétrico)</td><td>Sprint 24</td></tr>
-<tr><td>consultar_agente removido (resíduo ReAct)</td><td>Sprint 24</td></tr>
-<tr><td>Tier mismatch cross-provider</td><td>Sprint 24</td></tr>
-<tr><td>sendMessage bloqueado durante hitlGate</td><td>Sprint 24</td></tr>
-<tr><td>UUID fallback tool_grumbach_expert_simulation</td><td>Sprint 24</td></tr>
-<tr><td>maxOutputTokens KLIO 8k + anchorContext limit 20</td><td>Sprint 24</td></tr>
-<tr><td>PHASE_CONFIGS → banco (loadPhaseConfigs)</td><td>Sprint 24</td></tr>
-<tr><td>nginx auto-healing valid=300s</td><td>Sprint 24</td></tr>
-<tr><td>ATHENA visível via canal onAthena</td><td>Sprint 24</td></tr>
-<tr><td>Fase 4 Delphi prompt corrigido + tool_register_event</td><td>Sprint 24</td></tr>
-<tr><td>POST /sessions/parse-scope (importar escopo)</td><td>Sprint 24</td></tr>
-<tr><td>vizMode reduzido para 3 níveis</td><td>Sprint 24</td></tr>
-</tbody></table>
-<h3>🔲 Pendente — Bugs ativos (05 Jun 2026)</h3>
-<table>
-<thead>
-<tr><th>#</th><th>Bug</th><th>Descrição</th></tr>
-</thead>
-<tbody>
-<tr><td>B3</td><td><strong>Fases somem da tela após ATHENA</strong></td><td>Histórico de mensagens — investigação pendente</td></tr>
-<tr><td>RAG</td><td><strong>RAG inoperante localmente</strong></td><td>vector(768) correto, mas índice HNSW pode precisar rebuild após troca Voyage→Ollama</td></tr>
-</tbody></table>
-<h3>🔲 Pendente — Funcionalidades</h3>
-<table>
-<thead>
-<tr>
-<th>#</th>
-<th>Item</th>
-<th>Descrição</th>
-</tr>
-</thead>
-<tbody><tr>
-<td>A</td>
-<td><strong>VPN + Dados Proprietários</strong></td>
-<td>Acesso a dados internos do cliente via VPN. Railway ativo — desbloqueado, depende de contrato.</td>
-</tr>
-<tr>
-<td>B</td>
-<td><strong>PoC USB — teste máquina limpa</strong></td>
-<td>Pacote gerado. Falta validar instalação do zero em máquina sem Docker/Node.</td>
-</tr>
-</tbody></table>
-<h3>🔮 Longo Prazo</h3>
-<table>
-<thead>
-<tr>
-<th>#</th>
-<th>Item</th>
-<th>Descrição</th>
-</tr>
-</thead>
-<tbody><tr>
-<td>F</td>
-<td>Hybrid Sovereign Embedding</td>
-<td>SentenceTransformers para AIR_GAPPED (Ollama cobre SOBERANO)</td>
-</tr>
-<tr>
-<td>G</td>
-<td>Analytical Lineage Tracker</td>
-<td>Trilha: cada conclusão → evidências originais</td>
-</tr>
-<tr>
-<td>H</td>
-<td>Adaptive Briefing Engine</td>
-<td>Resumos adaptativos por stakeholder/classificação</td>
-</tr>
-<tr>
-<td>I</td>
-<td>Cross-Project Horizon Scanning</td>
-<td>Sinais fracos entre projetos do portfólio</td>
-</tr>
-<tr>
-<td>J</td>
-<td>Fase D — LLM Soberano</td>
-<td>Fine-tuning com dados MSEF · air-gapped para defesa · ativo de PI para exit. Provider Factory já prepara a transição.</td>
-</tr>
-<tr>
-<td>K</td>
-<td>Sabiá-3 / LLM Soberano BR</td>
-<td>Troca via LLM_PROVIDER sem reescrever o motor. Argumento de soberania para clientes de defesa.</td>
-</tr>
-</tbody></table>
-<hr>
-<h2>PARTE 17 — REGRAS DE ENGENHARIA CRÍTICAS</h2>
-<pre><code>1.  Zod PROIBIDO em ferramentas e nós do grafo (TS2589 com @langchain/core)
-2.  packages/tools NÃO importa @olympus/db
-3.  stopWhen: stepCountIs(N) — nunca maxSteps (ignorado no SDK v6)
-4.  (myTool as any).inputSchema = () =&gt; jsonSchema(rawSchema as any)
-5.  CMD produção: node apps/api/dist/index.js — nunca npx tsx
-6.  Rebuild obrigatório após alterar packages/core ou apps/api/src:
-    docker compose build --no-cache api &amp;&amp; docker compose up -d api
-7.  Ao trocar provider LLM: atualizar AMBOS llm E llm_tiers em platform_settings
-8.  Mudanças de prompt: via seed.ts (re-run) OU patch direto no banco
-9.  methodology_cache TTL 5 min — restart do container limpa imediatamente
-10. Tabelas checkpoint*: NÃO adicionar ao schema Drizzle
-11. Enums Gemini: &quot;type&quot;:&quot;string&quot; — Gemini rejeita &quot;type&quot;:&quot;number&quot;,&quot;enum&quot;:[1,2]
-12. node_slug no prompt OLYMPUS: NÃO enumerar (confunde Gemini)
-13. Ao trocar embedding provider (Voyage↔Ollama): reindexar todos os embeddings
-14. SIPLEx usa HERMES + agentMethodPrompts/siplex — não criar orquestradores específicos
-15. Tabelas pgboss.*: NÃO adicionar ao schema Drizzle (gerenciadas pelo pg-boss internamente)
-16. Hono route order: PATCH /batch/status DEVE preceder PATCH /:id/status — Hono casa /batch como id=&#39;batch&#39;
-17. railway.toml: NÃO incluir dockerfilePath/healthcheckPath na raiz — afeta TODOS os serviços
-18. nginx Railway: proxy_ssl_server_name on (SNI para HTTPS upstream), porta via $PORT (não hardcoded 80)
-19. pg_dump Railway usa PostgreSQL 18: binário real em /usr/lib/postgresql/18/bin/pg_dump (PGDG apt)
-20. Admin isento de rate limit de análise — MSEF em passos usa 8-10 chamadas por sessão
-</code></pre>
-<h3>Template canônico para novas ferramentas</h3>
-<p><strong>Passo 1 — Definir lógica</strong> em <code>packages/tools/src/</code> (sem DB) ou <code>apps/api/src/tools/</code> (com DB):</p>
-<pre><code class="language-typescript">export const minhaFerramenta = {
-  name: &quot;minha_ferramenta&quot;,
-  description: &quot;Descrição clara do que a ferramenta faz.&quot;,
-  execute: async (args: { parametro: string }, context: any): Promise&lt;string&gt; =&gt; {
-    return resultado;
-  },
-};
-</code></pre>
-<p><strong>Passo 2 — Registrar schema puro</strong> em <code>packages/core/src/Agent.ts</code>:</p>
-<pre><code class="language-typescript">const TOOL_JSON_SCHEMAS: Record&lt;string, object&gt; = {
-  minha_ferramenta: {
-    type: &quot;object&quot;,
-    properties: {
-      parametro: { type: &quot;string&quot;, description: &quot;Descrição do parâmetro&quot; }
-    },
-    required: [&quot;parametro&quot;]
-  }
-};
-</code></pre>
-<p><strong>Passo 3 — Rebuild obrigatório</strong> após alterar <code>packages/core</code>:</p>
-<pre><code class="language-bash">docker compose build --no-cache api
-docker compose up -d
-</code></pre>
-<hr>
-<h2>PARTE 18 — GUIA OPERACIONAL</h2>
-<h3>Fluxo normal de rebuild</h3>
-<pre><code class="language-bash"># Após alterar API ou packages/:
-docker compose build --no-cache api
-docker compose up -d
-docker compose logs -f api
+<div class="meta">
+  <strong>StratSight Brasil · Strategic Foresight · IA Agêntica</strong><br>
+  <strong>Atualizado em:</strong> 05 Jun 2026 (Sprint 25 concluído — HITL state machine + 12 bugs resolvidos)<br>
+  <strong>Destinatário:</strong> Claude Chat / Claude Design — diagnóstico e roadmap para outras metodologias<br>
+  <strong>Commit:</strong> 4484711 (Sprint 25i)
+</div>
 
-# Após alterar apenas o frontend:
-docker compose build --no-cache web
-docker compose up -d
-</code></pre>
-<h3>Reset nuclear (APAGA O BANCO)</h3>
-<pre><code class="language-bash"># 1. Zerar tudo
-wsl --shutdown
-docker compose down -v --rmi all
-docker system prune -a -f --volumes
+<h2>📌 SPRINT 25 — RESUMO EXECUTIVO</h2>
 
-# 2. Reinstalar dependências
-npm install
+<div class="success">
+  <strong>Grumbach 9 fases validado end-to-end com sucesso</strong><br>
+  12 bugs resolvidos · HITL state machine sólido · ATHENA determinística funcionando<br>
+  4 bugs novos identificados no teste de geopolítica Brasil
+</div>
 
-# 3. Build e subida completa
-docker compose build --no-cache
-docker compose up -d
+<h3>Bugs Resolvidos (Sprint 25a–i)</h3>
+<table>
+  <thead>
+    <tr>
+      <th>#</th>
+      <th>Bug</th>
+      <th>Sprint</th>
+      <th>Solução</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>1</td>
+      <td>Phase counter 8/9</td>
+      <td>25a</td>
+      <td>Rastreamento via 'athena' SSE event only</td>
+    </tr>
+    <tr>
+      <td>2</td>
+      <td>ATHENA reprova fase 1 sem dados</td>
+      <td>25a</td>
+      <td>tool_declarar_julgamento cria event "Premissa-Linchpin"</td>
+    </tr>
+    <tr>
+      <td>3</td>
+      <td>HITL button inativo</td>
+      <td>25b</td>
+      <td>vizMode default: 'passos' → 'etapa'</td>
+    </tr>
+    <tr>
+      <td>4</td>
+      <td>Cache polling 50req/s</td>
+      <td>25c</td>
+      <td>Intervalo 300s + phaseConfigCache status</td>
+    </tr>
+    <tr>
+      <td>5</td>
+      <td>OLYMPUS sintetiza em vez de HERMES</td>
+      <td>25d</td>
+      <td>Removida lógica condicional; query HERMES direto</td>
+    </tr>
+    <tr>
+      <td>6</td>
+      <td>Phase output desaparece em etapa mode</td>
+      <td>25e</td>
+      <td>phase_output SSE antes de interrupt, frontend persiste</td>
+    </tr>
+    <tr>
+      <td>7</td>
+      <td>Fases 5-9 ATS2 falha</td>
+      <td>25f</td>
+      <td>KeyFinding.description opcional + mapeado</td>
+    </tr>
+    <tr>
+      <td>8</td>
+      <td>currentPhaseNum salta em hitl_required</td>
+      <td>25g</td>
+      <td>Removida setCurrentPhaseNum de hitl_gate handler</td>
+    </tr>
+    <tr style="background: #fff3cd;">
+      <td>9 ⭐</td>
+      <td><strong>ATHENA audita ANTES da aprovação</strong></td>
+      <td>25h</td>
+      <td><strong>Moved audit para APÓS interrupt — crítico</strong></td>
+    </tr>
+    <tr>
+      <td>10</td>
+      <td>ATHENA REQUER_REVISAO sem contexto</td>
+      <td>25i</td>
+      <td>checks array com ATS codes adicionado</td>
+    </tr>
+    <tr>
+      <td>11</td>
+      <td>FPFs fracionadas (fase 1 + 2)</td>
+      <td>25i</td>
+      <td>Fase 1 sem tool_register_event; fase 2 única</td>
+    </tr>
+    <tr>
+      <td>12</td>
+      <td>Eventos mal-rotulados como "FPF"</td>
+      <td>25i</td>
+      <td>getSemanticLabel() em EventsPanel</td>
+    </tr>
+  </tbody>
+</table>
 
-# 4. OBRIGATÓRIO após -v: criar extensão e aplicar schema
-docker exec olympus_db psql -U postgres -d olympus -c &quot;CREATE EXTENSION IF NOT EXISTS vector;&quot;
-cd packages/db &amp;&amp; npx drizzle-kit push &amp;&amp; cd ../..
+<h3>HITL State Machine (etapa mode)</h3>
+<pre>KLIO propõe → phase_output SSE → interrupt
+          ↓
+   Usuário aprova/rejeita (PATCH /events/batch/status)
+          ↓
+resumeGraph() chamado
+          ↓
+ATHENA audita status='approved' events
+          ↓
+athena SSE com verdict + checks array
+          ↓
+Próxima fase OU síntese final</pre>
 
-# 5. Repovoar banco
-DATABASE_URL=&quot;postgres://postgres:postgres@localhost:5432/olympus&quot; npx tsx apps/api/src/scripts/seed.ts
+<h3>Visualizações Pendentes (Sprint 25i)</h3>
+<div class="warning">
+  <strong>4 bugs novos identificados no teste:</strong><br>
+  • Delphi P(i) sem visualização gráfica<br>
+  • Impactos cruzados sem heatmap 5×5<br>
+  • ATHENA vendo dados incompletos fase 1<br>
+  • Varredura FPF fracionada fase 2
+</div>
 
-# 6. Verificar saúde
-docker compose logs -f api
-</code></pre>
-<p><strong>Armadilhas do reset nuclear:</strong></p>
-<table>
-<thead>
-<tr>
-<th>Erro</th>
-<th>Causa</th>
-<th>Solução</th>
-</tr>
-</thead>
-<tbody><tr>
-<td><code>relation &quot;projects&quot; does not exist</code></td>
-<td>Schema não aplicado após <code>-v</code></td>
-<td>Rodar passo 4</td>
-</tr>
-<tr>
-<td><code>type &quot;vector(512)&quot; does not exist</code></td>
-<td>Extensão pgvector não criada</td>
-<td><code>docker exec olympus_db psql -U postgres -d olympus -c &quot;CREATE EXTENSION IF NOT EXISTS vector;&quot;</code></td>
-</tr>
-<tr>
-<td><code>unknown command &#39;push&#39;</code></td>
-<td>drizzle-kit desatualizado</td>
-<td>Atualizar para <code>^0.31.10</code></td>
-</tr>
-<tr>
-<td><code>ECONNREFUSED 172.x.x.x:5432</code></td>
-<td>Race condition API→Postgres</td>
-<td>Corrigido com retry (10×3s)</td>
-</tr>
-</tbody></table>
-<h3>Limpeza simples (preserva banco)</h3>
-<pre><code class="language-bash">docker compose stop api
-docker compose build --no-cache api
-docker compose up -d api
-docker compose logs -f api
-</code></pre>
-<blockquote>
-<p><code>docker compose down</code> (sem <code>-v</code>) preserva volumes. O banco só é perdido com <code>-v</code> ou <code>--volumes</code>.</p>
-</blockquote>
-<h3>Configuração WSL2</h3>
-<p>Criar <code>%USERPROFILE%\.wslconfig</code>:</p>
-<pre><code class="language-ini">[wsl2]
-memory=8GB
-processors=4
-swap=2GB
-</code></pre>
-<p>Se Docker travar com <code>input/output error</code>: <code>wsl --shutdown</code> + <em>Clean/Purge data</em> no Docker Desktop.</p>
-<hr>
-<h2>PARTE 19 — RISCOS IDENTIFICADOS</h2>
-<h3>19.1 Riscos Técnicos</h3>
-<table>
-<thead>
-<tr>
-<th>Risco</th>
-<th>Status</th>
-<th>Mitigação</th>
-</tr>
-</thead>
-<tbody><tr>
-<td>Context bloat em análises longas</td>
-<td>✅ <strong>Resolvido (Sprint Pré-LangGraph)</strong></td>
-<td><code>buildMemoryWindow()</code> com orçamento 32k tokens, <code>estimateTokens()</code>, suporte multimodal</td>
-</tr>
-<tr>
-<td>Dependência Voyage AI (RAG)</td>
-<td>✅ <strong>Resolvido (Sprint 19)</strong></td>
-<td>Ollama nomic-embed-text como padrão. Roteamento automático. Air-gapped.</td>
-</tr>
-<tr>
-<td>Esgotamento limite Tavily gratuito</td>
-<td>⚠️ Monitorar</td>
-<td>Plano free: 1.000 req/mês. Migrar para Tavily Starter (~USD 29/mês) após primeiro contrato. Brave Search como fallback.</td>
-</tr>
-<tr>
-<td>Race condition DB→API no Railway (cold start)</td>
-<td>✅ <strong>Resolvido</strong></td>
-<td>Retry 10×3s. Health check <code>/ping</code> configurado no dashboard Railway.</td>
-</tr>
-</tbody></table>
-<h3>19.2 Riscos Operacionais e Estratégicos</h3>
-<table>
-<thead>
-<tr>
-<th>Risco</th>
-<th>Contexto</th>
-<th>Mitigação</th>
-</tr>
-</thead>
-<tbody><tr>
-<td><del>Deploy ausente bloqueia KRATOS</del></td>
-<td>✅ <strong>Railway online desde 30 Mai 2026</strong></td>
-<td>KRATOS com pg-boss (T-10c) — jobs enfileirados em PostgreSQL, retry automático.</td>
-</tr>
-<tr>
-<td>Ausência de PoC presencial</td>
-<td>Ambiente governamental sem acesso externo é inviável com Docker de 3 contêineres.</td>
-<td><code>docker save</code> → USB + script Windows. Fallback: server.js legado como modo standalone.</td>
-</tr>
-<tr>
-<td>Complexidade operacional</td>
-<td>Stack evoluiu de 2 arquivos para monorepo + 4 pacotes + Docker + pgvector + múltiplas APIs. Operação solo tem limite.</td>
-<td>HISTORICO_DESENVOLVIMENTO.md é o principal ativo operacional. Contratar CIO técnico a partir do segundo contrato.</td>
-</tr>
-<tr>
-<td>Dependências externas não orçadas</td>
-<td>INLABS + ITU DataHub adicionados sem revisão de custos. Risco de surpresas ao escalar.</td>
-<td>Revisar modelo de custos a cada sprint (ver Parte 20).</td>
-</tr>
-</tbody></table>
-<hr>
-<h2>PARTE 20 — ATIVOS NÃO PLANEJADOS (Valor para Exit)</h2>
-<table>
-<thead>
-<tr>
-<th>Ativo</th>
-<th>O Que É</th>
-<th>Impacto no Exit / Valuation</th>
-</tr>
-</thead>
-<tbody><tr>
-<td>Motor Dinâmico de Metodologias</td>
-<td>Agentes e metodologias 100% via banco. Nova metodologia = upload de JSON, sem deploy.</td>
-<td>Cria marketplace de metodologias. Parceiros publicam engines — modelo de receita adicional.</td>
-</tr>
-<tr>
-<td>RAG com pgvector + Ollama</td>
-<td>Documentos do cliente indexados semanticamente por projectId. Air-gapped.</td>
-<td>Principal diferencial técnico para defesa. Lock-in e alto valor de retenção.</td>
-</tr>
-<tr>
-<td>Token Streaming SSE Real</td>
-<td><code>streamText</code> + cursor piscante em tempo real na UI.</td>
-<td>Experiência enterprise em demos ao vivo. Acelera fechamento de contratos.</td>
-</tr>
-<tr>
-<td>Provider Factory (Agent.ts)</td>
-<td><code>getModel()</code> lê <code>LLM_PROVIDER</code>. Trocar Anthropic por Ollama/Sabiá-3 sem alterar código dos agentes.</td>
-<td>Prepara Fase D sem reescrita. Demonstrável como &quot;agnóstico de modelo&quot; — maior múltiplo de valuation.</td>
-</tr>
-<tr>
-<td>Backup Corporativo pg_dump</td>
-<td>Rota admin-only que gera <code>.sql.gz</code>. BackupModal na UI.</td>
-<td>Requisito compliance ISO 27001 antecipado. Elimina objeção de segurança em clientes de defesa.</td>
-</tr>
-<tr>
-<td>Painel Admin (Engine Manager)</td>
-<td>Instala novos Motores (JSON + agentes) sem deploy. Gerenciamento de usuários e roles na UI.</td>
-<td>Permite operação por pessoal não-técnico. Requisito para escalar além da operação solo.</td>
-</tr>
-<tr>
-<td>Metodologias militares operacionais</td>
-<td>GRUMBACH + GODET + OTAN/AltA + SIPLEx/CEEEx com prompts v3 completos.</td>
-<td>Diferencial direto para clientes de defesa e governo. Amplia mercado endereçável.</td>
-</tr>
-<tr>
-<td>ICD 203 + EB70-MT-10.401 integrados</td>
-<td>ATHENA v3, TAD condicional, segregação epistemológica.</td>
-<td>Conformidade com doutrina militar brasileira e padrões ODNI. Diferencial único no mercado.</td>
-</tr>
-</tbody></table>
-<hr>
-<h2>PARTE 21 — MODELO DE CUSTOS (atualizado 30/05/2026)</h2>
-<table>
-<thead>
-<tr>
-<th>Ferramenta / Serviço</th>
-<th>Plano Atual</th>
-<th>Custo pré-contrato</th>
-<th>Custo pós-contrato</th>
-<th>Status</th>
-</tr>
-</thead>
-<tbody><tr>
-<td>Google Gemini API</td>
-<td>Pay-per-use (profissional)</td>
-<td>~R$ 150</td>
-<td>~R$ 500 (2 clientes)</td>
-<td>✅ Planejado</td>
-</tr>
-<tr>
-<td>Anthropic Claude API</td>
-<td>Pay-per-use</td>
-<td>~R$ 0 (teste)</td>
-<td>~R$ 400 (2 clientes)</td>
-<td>✅ Opcional</td>
-</tr>
-<tr>
-<td>Tavily Search API</td>
-<td>Free (1k req)</td>
-<td>R$ 0</td>
-<td>~R$ 150 (Starter)</td>
-<td>⚠️ Ampliar após 1º contrato</td>
-</tr>
-<tr>
-<td><del>Voyage AI (RAG embeddings)</del></td>
-<td><del>Free tier</del></td>
-<td><del>R$ 0</del></td>
-<td><del>R$ 50</del></td>
-<td>✅ <strong>Substituído por Ollama (R$0)</strong></td>
-</tr>
-<tr>
-<td>Railway (deploy 24/7 + PostgreSQL)</td>
-<td>Hobby ativo</td>
-<td>~R$ 70/mês</td>
-<td>~R$ 120 (Pro)</td>
-<td>✅ <strong>Online desde 30 Mai 2026</strong></td>
-</tr>
-<tr>
-<td>Google Workspace</td>
-<td>Business Starter</td>
-<td>R$ 35</td>
-<td>R$ 35</td>
-<td>✅ Planejado</td>
-</tr>
-<tr>
-<td>Contador terceirizado</td>
-<td>Mensalidade</td>
-<td>R$ 500</td>
-<td>R$ 500</td>
-<td>✅ Planejado</td>
-</tr>
-<tr>
-<td>Demais (Notion, Canva, n8n)</td>
-<td>Free/Pro</td>
-<td>R$ 93</td>
-<td>R$ 93</td>
-<td>✅ Planejado</td>
-</tr>
-<tr>
-<td><strong>TOTAL</strong></td>
-<td>—</td>
-<td><strong>R$ 808/mês</strong></td>
-<td><strong>~R$ 1.258/mês</strong></td>
-<td>✅ &lt; R$ 1.500</td>
-</tr>
-</tbody></table>
-<blockquote>
-<p><strong>Margem de segurança:</strong> custo pós-contrato estimado em R$ 1.258/mês — dentro da diretriz de R$ 1.500/mês. Voyage AI substituído por Ollama local zerou este item. Margem de R$ 242/mês absorve variações.</p>
-</blockquote>
-<hr>
-<h2>PARTE 22 — PONTOS DE ATENÇÃO ARQUITETURAIS E DE UI</h2>
-<h3>22.1 Decisões arquiteturais conhecidas (intencionais, não problemas)</h3>
+<h2>🔗 DOCUMENTOS COMPLEMENTARES</h2>
 <ul>
-<li><del><strong>Duas rotas de análise:</strong></del> <strong>✅ Sprint 21 — Motor único LangGraph.</strong> <code>/chat/stream</code> e a rota síncrona foram removidas. Toda análise passa por <code>/chat/stream/graph</code>. Os 4 modos (passos/etapa/passagem/thinking) são configurações do grafo.</li>
-<li><strong>App.tsx com estado global centralizado:</strong> padrão deliberado para MVP. Decomposição em contextos React (LLMContext, SessionContext) está no roadmap mas não é bloqueadora.</li>
+  <li><strong>SPRINT_25_DIAGNOSTICO_FINAL.md</strong> — Diagnóstico detalhado com causa raiz de cada bug</li>
+  <li><strong>PARA_COMPARTILHAR_COM_CHAT.md</strong> — Sumário para o Chat iniciar diagnóstico arquitetural</li>
+  <li><strong>ESTADO_REAL_SISTEMA.md</strong> — Estado atual do sistema (tabelas, caches, metodologias)</li>
 </ul>
-<h3>22.2 Débito técnico conhecido</h3>
-<ul>
-<li><strong>export.ts — mapeamentos de fase:</strong> usa <code>_getPhaseMap()</code> com TTL 5 min — fonte única via banco. ✅ Resolvido Sprint 20.</li>
-<li><strong>parseScenarioProbabilities() — regex frágil:</strong> ainda em uso para análises antigas. <code>tool_register_scenario</code> é o substituto para novas análises.</li>
-<li><strong>HERMES_SIPLEX no banco:</strong> deletado via seed.ts a partir do Sprint 20. Não recriado.</li>
-<li><del><strong>Mensagem duplicada (Bug #2/#3):</strong></del> ✅ Resolvido Sprint 21 — instrução de transcrição verbatim removida.</li>
-<li><del><strong>Páginas vazias PDF (Bug D):</strong></del> ✅ Resolvido Sprint 21 — filterAgentMessages threshold 800 chars.</li>
-<li><strong>Normalização de slugs pendente:</strong> <code>alta</code>→<code>otan</code>, <code>macroplan</code>→<code>ipea</code>, <code>futures</code>→<code>gbn</code>, <code>siplex</code>→<code>siplex_ceex</code>. Não afeta funcionamento (loadMethodology busca por nome E slug). Migração requer DROP+RECREATE ou UPDATE preservando FKs.</li>
-<li><strong>OLYMPUS stubs pendentes:</strong> grumbach_plj, siex_mpc, siplex_plj, asplan_sped (metodologias de planejamento estratégico — fases indefinidas, orquestrador OLYMPUS).</li>
-</ul>
-<h3>22.3 UI/UX — itens pendentes de design</h3>
-<ul>
-<li><strong>Modo <code>passos</code> — HitlDecisionCard:</strong> ✅ Sprint 21 — cartão de Confirmar/Redirecionar implementado acima do InputZone.</li>
-<li><strong>VizStatusBar:</strong> ✅ Sprint 21 — barra de status mostrando modo, fase e agente ativo.</li>
-<li><strong>Seletor de <code>reportLayout</code>:</strong> ✅ Toggle Standard/Estendido implementado no CommandBar (Sprint 20). Estado em localStorage por projeto.</li>
-<li><strong>Seletor de <code>vizMode</code>:</strong> ✅ Sprint 21 — &#39;Motor LangGraph&#39; removido (obsoleto). 4 modos disponíveis: Passo a Passo, Etapa Completa, Processo Completo, Raciocínio Estendido.</li>
-<li><strong>EventsPanel (HITL):</strong> funcional, flicker corrigido (Sprint 20). Theming ainda inconsistente com o restante da UI.</li>
-</ul>
-<hr>
-<h2>Sprint 21 — Motor LangGraph-first + Bugs + OTAN (31 Mai 2026)</h2>
-<h3>Decisão arquitetural principal</h3>
-<p><strong>Eliminação do <code>runAnalysis()</code> e adoção do LangGraph como motor único.</strong> Ver seção 22.1 acima.</p>
-<h3>Mudanças críticas</h3>
-<table>
-<thead>
-<tr>
-<th>Componente</th>
-<th>Antes</th>
-<th>Depois</th>
-</tr>
-</thead>
-<tbody><tr>
-<td><code>chat.ts</code></td>
-<td>3 rotas (/, /stream, /stream/graph)</td>
-<td>1 rota (/stream/graph)</td>
-</tr>
-<tr>
-<td><code>analysis.service.ts</code></td>
-<td>569 linhas — orquestrador ReAct completo</td>
-<td>75 linhas — cache de metodologias</td>
-</tr>
-<tr>
-<td><code>useChat.ts</code></td>
-<td>Alternava entre /stream e /stream/graph</td>
-<td>Sempre /stream/graph</td>
-</tr>
-<tr>
-<td><code>cron.ts KRATOS</code></td>
-<td><code>runAnalysis()</code></td>
-<td><code>runDirectAgent()</code> (sem grafo)</td>
-</tr>
-<tr>
-<td><code>synthesisNode</code></td>
-<td>Pegava primeiro orchestrator do DB</td>
-<td>Prefere HERMES via agentMethodPrompts</td>
-</tr>
-<tr>
-<td><code>NewSessionModal</code></td>
-<td>5 modos (incl. Motor LangGraph)</td>
-<td>4 modos (todos já usam LangGraph)</td>
-</tr>
-</tbody></table>
-<h3>Bugs resolvidos</h3>
-<table>
-<thead>
-<tr>
-<th>Bug</th>
-<th>Fix</th>
-</tr>
-</thead>
-<tbody><tr>
-<td>pg-boss crash Railway (ERR_UNHANDLED_ERROR)</td>
-<td><code>cron.ts</code>: <code>boss.start()</code> → <code>boss.work()</code> + <code>boss.on(&#39;error&#39;)</code></td>
-</tr>
-<tr>
-<td>Bugs #2/#3: conteúdo duplicado</td>
-<td>Instrução &quot;Transcreva verbatim&quot; → &quot;Apresente sem duplicar&quot;</td>
-</tr>
-<tr>
-<td>Bug #6: <code>---</code> repetido</td>
-<td>Regex <code>/(\n\s*---\s*){3,}/g</code> em analysis.service.ts</td>
-</tr>
-<tr>
-<td>Bug C: export bloqueado em erro de especialista</td>
-<td>useExport.ts: fallback 3 níveis (&gt;300 chars, excl. planning)</td>
-</tr>
-<tr>
-<td>Bug D: páginas vazias PDF</td>
-<td>export.ts: filterAgentMessages threshold 800 chars</td>
-</tr>
-</tbody></table>
-<h3>Metodologias</h3>
-<ul>
-<li><strong>OTAN/AltA</strong>: 6 fases per OTAN.md — KAC, What-If, Analysis of Alternatives, Red Teaming, Pre-Mortem</li>
-<li><strong>SIPLEx/CEEEx</strong>: 7 fases — HERMES removido como agentRole (causava crash SSE ao tentar usar consultar_agente como especialista)</li>
-<li><strong>SIEx</strong>: nome canônico &quot;SIEx: Conhecimento Estimativa EB&quot; (era &quot;MPC: Conhecimento Estimativa EB&quot;)</li>
-<li><strong>HERMES agentMethodPrompts</strong>: Grumbach (9 fases) e SIEx (5 fases) adicionados; Godet, OTAN, ESG, macroplan, futures reforçados com [MAPEAMENTO DE ESPECIALISTAS]</li>
-<li><strong>seed.ts</strong>: cleanup automático de fases excedentes com <code>gt(phaseNum, max)</code></li>
-</ul>
-<hr>
-<p><em>Atualizado em 31/05/2026 — Sprint 21 concluído — Railway deploy em andamento — LangGraph-first</em>
-<em>Para revisão de arquitetura e UI pelo Claude Chat e Design</em></p>
 
+<h2>📊 PRÓXIMOS PASSOS</h2>
+<ol>
+  <li>Claude Chat produz diagnóstico da implementação Grumbach</li>
+  <li>Responde 6 dúvidas críticas sobre validação, estrutura de dados, contexto</li>
+  <li>Elabora guia de correção para 5 bugs críticos de UX</li>
+  <li>Prepara template PHASE_CONFIGS reutilizável para SIEX/ALTA/CEEEX</li>
+</ol>
+
+<hr>
+
+<h2>📚 REFERÊNCIA RÁPIDA — SPRINT 25</h2>
+
+<h3>Arquivos Modificados</h3>
+<ul>
+  <li><code>apps/api/src/graph/nodes.ts</code> — ATHENA timing (pós-interrupt); phase_output SSE</li>
+  <li><code>apps/api/src/graph/builder.ts</code> — checks array em onAthena callback</li>
+  <li><code>apps/api/src/graph/phase-configs/grumbach.ts</code> — Fase 1 sem FPFs; fases 5-9 com eventos</li>
+  <li><code>apps/web/src/hooks/useChat.ts</code> — currentPhaseNum via athena SSE; checks formatting</li>
+  <li><code>apps/web/src/components/layout/EventsPanel.tsx</code> — getSemanticLabel() para labels contextuais</li>
+  <li><code>apps/api/src/routes/chat.ts</code> — Removido 'agent' SSE antes de 'done'</li>
+</ul>
+
+<h3>Terminologia Corrigida</h3>
+<ul>
+  <li>"Cena" → "Cenário" (fases 6-7) — correção pendente em systemPromptInject</li>
+  <li>"FPF" → Semantic labels (Delphi P(i), Cenário, Narrativa, Signpost, Linchpin)</li>
+</ul>
+
+<h3>Taxa de Análise</h3>
+<ul>
+  <li>Antes: 20/hora</li>
+  <li>Agora: 30/hora</li>
+  <li>Etapa mode: ~19 POSTs por análise completa</li>
+</ul>
+
+<h2>⚙️ ARQUITETURA VALIDADA</h2>
+
+<div class="success">
+  <strong>✅ LangGraph 2-node (phaseLoopNode → synthesisNode)</strong><br>
+  <strong>✅ HITL state machine (etapa + passagem modes)</strong><br>
+  <strong>✅ ATHENA determinística (ATS1-ATS9)</strong><br>
+  <strong>✅ Event panel semantic labels</strong><br>
+  <strong>✅ PostgreSQL checkpoint persistence</strong><br>
+  <strong>✅ Cache module-level (KLIO, projectName, tools)</strong>
+</div>
+
+<div class="footer">
+  <p><strong>Gerado em:</strong> 05/06/2026 — Sprint 25 concluído</p>
+  <p><strong>Próxima sessão:</strong> Claude Chat diagnóstico + roadmap para SIEX/ALTA/CEEEX</p>
+  <p><strong>Responsável:</strong> Claude Sonnet 4.6 · StratSight Brasil</p>
+</div>
 
 </div>
 
-<script>
-  // Gerar TOC dinamicamente
-  const content = document.getElementById('content');
-  const tocList = document.getElementById('toc-list');
-  const headers = content.querySelectorAll('h1,h2,h3');
-  let idx = 0;
-  headers.forEach(h => {
-    if (!h.id) { h.id = 'h' + idx++; }
-    const li = document.createElement('li');
-    const a = document.createElement('a');
-    a.href = '#' + h.id;
-    a.textContent = h.textContent;
-    a.className = 'toc-' + h.tagName.toLowerCase();
-    li.appendChild(a);
-    tocList.appendChild(li);
-  });
-  // Highlight ativo no scroll
-  const tocLinks = tocList.querySelectorAll('a');
-  const observer = new IntersectionObserver(entries => {
-    entries.forEach(e => {
-      if(e.isIntersecting){
-        tocLinks.forEach(l => l.classList.remove('active'));
-        const active = tocList.querySelector('a[href="#'+e.target.id+'"]');
-        if(active) active.classList.add('active');
-      }
-    });
-  }, {rootMargin:'-10% 0px -80% 0px'});
-  headers.forEach(h => observer.observe(h));
-</script>
 </body>
 </html>

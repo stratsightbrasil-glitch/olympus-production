@@ -1,7 +1,7 @@
 # OLYMPUS 1.0 — Histórico de Desenvolvimento e Estado Atual
 **StratSight Brasil · Strategic Foresight · IA Agêntica**
-**Atualizado em:** 04 Jun 2026 (Sprint 23 concluído — auditoria sec+perf+bugs)
-**Destinatário:** Claude Chat / Claude Design — revisão de arquitetura e UI
+**Atualizado em:** 05 Jun 2026 (Sprint 25 concluído — 12 bugs Grumbach, HITL state machine, visualizações)
+**Destinatário:** Claude Chat / Claude Design — diagnóstico e roadmap para outras metodologias
 
 > **⚠️ Cuidado para Claude Code:** este arquivo (`HISTORICO_DESENVOLVIMENTO.md`) e o correspondente `HISTORICO_DESENVOLVIMENTO.html` são os registros canônicos da evolução do sistema. Sempre que uma mudança arquitetural relevante for implementada, **ambos os arquivos devem ser atualizados no mesmo commit**. O `.md` é a fonte da verdade; o `.html` é gerado a partir dele para leitura amigável. Nunca divergir os dois.
 
@@ -463,6 +463,7 @@ services:
 | **Sprint 22** | **02 Jun 2026** | **Olympus 1.0 — Migração arquitetural v4→v5:** phaseLoopNode substitui 6 nós especializados · PHASE_CONFIGS em código · phase_outputs (artefatos estruturados) · ATHENA determinística por fase · contexto ~268 tokens vs 40-60K · 5 agentes (remove SCOPUS/PYTHIA/MNEMOSYNE/THEMIS) · 12 metodologias (Bloco A/B) · migration idempotente em index.ts · stress test 10/10 · TypeScript zero erros · Railway deploy + fix clearCheckpointSql |
 | **Sprint 23** | **03–04 Jun 2026** | **Auditoria de segurança + performance + bugs de produção:** Sec: role injection bloqueado no register, 2FA sem userId leak, /health minimal, backup spawn() vs exec(), validação de input em users/auth, JWT secret guard no startup, headers CSP/HSTS/X-Frame no nginx + Hono, login rate limit migrado para Postgres. Perf: 3 caches module-level em phaseLoopNode (KLIO/projectName/tools), buildToolsForPhase cached, buildPhaseSummary O(1), sessions list com colunas seletivas, reloadCronJobs → cirúrgico. Bugs: 8 observações do teste Grumbach corrigidas (circular JSON EventsPanel, PYTHIA legado removido, MPC condicional por metodologia, ATHENA message descritiva, empty KLIO output fallback, fase 3 tool_register_event adicionado, guardrail fase-count no phase-configs e seed). |
 | **Sprint 24** | **04–05 Jun 2026** | **Motor genérico + testagem end-to-end Grumbach:** (1) PHASE_CONFIGS migrados para o banco — 5 colunas novas em `methodology_phases` (system_prompt_inject, allowed_tools, requires_hitl_before, requires_qualitative_audit, ats_codes); `loadPhaseConfigs(slug)` em phase-context.ts substitui objeto em código; builder.ts usa `state.totalPhases`; stress test 10/10 ✅ incluindo CP-9 (banco) e CP-10 (erro descritivo). (2) Fix root cause "KLIO volta à fase 1": `sendMessage()` bloqueado quando hitlGate ativo, evitando `isResuming=false` acidental; `streamingText` limpo no hitl_gate. (3) toolTadScoreCalculator commitada (score TAD paramétrico 6 subcritérios). (4) consultar_agente removido de todo o código (resíduo ReAct — helpers.ts + Agent.ts). (5) Tier mismatch cross-provider: PATCH /settings/llm agora upserta llm_tiers com defaults do novo provider. (6) nginx auto-healing: `resolver 127.0.0.11 valid=300s` + variável `$upstream` — auto-heals em ≤5min após reinício Docker Desktop sem `docker compose restart web`. (7) Rate limit analysis 5→20/hora (9 fases passos mode ≈ 10 POSTs). (8) UUID fallback em tool_grumbach_expert_simulation: UUID→nome→todos aprovados. (9) maxOutputTokens KLIO 32k→12k→8k + anchorContext limitado a 20 eventos (fix OOM exit 137 nas fases tardias). (10) HERMES streaming bubble: usa `progressAgent` em vez de "HERMES" hardcoded. (11) Agent lookup via `msg.agentName` em vez de getAgentInfo(content). (12) Fase 4 prompt reescrito: ferramenta retorna instruções, KLIO deve simular e GERAR P(i); `tool_register_event` adicionado a allowedTools. (13) POST /sessions/parse-scope: extrai 6 campos de escopo de PDF/DOCX via Gemini economy; botão "Importar escopo" no NewSessionModal. (14) Canal ATHENA: onAthena → SSE `athena` → mensagem permanente no chat (✅/⚠️/❌ por fase). (15) progressAgent resetado no início de callChatStream. (16) vizMode reduzido de 4 para 3 níveis (removido passos; supervisão via HITL gates). (17) getModel() exportada de packages/core. |
+| **Sprint 25** | **05 Jun 2026** | **HITL state machine + ATHENA determinística + 12 bugs Grumbach:** (a) Bug #1 — Phase counter 8/9: rastreamento via `athena` SSE only, nunca `hitl_gate`. (b) Bug #2 — ATHENA reprova fase 1: `tool_declarar_julgamento` agora cria event com "Premissa-Linchpin". (c) Bug #3 — HITL button inativo: vizMode default `'pastos'` → `'etapa'`. (d) Bug #4 — cache polling 50req/s: interval 300s (TTL) + `phaseConfigCache` status. (e) Bug #5 — OLYMPUS vs HERMES: removida lógica condicional; query direto HERMES. (f) Bug #6 — phase_output desaparece: `phase_output` SSE antes de interrupt, frontend persiste como mensagem. (g) Bug #7 — Fases 5-9 ATS2 falha: `KeyFinding.description` opcional + mapeado de `project_events.description`. (h) Bug #8 — currentPhaseNum salta: removida `setCurrentPhaseNum` de `hitl_gate` handler. (i) **Bug #9 CRÍTICO** — ATHENA audita antes do usuário: moved `athenaAuditPhase()` para APÓS `interrupt()` — agora ATHENA audita status='approved' events somente. (j) Bug #10 — ATHENA sem contexto: `checks` array adicionado ao callback `onAthena`, frontend mostra ATS codes falhados. (k) Bug #11 — FPFs fracionadas: Fase 1 remove `tool_register_event` de allowedTools, Fase 2 é a única a registrar FPFs. (l) Bug #12 — Eventos mal-rotulados: `getSemanticLabel()` implementada em EventsPanel, labels semânticas (Delphi, Cenário, Narrativa, Signpost) em vez de "FPF" genérico. (m) Taxa análise 20→30/hora (etapa mode ≈19 POSTs). (n) Ciclo HITL etapa mode validado: KLIO propõe → fase_output SSE → interrupt → usuário aprova → resumeGraph → ATHENA audita. (o) Teste end-to-end Grumbach 9 fases sucesso; 4 bugs novos identificados (ATHENA dados incompletos fase 1, FPFs varredura fracionada, Delphi sem visualização gráfica, Impactos sem visualização, Fase 6 reprovações cascata 7). |
 
 ---
 
@@ -514,12 +515,17 @@ services:
 | POST /sessions/parse-scope (importar escopo) | Sprint 24 |
 | vizMode reduzido para 3 níveis | Sprint 24 |
 
-### 🔲 Pendente — Bugs ativos (05 Jun 2026)
+### 🔲 Pendente — Bugs ativos (05 Jun 2026 — Sprint 25)
 
-| # | Bug | Descrição |
-|---|-----|-----------|
-| B3 | **Fases somem da tela após ATHENA** | Histórico de mensagens — investigação pendente |
-| RAG | **RAG inoperante localmente** | vector(768) correto, mas índice HNSW pode precisar rebuild após troca Voyage→Ollama |
+| # | Bug | Sprint | Status |
+|---|-----|--------|--------|
+| **A** | **ATHENA reprova fase 1 com dados incompletos (mesmo após fix Sprint 25h)** | Sprint 25i (NOVO) | ⚠️ Investigação: status='approved' setado corretamente? |
+| **B** | **Varredura de FPF em fase 2 feita aos pedaços, não em lote** | Sprint 25i (NOVO) | ⚠️ KLIO emitindo `tool_register_event` incrementalmente? |
+| **C** | **Delphi P(i) não visualizado graficamente** | Sprint 25i (NOVO) | ⚠️ Componente React necessário para matriz Delphi |
+| **D** | **Impactos cruzados (matriz 5×5) não visualizados** | Sprint 25i (NOVO) | ⚠️ Componente React necessário para heatmap |
+| **E** | **Fase 6 reprovações cascateando para fase 7** | Sprint 25i (NOVO) | ⚠️ buildAnchorCtx filtrando corretamente? |
+| B3 | **Fases somem da tela após ATHENA** | Sprint 24 | Histórico de mensagens — investigação pendente |
+| RAG | **RAG inoperante localmente** | Sprint 19 | vector(768) correto, mas índice HNSW pode precisar rebuild após troca Voyage→Ollama |
 
 ### 🔲 Pendente — Funcionalidades
 
@@ -790,5 +796,5 @@ Se Docker travar com `input/output error`: `wsl --shutdown` + *Clean/Purge data*
 
 ---
 
-*Atualizado em 31/05/2026 — Sprint 21 concluído — Railway deploy em andamento — LangGraph-first*
-*Para revisão de arquitetura e UI pelo Claude Chat e Design*
+*Atualizado em 05/06/2026 — Sprint 25 concluído — 12 bugs Grumbach + 4 novos identificados — HITL state machine sólido*
+*Próximo passo: Claude Chat diagnóstico + roadmap para outras metodologias*
