@@ -143,3 +143,17 @@ export function invalidatePhaseConfigCache(methodologySlug?: string) {
   if (methodologySlug) _phaseConfigCache.delete(methodologySlug);
   else _phaseConfigCache.clear();
 }
+
+/** Status do _phaseConfigCache para o endpoint /settings/cache/status */
+export function getPhaseConfigCacheStatus(): { entries: number; slugs: string[]; oldestEntryAt: string | null; ttlSeconds: number } {
+  let oldest: number | null = null;
+  for (const v of _phaseConfigCache.values()) {
+    if (oldest === null || v.ts < oldest) oldest = v.ts;
+  }
+  return {
+    entries:      _phaseConfigCache.size,
+    slugs:        [..._phaseConfigCache.keys()],
+    oldestEntryAt: oldest !== null ? new Date(oldest).toISOString() : null,
+    ttlSeconds:   PHASE_CONFIG_TTL_MS / 1000,
+  };
+}

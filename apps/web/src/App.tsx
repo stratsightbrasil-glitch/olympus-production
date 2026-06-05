@@ -43,7 +43,10 @@ function App() {
   const [activeModal, setActiveModal] = useState<ActiveModal>(null);
   const [mainView, setMainView] = useState<'chat' | 'kratos'>('chat');
   const [mode, setMode] = useState('production');
-  const [cacheStatus, setCacheStatus] = useState<{ entries: number; oldestEntryAt: string | null; ttlSeconds: number } | null>(null);
+  const [cacheStatus, setCacheStatus] = useState<{
+    entries: number; oldestEntryAt: string | null; ttlSeconds: number;
+    phaseConfigs: { entries: number; slugs: string[]; oldestEntryAt: string | null; ttlSeconds: number };
+  } | null>(null);
   const [vizMode, setVizMode] = useState('etapa');
   const [reportLayout, setReportLayout] = useState<'standard' | 'extended'>('standard');
   const handleReportLayoutChange = (layout: 'standard' | 'extended') => {
@@ -153,7 +156,7 @@ function App() {
         .then(d => d && setCacheStatus(d))
         .catch(() => {});
     fetchStatus();
-    const interval = setInterval(fetchStatus, 30_000);
+    const interval = setInterval(fetchStatus, 300_000); // 5 min — alinhado ao TTL dos caches
     return () => clearInterval(interval);
   }, [token, user?.role]);
 

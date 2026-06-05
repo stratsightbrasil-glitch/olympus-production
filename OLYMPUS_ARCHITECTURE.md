@@ -2,7 +2,7 @@
 **StratSight Brasil · Strategic Foresight · IA Agêntica**
 
 <!-- AUTO:versao:START -->
-**Versão:** `4.0.0` · **Atualizado:** 04 de junho de 2026 · Gerado automaticamente
+**Versão:** `4.0.0` · **Atualizado:** 05 de junho de 2026 · Gerado automaticamente
 
 | Dependência | Versão |
 |-------------|--------|
@@ -38,8 +38,8 @@
 | POST   | `/api/v1/2fa/generate` | Público | userId derivado do token JWT — nunca da payload do request (previne IDOR/escalada). | auth.ts |
 | PATCH  | `/api/v1/anthropic-models` | Público | ── PATCH /api/v1/settings/anthropic-models ── atualiza lista sem rebuild ────── | settings.ts |
 | PATCH  | `/api/v1/batch/status` | Público | /:id/status vier primeiro, causando UUID parse error (500) no banco. | events.ts |
-| POST   | `/api/v1/cache/invalidate` | Público | ── POST /api/v1/settings/cache/invalidate — limpa cache de metodologias (admin) ─ | settings.ts |
-| GET    | `/api/v1/cache/status` | Público | ── GET /api/v1/settings/cache/status — estado do cache de metodologias (admin) ─ | settings.ts |
+| POST   | `/api/v1/cache/invalidate` | Público | ── POST /api/v1/settings/cache/invalidate — limpa todos os caches em memória (admin) ─ | settings.ts |
+| GET    | `/api/v1/cache/status` | Público | ── GET /api/v1/settings/cache/status — estado dos caches em memória (admin) ── | settings.ts |
 | POST   | `/api/v1/docx` | Público | Cria docx | export.ts |
 | GET    | `/api/v1/download/:filename` | Público | Lista/busca download | backup.ts |
 | POST   | `/api/v1/estimativa` | Público | Cria estimativa | export.ts |

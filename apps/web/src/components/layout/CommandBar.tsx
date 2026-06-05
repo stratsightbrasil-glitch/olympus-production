@@ -41,8 +41,11 @@ interface CommandBarProps {
   /** Mapeamento tier→modelId (admin only). Ausente = sem controle de tiers na UI. */
   llmTiers?: Record<string, string>;
   onTierChange?: (tiers: Record<string, string>) => void;
-  /** Status do cache de metodologias (admin only). */
-  cacheStatus?: { entries: number; oldestEntryAt: string | null; ttlSeconds: number } | null;
+  /** Status dos caches em memória (admin only). */
+  cacheStatus?: {
+    entries: number; oldestEntryAt: string | null; ttlSeconds: number;
+    phaseConfigs?: { entries: number; slugs: string[]; oldestEntryAt: string | null };
+  } | null;
   onInvalidateCache?: () => void;
   /** Modo de layout do relatório final. */
   reportLayout?: 'standard' | 'extended';
@@ -502,35 +505,56 @@ export function CommandBar({
           />
         )}
 
-        {/* Badge de cache de metodologias — apenas admin */}
+        {/* Badge de caches em memória — apenas admin */}
         {cacheStatus != null && (() => {
+          // methodology cache (analysis.service.ts)
           const ageMs = cacheStatus.oldestEntryAt ? Date.now() - new Date(cacheStatus.oldestEntryAt).getTime() : 0;
           const ageMin = Math.floor(ageMs / 60_000);
           const isWarm = ageMin < 1;
-          const badgeColor = isWarm ? '#4CAF50' : ageMin < 5 ? '#FFC107' : '#FF7043';
-          const label = cacheStatus.entries === 0
-            ? 'Cache vazio'
-            : isWarm ? 'Prompt atual' : `Cache ${ageMin}m atrás`;
+          const color = isWarm ? '#4CAF50' : ageMin < 5 ? '#FFC107' : '#FF7043';
+          const label = cacheStatus.entries === 0 ? 'Cache vazio' : isWarm ? 'Prompt atual' : `Cache ${ageMin}m atrás`;
+
+          // phaseConfig cache (phase-context.ts)
+          const pc = cacheStatus.phaseConfigs;
+          const pcAgeMs = pc?.oldestEntryAt ? Date.now() - new Date(pc.oldestEntryAt).getTime() : 0;
+          const pcAgeMin = Math.floor(pcAgeMs / 60_000);
+          const pcColor = !pc || pc.entries === 0 ? '#888' : pcAgeMin < 1 ? '#4CAF50' : pcAgeMin < 5 ? '#FFC107' : '#FF7043';
+          const pcLabel = !pc || pc.entries === 0
+            ? 'PhaseConfigs vazio'
+            : `PhaseConfigs ${pc.slugs.join(', ')} (${pcAgeMin}m)`;
+
+          const tooltipText = [
+            `Methodology cache: ${cacheStatus.entries} entrada(s)`,
+            pc ? `PhaseConfig cache: ${pc.entries} entrada(s) — slugs: ${pc.slugs.join(', ') || 'nenhum'}` : '',
+          ].filter(Boolean).join('\n');
+
           return (
             <div style={{ display: 'flex', alignItems: 'center', gap: 5, flexShrink: 0 }}>
               <div
                 role="status"
-                aria-label={`Cache de metodologias: ${label}. Entradas: ${cacheStatus.entries}`}
+                aria-label={tooltipText}
+                title={tooltipText}
                 style={{
-                  display: 'flex', alignItems: 'center', gap: 5,
-                  background: 'rgba(255,255,255,.05)', border: `1px solid ${badgeColor}44`,
+                  display: 'flex', alignItems: 'center', gap: 6,
+                  background: 'rgba(255,255,255,.05)', border: `1px solid ${color}44`,
                   borderRadius: 5, padding: '4px 9px',
-                  fontSize: 10, color: badgeColor, whiteSpace: 'nowrap' as const,
+                  fontSize: 10, whiteSpace: 'nowrap' as const,
                 }}
-                title={`Entradas em cache: ${cacheStatus.entries}`}
               >
-                <div aria-hidden="true" style={{ width: 5, height: 5, borderRadius: '50%', background: badgeColor, flexShrink: 0 }} />
-                {label}
+                <span style={{ color, display: 'flex', alignItems: 'center', gap: 4 }}>
+                  <span aria-hidden="true" style={{ width: 5, height: 5, borderRadius: '50%', background: color, flexShrink: 0, display: 'inline-block' }} />
+                  {label}
+                </span>
+                <span style={{ color: 'rgba(255,255,255,.2)' }}>|</span>
+                <span style={{ color: pcColor, display: 'flex', alignItems: 'center', gap: 4 }}>
+                  <span aria-hidden="true" style={{ width: 5, height: 5, borderRadius: '50%', background: pcColor, flexShrink: 0, display: 'inline-block' }} />
+                  {pcLabel}
+                </span>
               </div>
               {onInvalidateCache && (
                 <button
                   onClick={onInvalidateCache}
-                  title="Limpar cache de metodologias — próxima análise recarrega do banco"
+                  title="Limpar caches — próxima análise recarrega do banco"
                   style={{
                     background: 'none', border: '1px solid rgba(255,255,255,.14)',
                     borderRadius: 5, color: '#A3C9AE', fontSize: 10,

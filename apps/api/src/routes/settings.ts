@@ -261,24 +261,30 @@ settingsRoutes.patch('/kratos-cooldown', async (c) => {
   return c.json({ ok: true, kratos_cooldown_ms: ms });
 });
 
-// ── GET /api/v1/settings/cache/status — estado do cache de metodologias (admin) ─
+// ── GET /api/v1/settings/cache/status — estado dos caches em memória (admin) ──
 settingsRoutes.get('/cache/status', async (c) => {
   const payload = c.get('jwtPayload') as any;
   if (!payload || payload.role !== 'admin') {
     return c.json({ error: 'Apenas administradores podem ver o status do cache.' }, 403);
   }
   const { getMethodologyCacheStatus } = await import('../services/analysis.service.js');
-  return c.json(getMethodologyCacheStatus());
+  const { getPhaseConfigCacheStatus } = await import('../graph/phase-context.js');
+  const methodology  = getMethodologyCacheStatus();
+  const phaseConfigs = getPhaseConfigCacheStatus();
+  // Campos legados mantidos (entries, oldestEntryAt, ttlSeconds) para não quebrar o frontend.
+  return c.json({ ...methodology, phaseConfigs });
 });
 
-// ── POST /api/v1/settings/cache/invalidate — limpa cache de metodologias (admin) ─
+// ── POST /api/v1/settings/cache/invalidate — limpa todos os caches em memória (admin) ─
 settingsRoutes.post('/cache/invalidate', async (c) => {
   const payload = c.get('jwtPayload') as any;
   if (!payload || payload.role !== 'admin') {
     return c.json({ error: 'Apenas administradores podem invalidar o cache.' }, 403);
   }
   const { invalidateMethodologyCache } = await import('../services/analysis.service.js');
+  const { invalidatePhaseConfigCache } = await import('../graph/phase-context.js');
   invalidateMethodologyCache();
+  invalidatePhaseConfigCache();
   return c.json({ ok: true, clearedAt: new Date().toISOString() });
 });
 
