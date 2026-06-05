@@ -132,35 +132,30 @@ PRODUTO OBRIGATÓRIO:
     nodeSlug:  "node_scanning_forces",
     label:     "Seleção de FPFs (HITL)",
     systemPromptInject: `
-[FASE 3 — CONFIGURAÇÃO DA BANCA DE ESPECIALISTAS]
+[FASE 3 — CONFIRMAÇÃO PÓS-HITL: SELEÇÃO DOS FPFs]
 
 O analista humano acabou de aprovar os FPFs na etapa HITL anterior.
-Você está configurando as 7 personas da banca virtual de especialistas
-que será usada na Fase 4 (Delphi) para atribuir probabilidades P(i).
+Os FPFs com status='approved' na Âncora de Contexto são o conjunto final
+para as próximas fases. A banca de 7 especialistas é gerada internamente
+pela tool_grumbach_expert_simulation na Fase 4 — NÃO precisa ser registrada aqui.
 
 MISSÃO:
-Registrar cada uma das 7 personas via tool_register_event com:
-  - name: nome curto da persona (ex: "Persona 1 — Otimista Estrutural")
-  - type: "fpf" (configuração interna do painel)
-  - description: viés, área de expertise e posição inicial esperada
-  - reliability: "A" (configuração interna confirmada)
-  - credibility: "1"
+1. Usar declarar_julgamento para registrar o julgamento sobre a qualidade e
+   completude do conjunto de FPFs aprovados pelo analista.
+2. Verificar se os FPFs cobrem adequadamente o espaço de incerteza do sistema.
+3. Identificar a premissa-linchpin que une o enquadramento da Fase 1 ao
+   conjunto de FPFs aprovados.
 
-As 7 personas obrigatórias:
-  1. Otimista estrutural
-  2. Pessimista estratégico
-  3. Tecnocrata institucional
-  4. Analista geopolítico
-  5. Especialista de domínio
-  6. Inovador disruptivo
-  7. Historiador comparativo
+PROIBIDO:
+- NÃO registrar personas, especialistas ou configurações de banca via tool_register_event.
+- NÃO criar novos FPFs ou eventos — o conjunto foi finalizado pelo analista no HITL.
+- NÃO chamar tool_register_event nesta fase.
 
 PRODUTO OBRIGATÓRIO:
-- 7 chamadas a tool_register_event, uma por persona
-- factStatus="FATO" para todas (configuração confirmada pelo analista)
+- 1 chamada a declarar_julgamento com avaliação do conjunto de FPFs aprovados,
+  incluindo premissaLinchpin e grauProbabilidade calibrado (vocabulário Hendrikson).
 `,
     allowedTools: [
-      "tool_register_event",
       "tool_mpc_source_evaluator",
       "declarar_julgamento",
     ],
@@ -250,15 +245,16 @@ MISSÃO:
   * Autônomos: baixa motricidade, baixa dependência
 - Documentar elos mais fracos da cadeia de raciocínio
 
-PRODUTO OBRIGATÓRIO:
-- Matriz de impactos registrada nos keyFindings
-- Classificação Motricidade × Dependência dos FPFs
-- Ao menos 1 finding declarando os elos mais fracos
+PRODUTO OBRIGATÓRIO nos keyFindings — use tool_register_event para cada item:
+- 1 finding por FPF classificado: "Impacto [nome FPF]: [quadrante] — motricidade [X]% dependência [Y]%"
+  · type: "fpf" | description: inclua vocabulário Hendrikson (ex: "provável impacto cruzado (55-80%)")
+- 1 finding "Elos mais fracos: [nome dos FPFs críticos] — premissa-linchpin [x]"
+- Use declarar_julgamento para os elos mais fracos com premissaLinchpin e grauProbabilidade calibrado.
 `,
     allowedTools: [
       "tool_grumbach_expert_simulation",
       "tool_register_impact_relation",
-      "tool_register_scenario",
+      "tool_register_event",
       "declarar_julgamento",
     ],
     requiresHitlBefore:       false,
@@ -310,13 +306,21 @@ ANÁLISE COMPARATIVA obrigatória (registrar nos keyFindings):
 - Ideal × Mais Provável → futuro é oportunidade ou ameaça?
 
 PRODUTO OBRIGATÓRIO:
-- 4 findings, um por cena: "Cena [A/B/C/D] — [Nome]: [configuração booleana dos FPFs]"
+1. Registrar cada cena via tool_register_scenario (para o banco de cenários).
+2. Registrar cada cena também via tool_register_event para ATHENA verificar:
+   - name: "Cena A — Mais Provável: [FPF1=SIM, FPF2=NÃO, ...]"
+   - name: "Cena B — Projetivo: [descrição tendencial]"
+   - name: "Cena C — Ideal: [FPF1=SIM, FPF2=NÃO, ...]"
+   - name: "Cena D — Alvo: [FPF1=SIM, FPF2=NÃO, ...]"
+   - type: "fpf" | reliability: "A" | credibility: "1"
+3. Análise comparativa via declarar_julgamento.
 
 REGRA CRÍTICA: A configuração booleana desta fase é a FONTE DA VERDADE
 para as crônicas da Fase 7. As narrativas NÃO PODEM contradizer estas configurações.
 `,
     allowedTools: [
       "tool_register_scenario",
+      "tool_register_event",
       "declarar_julgamento",
     ],
     requiresHitlBefore:       false,
@@ -347,9 +351,14 @@ MISSÃO:
   [OCORRE] = evento mencionado como tendo ocorrido
   [NÃO OCORRE] = evento ausente ou explicitamente descartado
 
-PRODUTO OBRIGATÓRIO nos keyFindings:
-- 4 findings de narrativa, um por cena:
-  "Narrativa [Cena X — nome]: [1 frase resumindo a lógica causal central]"
+PRODUTO OBRIGATÓRIO nos keyFindings — registre via tool_register_event:
+- 4 findings, um por cena:
+  - name: "Narrativa Cena A — [nome]: [1 frase resumindo a lógica causal central]"
+  - name: "Narrativa Cena B — [nome]: [1 frase resumindo a lógica causal central]"
+  - name: "Narrativa Cena C — [nome]: [1 frase resumindo a lógica causal central]"
+  - name: "Narrativa Cena D — [nome]: [1 frase resumindo a lógica causal central]"
+  - type: "fpf" | reliability: "A" | credibility: "1"
+  - description: parágrafo de 2-3 frases com o enredo central da crônica
 
 PROIBIDO:
 - Mencionar FPF como ocorrido se marcado [NÃO OCORRE]
@@ -358,6 +367,7 @@ PROIBIDO:
 `,
     allowedTools: [
       "buscar_documentos_internos",
+      "tool_register_event",
       "declarar_julgamento",
     ],
     requiresHitlBefore:       false,
@@ -434,13 +444,22 @@ MISSÃO:
 - Configurar payload para KRATOS (lista de signposts com URLs rastreáveis)
 
 PRODUTO OBRIGATÓRIO:
-- Um finding por FPF com o indicador de monitoramento correspondente
-- Ao menos 1 URL de fonte por indicador (para KRATOS rastrear)
-- Frequência de revisão sugerida para o painel completo
+1. registrar_sinal para cada indicador de monitoramento.
+2. Registrar via tool_register_event os signposts principais:
+   - name: "SE [indicador] > [limiar] ENTÃO Cena [X] +[N]%"
+   Exemplos:
+   - "SE IED manufatura média tecnologia > US$ 5bi/ano ENTÃO Cena A +15%"
+   - "SE licença ambiental mineração Amazônia > 5 anos ENTÃO Cena A -20%"
+   - type: "fpf" | reliability: "A" | credibility: "1"
+   - description: URL rastreável + frequência de revisão sugerida
+3. Frequência de revisão sugerida para o painel completo via declarar_julgamento.
+
+PRODUTO MÍNIMO: ao menos 3 signposts registrados via tool_register_event.
 `,
     allowedTools: [
       "registrar_sinal",
       "buscar_sinais",
+      "tool_register_event",
       "declarar_julgamento",
       "web_search",
     ],

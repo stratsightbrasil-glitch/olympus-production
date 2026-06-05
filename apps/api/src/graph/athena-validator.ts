@@ -120,10 +120,10 @@ const STRUCTURAL_CHECKS: Record<string, (findings: KeyFinding[]) => AthenaCheck[
 
   node_matrix_design: (findings) => {
     const scenarios = findings.filter(f => {
-      const lower = f.claim.toLowerCase();
-      return lower.includes("cenário") || lower.includes("cenario") ||
-             lower.includes("cena a") || lower.includes("cena b") ||
-             lower.includes("cena c") || lower.includes("cena d");
+      const text = (f.claim + ' ' + (f.description ?? '')).toLowerCase();
+      return text.includes("cenário") || text.includes("cenario") ||
+             text.includes("cena a") || text.includes("cena b") ||
+             text.includes("cena c") || text.includes("cena d");
     });
     return [{
       atsCode: "ATS8",
@@ -136,9 +136,10 @@ const STRUCTURAL_CHECKS: Record<string, (findings: KeyFinding[]) => AthenaCheck[
 
   node_narrative: (findings) => {
     const narratives = findings.filter(f => {
-      const lower = f.claim.toLowerCase();
-      return lower.startsWith("narrativa") || lower.startsWith("crônica") ||
-             lower.startsWith("cronica") || lower.includes("narrativa [cena");
+      const text = (f.claim + ' ' + (f.description ?? '')).toLowerCase();
+      return text.startsWith("narrativa") || text.startsWith("crônica") ||
+             text.startsWith("cronica") || text.includes("narrativa [cena") ||
+             text.includes("narrativa cena");
     });
     return [{
       atsCode: "ATS6",
@@ -150,13 +151,15 @@ const STRUCTURAL_CHECKS: Record<string, (findings: KeyFinding[]) => AthenaCheck[
   },
 
   node_integration: (findings) => {
-    const hasThreshold = findings.some(f =>
-      f.claim.includes(">") || f.claim.includes("<") ||
-      f.claim.toLowerCase().includes("limiar") ||
-      f.claim.toLowerCase().includes("gatilho") ||
-      f.claim.toLowerCase().includes("se ") ||
-      f.claim.toLowerCase().includes("signpost")
-    );
+    const hasThreshold = findings.some(f => {
+      const text = f.claim + ' ' + (f.description ?? '');
+      return text.includes(">") || text.includes("<") ||
+             text.toLowerCase().includes("limiar") ||
+             text.toLowerCase().includes("gatilho") ||
+             text.toLowerCase().includes("se ") ||
+             text.toLowerCase().includes("signpost") ||
+             text.toLowerCase().includes("então");
+    });
     return [{
       atsCode: "ATS9",
       passed:  hasThreshold,
