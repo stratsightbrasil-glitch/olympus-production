@@ -118,7 +118,8 @@ export async function phaseLoopNode(
   onStep?.(`[KLIO] Iniciando fase ${phaseConfig.phaseNum}: ${phaseConfig.label}`);
 
   // ── Portão HITL antes da fase (se requerido) ──────────────────────────────
-  if (phaseConfig.requiresHitlBefore && process.env.TEST_MODE !== "true") {
+  // passagem = totalmente autônomo — sem portões, sem intervenção humana.
+  if (phaseConfig.requiresHitlBefore && process.env.TEST_MODE !== "true" && state.vizMode !== "passagem") {
     interrupt({
       interruptType: "hitl_required",
       agent:         "KLIO",
@@ -235,15 +236,9 @@ export async function phaseLoopNode(
     source:      (e.sourceEvaluation as any)?.sourceType as string | undefined,
   }));
 
-  // Auto-aprovação de eventos pós-HITL: eventos criados a partir da fase HITL (inclusive)
-  // são artefatos analíticos do KLIO (P(i), impactos, cenários, narrativas, signposts),
-  // não FPFs para o analista revisar. Aprová-los automaticamente:
-  //  a) os inclui no buildAnchorCtx de fases seguintes (contexto entre fases)
-  //  b) evita que o analista receba dezenas de aprovações ao final da análise
-  // Fases pré-HITL (ex: grumbach_p1, _p2) ficam como 'proposed' para revisão no gate.
-  const hitlPhaseIdx = phaseConfigs.findIndex(p => p.requiresHitlBefore);
-  const isPostHitlPhase = hitlPhaseIdx >= 0 && currentIndex >= hitlPhaseIdx;
-  if (isPostHitlPhase && recentEvents.length > 0) {
+  // Processo Completo (passagem): auto-aprova todos os eventos sem intervenção humana.
+  // etapa/passos: o analista revê e aprova eventos no EventsPanel antes de confirmar a fase.
+  if (state.vizMode === "passagem" && recentEvents.length > 0) {
     const proposedIds = recentEvents
       .filter(e => e.status === 'proposed')
       .map(e => e.id);
@@ -321,8 +316,10 @@ export async function phaseLoopNode(
   // Veredicto ATHENA após o output — persiste no chat como mensagem permanente AT.
   onAthena?.({ verdict: athenaVerdict.verdict, phaseNum: phaseConfig.phaseNum, label: phaseConfig.label, usedLlm: athenaVerdict.usedLLM });
 
-  // ── Modo passos: interromper para revisão do analista ────────────────────
-  if (state.vizMode === "passos" && process.env.TEST_MODE !== "true") {
+  // Etapa Completa (etapa) e Passos: interromper após cada fase para revisão do analista.
+  // O analista aprova eventos no EventsPanel e confirma/redireciona no HitlDecisionCard.
+  // Processo Completo (passagem): sem interrupção — análise corre até o relatório final.
+  if ((state.vizMode === "etapa" || state.vizMode === "passos") && process.env.TEST_MODE !== "true") {
     const verdictDisplay = athenaVerdict.verdict === "APROVADO"
       ? "✅ Rigor analítico aprovado"
       : athenaVerdict.verdict === "RESSALVAS"
@@ -336,8 +333,9 @@ export async function phaseLoopNode(
       verdict:       athenaVerdict.verdict,
       message:       `Fase ${phaseConfig.phaseNum} — ${phaseConfig.label} concluída. `
                    + `${verdictDisplay} por ATHENA. `
-                   + `Clique em "Confirmar e Avançar" para ir à próxima fase, ou "Redirecionar" para ajustar o foco.`,
-      output:        phaseOutput,
+                   + `Aprove os eventos no painel lateral e clique em "Confirmar e Avançar" `
+                   + `para ir à próxima fase, ou "Redirecionar" para ajustar o foco.`,
+      // output omitido: já foi enviado via onPhaseOutput antes do interrupt
     });
   }
 

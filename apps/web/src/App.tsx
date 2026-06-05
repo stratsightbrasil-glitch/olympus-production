@@ -215,7 +215,9 @@ function App() {
 
     // LangGraph interrupts — caminho principal (sem scan de mensagens)
     if (chat.hitlGate?.interruptType === 'hitl_required') return true;
-    if (chat.hitlGate?.interruptType === 'phase_complete') return vizMode === 'passos';
+    // etapa = confirmação por fase (analista aprova eventos + confirma/redireciona output)
+    // passos = legado (mantido como alias de etapa no backend)
+    if (chat.hitlGate?.interruptType === 'phase_complete') return vizMode === 'etapa' || vizMode === 'passos';
 
     // Legado: scan da última mensagem de assistente. Limitado à última mensagem
     // (não scan completo) para O(1) em vez de O(N).
