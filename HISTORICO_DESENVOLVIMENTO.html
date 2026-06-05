@@ -52,7 +52,7 @@
 <div id="content">
 <h1>OLYMPUS 1.0 — Histórico de Desenvolvimento e Estado Atual</h1>
 <p><strong>StratSight Brasil · Strategic Foresight · IA Agêntica</strong><br>
-<strong>Atualizado em:</strong> 04 Jun 2026 (Sprint 23 concluído — auditoria sec+perf+bugs)<br>
+<strong>Atualizado em:</strong> 05 Jun 2026 (Sprint 24 concluído — motor genérico + testagem end-to-end Grumbach)<br>
 <strong>Destinatário:</strong> Claude Chat / Claude Design — revisão de arquitetura e UI</p>
 <blockquote><p><strong>⚠️ Cuidado para Claude Code:</strong> este arquivo (<code>HISTORICO_DESENVOLVIMENTO.html</code>) e o correspondente <code>.md</code> são os registros canônicos da evolução do sistema. Sempre que uma mudança arquitetural relevante for implementada, <strong>ambos os arquivos devem ser atualizados no mesmo commit</strong>. O <code>.md</code> é a fonte da verdade; o <code>.html</code> é a versão de leitura amigável. Nunca divergir os dois.</p></blockquote>
 <hr>
@@ -1102,7 +1102,28 @@ Nenhum configurado       → erro explícito (não silencioso)
 <td><strong>Auditoria de segurança + performance + bugs de produção:</strong>
 Sec: role injection bloqueado no register · 2FA sem userId leak · <code>/health</code> minimal · backup <code>spawn()</code> vs <code>exec()</code> · validação de input em users/auth · JWT secret guard no startup · headers CSP/HSTS/X-Frame no nginx + Hono · login rate limit migrado para Postgres.
 Perf: 3 caches module-level em <code>phaseLoopNode</code> (KLIO/projectName/tools) · <code>buildPhaseSummary</code> O(1) · sessions list com colunas seletivas · <code>reloadCronJobs</code> → cirúrgico por projeto.
-Bugs: circular JSON no <code>EventsPanel</code> (onClick={handler} → onClick={() =&gt; handler()}) · PYTHIA removido de toda a UI · MPC condicional por metodologia (siex/alta/ceeex: alfanumérico; demais: semântico) · ATHENA message descritiva com instrução de ação · empty KLIO output fallback · fase 3 Grumbach com <code>tool_register_event</code> · guardrail fase-count no phase-configs e seed.</td>
+Bugs: circular JSON no <code>EventsPanel</code> · PYTHIA removido da UI · MPC condicional por metodologia · ATHENA message descritiva · empty KLIO output fallback · fase 3 Grumbach com <code>tool_register_event</code> · guardrail fase-count.</td>
+</tr>
+<tr>
+<td><strong>Sprint 24</strong></td>
+<td><strong>04–05 Jun 2026</strong></td>
+<td><strong>Motor genérico + testagem end-to-end Grumbach:</strong>
+(1) <strong>PHASE_CONFIGS → banco:</strong> 5 novas colunas em <code>methodology_phases</code>; <code>loadPhaseConfigs(slug)</code> em <code>phase-context.ts</code> substitui objeto em código; <code>builder.ts</code> usa <code>state.totalPhases</code>; stress test 10/10 ✅.
+(2) <strong>Fix root cause "KLIO volta à fase 1":</strong> <code>sendMessage()</code> bloqueado durante <code>hitlGate</code>; <code>streamingText</code> limpo no <code>hitl_gate</code>.
+(3) <strong>toolTadScoreCalculator</strong> commitada (score TAD paramétrico 6 subcritérios).
+(4) <strong><code>consultar_agente</code> removido</strong> de todo o código (resíduo ReAct — <code>helpers.ts</code> + <code>Agent.ts</code>).
+(5) <strong>Tier mismatch cross-provider:</strong> PATCH <code>/settings/llm</code> upserta <code>llm_tiers</code> com defaults do novo provider.
+(6) <strong>nginx auto-healing:</strong> <code>resolver 127.0.0.11 valid=300s</code> — auto-heals em ≤5min após restart Docker Desktop.
+(7) <strong>Rate limit analysis</strong> 5→20/hora (9 fases passos ≈ 10 POSTs).
+(8) <strong>UUID fallback</strong> em <code>tool_grumbach_expert_simulation</code> (UUID→nome→todos aprovados).
+(9) <strong>maxOutputTokens KLIO</strong> 32k→12k→8k + <code>anchorContext</code> limitado a 20 eventos (fix OOM exit 137).
+(10) <strong>HERMES streaming bubble</strong> usa <code>progressAgent</code> em vez de "HERMES" hardcoded.
+(11) <strong>Fase 4 Delphi</strong> prompt reescrito: ferramenta retorna instruções, KLIO gera P(i); <code>tool_register_event</code> em allowedTools.
+(12) <strong>POST /sessions/parse-scope:</strong> extrai 6 campos de escopo de PDF/DOCX via Gemini; botão "Importar escopo" no NewSessionModal.
+(13) <strong>Canal ATHENA:</strong> <code>onAthena</code> → SSE <code>athena</code> → mensagem permanente no chat ✅/⚠️/❌ por fase.
+(14) <strong>progressAgent</strong> resetado no início de <code>callChatStream</code> (impedia "HERMES raciocinando" inicial).
+(15) <strong>vizMode</strong> reduzido de 4 para 3 níveis (removido passos; supervisão via HITL gates).
+(16) <strong>Grumbach 9 fases</strong> validadas end-to-end em localhost.</td>
 </tr>
 </tbody></table>
 <hr>
@@ -1231,36 +1252,27 @@ Bugs: circular JSON no <code>EventsPanel</code> (onClick={handler} → onClick={
 <td>pg-boss KRATOS — isolamento de jobs</td>
 <td>T-10c</td>
 </tr>
+<tr><td>toolTadScoreCalculator (score TAD paramétrico)</td><td>Sprint 24</td></tr>
+<tr><td>consultar_agente removido (resíduo ReAct)</td><td>Sprint 24</td></tr>
+<tr><td>Tier mismatch cross-provider</td><td>Sprint 24</td></tr>
+<tr><td>sendMessage bloqueado durante hitlGate</td><td>Sprint 24</td></tr>
+<tr><td>UUID fallback tool_grumbach_expert_simulation</td><td>Sprint 24</td></tr>
+<tr><td>maxOutputTokens KLIO 8k + anchorContext limit 20</td><td>Sprint 24</td></tr>
+<tr><td>PHASE_CONFIGS → banco (loadPhaseConfigs)</td><td>Sprint 24</td></tr>
+<tr><td>nginx auto-healing valid=300s</td><td>Sprint 24</td></tr>
+<tr><td>ATHENA visível via canal onAthena</td><td>Sprint 24</td></tr>
+<tr><td>Fase 4 Delphi prompt corrigido + tool_register_event</td><td>Sprint 24</td></tr>
+<tr><td>POST /sessions/parse-scope (importar escopo)</td><td>Sprint 24</td></tr>
+<tr><td>vizMode reduzido para 3 níveis</td><td>Sprint 24</td></tr>
 </tbody></table>
-<h3>🔲 Pendente — Bugs confirmados em smoke test (30 Mai 2026)</h3>
+<h3>🔲 Pendente — Bugs ativos (05 Jun 2026)</h3>
 <table>
 <thead>
-<tr>
-<th>#</th>
-<th>Bug</th>
-<th>Descrição</th>
-</tr>
+<tr><th>#</th><th>Bug</th><th>Descrição</th></tr>
 </thead>
-<tbody><tr>
-<td>#2/#3</td>
-<td><strong>Mensagem duplicada</strong></td>
-<td>HERMES transcreve saída do especialista nos tokens E inclui na síntese → 2 mensagens salvas no banco. Afeta chat e DOCX exportado.</td>
-</tr>
-<tr>
-<td>D</td>
-<td><strong>Páginas vazias PDF</strong></td>
-<td>Mensagens <code>parcial</code> curtas (~800 chars) do HERMES entre fases exportadas como blocos quase vazios.</td>
-</tr>
-<tr>
-<td>#6</td>
-<td><strong><code>---</code> repetido</strong></td>
-<td>LLM artifact: traço horizontal repetido por dezenas de linhas em alguns outputs.</td>
-</tr>
-<tr>
-<td>C</td>
-<td><strong>Bloco sem export visível</strong></td>
-<td>Quando especialista retorna erro, HERMES gera resposta <code>parcial</code> — REPORT_PATTERNS não casa.</td>
-</tr>
+<tbody>
+<tr><td>B3</td><td><strong>Fases somem da tela após ATHENA</strong></td><td>Histórico de mensagens — investigação pendente</td></tr>
+<tr><td>RAG</td><td><strong>RAG inoperante localmente</strong></td><td>vector(768) correto, mas índice HNSW pode precisar rebuild após troca Voyage→Ollama</td></tr>
 </tbody></table>
 <h3>🔲 Pendente — Funcionalidades</h3>
 <table>

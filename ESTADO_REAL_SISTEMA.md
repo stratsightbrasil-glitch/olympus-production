@@ -1,7 +1,7 @@
 # ESTADO REAL DO SISTEMA — OLYMPUS 1.0
-**Gerado em:** 04/06/2026 — Pós Sprint 23 (auditoria sec + perf + bugs)
-**Commit HEAD:** `7c22f52` (docs CLAUDE.md) · `3164e7e` (fix Railway fase 3 + KLIO) · `c0ac0d0` (8 bugs Grumbach)
-**Método:** queries SQL reais no banco ativo + inspeção do dist compilado + containers
+**Gerado em:** 05/06/2026 — Sprint 24 concluído · testagem end-to-end Grumbach 9 fases
+**Commit HEAD:** `0539c70` (OOM+ATHENA+vizMode) · `b711d95` (Fase4+parse-scope) · `a6aab5d` (Sprint24 motor genérico)
+**Método:** queries SQL reais no banco ativo + inspeção do código-fonte + containers
 **Containers:** olympus_api ✅ healthy · olympus_db ✅ healthy · olympus_web ✅ up · olympus_ollama ✅ healthy
 
 ---
@@ -10,13 +10,14 @@
 
 | name | type | prompt_len (chars) | Observação |
 |------|------|-------------------|-----------|
-| ATHENA | expert | 5 838 | `[]` — auditora determinística, chamada como função TS |
-| HERMES | orchestrator | 1 299 | `[]` — compilador de relatório final (sem ferramentas) |
-| KLIO | expert | **2 187** | 18 ferramentas — analista monolítico de todas as fases |
+| ATHENA | expert | 5 838 | `[]` — auditora determinística, chamada como função TS via `athena-validator.ts` |
+| HERMES | orchestrator | 1 299 | `[]` — compilador de relatório final. Sem ferramentas. Roda em `synthesisNode`. |
+| KLIO | expert | 2 187 | 18 ferramentas — analista monolítico de todas as fases via `phaseLoopNode` |
 | KRATOS | expert | 1 214 | `["web_search","buscar_dados_publicos","buscar_sinais","registrar_sinal","atualizar_sentinela"]` |
-| OLYMPUS | orchestrator | 332 | stub — não ativo em 1.0 |
+| OLYMPUS | orchestrator | 332 | Stub — não ativo em Olympus 1.0 |
 
-**Total: 5 agentes.** KLIO prompt cresceu de 1.441 → 2.187 chars no Sprint 23: adicionados guardrail de objeto de análise, regra de escopo por fase (não descrever outras fases), e regra FIRST-STEP removida (conflitava com PHASE_CONFIGS).
+**Total: 5 agentes.** `consultar_agente` removido de todo o código (Sprint 24 — resíduo ReAct).
+Orquestrador detectado por nome: `this.name === 'HERMES' || this.name === 'OLYMPUS'`.
 
 ### KLIO — toolsConfig (18 ferramentas)
 ```json
@@ -33,83 +34,86 @@
 
 ## SEÇÃO 2 — METODOLOGIAS E FASES
 
-### Bloco A — Cenários (9 metodologias, v1.0)
+### Sprint 24 — PHASE_CONFIGS migrados para o banco
 
-| slug | PHASE_CONFIGS | Fases DB | Observação |
-|------|--------------|---------|-----------|
-| `grumbach` ⭐ | ✅ 9 fases implementadas | 9 | **CASO DE VALIDAÇÃO 1.0** |
-| `ceeex` | ❌ erro explícito | 0 | novo slug — sem fases DB ainda |
-| `esg` | ❌ erro explícito | 6 | phases no banco, sem phase-configs |
-| `godet` | ❌ erro explícito | 7 | phases no banco, sem phase-configs |
-| `gbn` | ❌ erro explícito | 0 | novo slug — sem fases DB ainda |
-| `alta` | ❌ erro explícito | 6 | phases no banco, sem phase-configs |
-| `ipea_buarque` | ❌ erro explícito | 0 | novo slug — sem fases DB ainda |
-| `mpo` | ❌ erro explícito | 8 | phases no banco, sem phase-configs |
-| `siex` | ❌ erro explícito | 7 | phases no banco, sem phase-configs |
+5 novas colunas em `methodology_phases` (Sprint 24):
+`system_prompt_inject`, `allowed_tools`, `requires_hitl_before`, `requires_qualitative_audit`, `ats_codes`
+
+**`loadPhaseConfigs(slug)`** em `phase-context.ts` substitui `PHASE_CONFIGS[slug]` em código.
+Cache 5 min. Erro descritivo se `systemPromptInject` ausente. `grumbach.ts` marcado `@deprecated`.
+
+### Bloco A — Cenários (9 metodologias)
+
+| slug | phase_configs no banco | Fases DB | Observação |
+|------|------------------------|---------|-----------|
+| `grumbach` ⭐ | ✅ 9 fases com prompts + tools | 9 | **VALIDADO end-to-end 9 fases (05/Jun/2026)** |
+| `esg` | ❌ sem systemPromptInject | 6 | fases no banco, prompts pendentes |
+| `godet` | ❌ sem systemPromptInject | 7 | fases no banco, prompts pendentes |
+| `mpo` | ❌ sem systemPromptInject | 8 | fases no banco, prompts pendentes |
+| `alta` | ❌ sem systemPromptInject | 6 | fases no banco, prompts pendentes |
+| `siex` | ❌ sem systemPromptInject | 7 | fases no banco, prompts pendentes |
+| `ceeex` | ❌ sem fases no banco | 0 | novo slug — criar fases + prompts |
+| `gbn` | ❌ sem fases no banco | 0 | novo slug — criar fases + prompts |
+| `ipea_buarque` | ❌ sem fases no banco | 0 | novo slug — criar fases + prompts |
 
 ### Bloco B — Planejamento Estratégico (3 stubs, v2.0)
 
 | slug | DB | Observação |
 |------|-----|-----------|
-| `siplex` | ✅ 7 fases | stub — pipeline Olympus 2.0 |
+| `siplex` | 7 fases | stub — pipeline Olympus 2.0 |
 | `grumbach_gestao` | 0 fases | stub |
 | `sped` | 0 fases | stub |
 
-### Grumbach — fases em detalhe (Olympus 1.0 — Sprint 23)
+### Grumbach — fases (Olympus 1.0 — Sprint 24)
 
-| phase_num | slug | node_slug | label |
-|-----------|------|-----------|-------|
-| 1 | grumbach_p1 | node_framing | Delimitação do Sistema |
-| 2 | grumbach_p2 | node_scanning_macro | Varredura de FPFs |
-| 3 | grumbach_p3_hitl | node_scanning_forces | Seleção de FPFs (HITL) |
-| 4 | grumbach_p4 | node_modeling | Delphi — Probabilidades P(i) |
-| 5 | grumbach_p5 | node_modeling | Impacto Cruzado P(i\|j) |
-| 6 | grumbach_p6 | node_matrix_design | Seleção das 4 Cenas |
-| 7 | grumbach_p7 | node_narrative | Narrativas das 4 Cenas |
-| 8 | grumbach_p8 | node_integration | Indicações Estratégicas |
-| 9 | grumbach_p9 | node_integration | Painel de Monitoramento |
+| phase_num | slug | n_tools | requires_hitl_before | label |
+|-----------|------|---------|---------------------|-------|
+| 1 | grumbach_p1 | 5 | false | Delimitação do Sistema |
+| 2 | grumbach_p2 | 8 | false | Varredura de FPFs |
+| 3 | grumbach_p3_hitl | 3 | **true** | Seleção de FPFs (HITL) |
+| 4 | grumbach_p4 | 3 | false | Delphi — Probabilidades P(i) |
+| 5 | grumbach_p5 | 4 | false | Impacto Cruzado P(i\|j) |
+| 6 | grumbach_p6 | 2 | false | Seleção das 4 Cenas |
+| 7 | grumbach_p7 | 2 | false | Narrativas das 4 Cenas |
+| 8 | grumbach_p8 | 5 | false | Indicações Estratégicas |
+| 9 | grumbach_p9 | 4 | false | Painel de Monitoramento |
 
-> **Sprint 23 fix — fase 3:** `allowedTools` agora inclui `tool_register_event` (estava ausente, causando recusa da fase no Railway). Prompt reescrito com instrução explícita de como registrar cada persona.
+> **Sprint 24 — Fase 4:** prompt reescrito para deixar claro que `tool_grumbach_expert_simulation`
+> retorna INSTRUÇÕES (não P(i)). KLIO deve simular as 7 personas e GERAR probabilidades.
+> `tool_register_event` adicionado a allowedTools (sem ele os keyFindings da fase ficavam vazios).
 
 ---
 
 ## SEÇÃO 3 — BANCO DE DADOS
 
-### Tabelas principais (30 total)
+### Tabelas principais
 
 ```
 Aplicação (26): agent_method_prompts, agents, analytic_reviews, audit_logs,
   embeddings, indicators, matrix_direct_impacts, messages, methodologies,
-  methodology_phases, methodology_types, phase_outputs ← NOVO v1.0,
-  phase_techniques, platform_settings, project_events, project_scenarios,
-  projects, rate_limit_logs, revoked_tokens, team_members, teams,
-  technique_execution_outputs, techniques, tools, users, weak_signals
+  methodology_phases ← Sprint 24: +5 colunas phase config,
+  methodology_types, phase_outputs, phase_techniques, platform_settings,
+  project_events, project_scenarios, projects, rate_limit_logs,
+  revoked_tokens, team_members, teams, technique_execution_outputs,
+  techniques, tools, users, weak_signals
 
 LangGraph PostgresSaver (4): checkpoint_blobs, checkpoint_migrations,
   checkpoint_writes, checkpoints  ← NÃO tocar no schema Drizzle
 ```
 
-### Estado atual do banco local
-
-| Tabela | Linhas | Observação |
-|--------|--------|-----------|
-| projects | 1 | análise em andamento |
-| phase_outputs | 2 | fases 1–2 concluídas |
-| project_events | 19 | FPFs registrados nas fases |
-| checkpoints | 4 | PostgresSaver ativo |
-
-### Novos campos em `methodologies` (Sprint 22)
-```
-methodology_type        TEXT DEFAULT 'cenarios'
-implementation_status   TEXT DEFAULT 'v1.0'
-parent_relation         TEXT
-source_documents        JSONB DEFAULT '[]'
+### Campos-chave Sprint 24 em `methodology_phases`
+```sql
+system_prompt_inject       TEXT              -- prompt injetado em KLIO por fase
+allowed_tools              JSONB NOT NULL DEFAULT '[]'
+requires_hitl_before       BOOLEAN NOT NULL DEFAULT FALSE
+requires_qualitative_audit BOOLEAN NOT NULL DEFAULT FALSE
+ats_codes                  JSONB NOT NULL DEFAULT '[]'
 ```
 
-### `phase_outputs` — tabela crítica do v1.0
+### `phase_outputs` — tabela crítica
 ```sql
 id, project_id, phase_slug, node_slug, phase_num, methodology_id,
-summary TEXT,          -- ~500 chars, determinístico (não gerado por LLM)
+summary TEXT,          -- ~500 chars, determinístico
 key_findings JSONB,    -- [{claim, factStatus, tadScore?, source?}]
 tool_call_ids TEXT[],
 athena_verdict TEXT,   -- APROVADO | RESSALVAS | REQUER_REVISAO
@@ -120,7 +124,7 @@ athena_used_llm BOOLEAN
 ### Embeddings
 - Dimensão: `vector(768)` — Ollama `nomic-embed-text`
 - Voyage AI removido definitivamente
-- HNSW index recriado para 768 dims
+- HNSW index para 768 dims
 
 ---
 
@@ -131,22 +135,21 @@ athena_used_llm BOOLEAN
 START → phase_loop ──(loop N fases)──→ synthesis → END
 ```
 
-### PHASE_CONFIGS (código, não banco)
-```typescript
-{ grumbach: GRUMBACH_PHASES }  // único implementado em 1.0
-// outros slugs → throw explícito com mensagem clara
-```
+### Roteamento (Sprint 24)
+`routeFromStart` e `routeAfterPhase` usam `state.totalPhases` (populado pelo `chat.ts` via `loadPhaseConfigs()` e atualizado pelo `phaseLoopNode` após cada fase).
+Fallback `totalPhases = 9` para checkpoints antigos sem o campo.
 
-### Caches module-level em `nodes.ts` (Sprint 23, TTL 5min)
+### Caches module-level em `nodes.ts` (TTL 5 min)
 | Cache | Chave | O que elimina |
 |-------|-------|--------------|
-| `_klioCache` | global | 1 DB query × 9 fases = 9 round-trips |
-| `_projectNameCache` | projectId | idem |
+| `_klioCache` | global | 1 DB query × 9 fases |
+| `_projectNameCache` | projectId | 1 DB query × 9 fases |
 | `_toolsCache` | `projectId:sortedTools` | 16 closures × 9 fases = 144 objetos |
 
-### Cursor de estado
-- `currentPhaseIndex`: 0-based, null = não iniciado (v5)
-- `currentNodeSlug`: legado v4 — mantido para compat SSE
+### Cache em `phase-context.ts` (TTL 5 min)
+| Cache | Chave | O que elimina |
+|-------|-------|--------------|
+| `_phaseConfigCache` | methodologySlug | DB query por fase (antes: 9 queries/análise) |
 
 ---
 
@@ -166,10 +169,14 @@ START → phase_loop ──(loop N fases)──→ synthesis → END
 | `llm` | `{"provider": "google", "model": "gemini-2.5-flash-lite"}` |
 | `llm_tiers` | `{"economy": "gemini-2.5-flash-lite", "premium": "gemini-2.5-flash"}` |
 
-### Variáveis de ambiente relevantes
-- `TEST_MODE=false` — interrupts ativos, análise para em cada fase (passos mode)
-- `NODE_TLS_REJECT_UNAUTHORIZED` — comentado no .env local; bloqueado em produção
-- `JWT_SECRET` — rotacionado em 04/Jun/2026 (≥32 chars, seguro)
+**Sprint 24:** PATCH /settings/llm agora upserta `llm_tiers` automaticamente com defaults do novo provider.
+
+### Tokens (Agent.ts)
+| Agente | maxOutputTokens | maxSteps |
+|--------|----------------|---------|
+| HERMES | 32 000 | 15 |
+| KLIO | **8 000** | 12 |
+| KLIO (TEST_MODE) | 4 000 | 5 |
 
 ---
 
@@ -178,49 +185,49 @@ START → phase_loop ──(loop N fases)──→ synthesis → END
 ```bash
 npx tsc --noEmit --project apps/api/tsconfig.json  → ZERO ERROS ✅
 npx tsc --noEmit --project apps/web/tsconfig.json  → ZERO ERROS ✅
+stress test: 10/10 ✅ (CP-9: banco, CP-10: erro descritivo)
 ```
 
 ---
 
 ## SEÇÃO 7 — DIAGNÓSTICO: ESTADO ATUAL
 
-### ✅ Funcionando
+### ✅ Funcionando (05/Jun/2026)
 
 | Item | Verificação |
 |------|-------------|
-| TypeScript API + Web | Zero erros (confirmado) |
-| Grumbach fase 1-2 | 2 phase_outputs no banco da análise atual |
-| Google Gemini | Análises executando com gemini-2.5-flash |
-| HITL fase 3 | `tool_register_event` disponível (fix Sprint 23) |
-| Guardrail fase-count | KLIO não lista outras fases (fix Sprint 23) |
-| Circular JSON fix | `onClick={() => onResume?.()}` (fix Sprint 23) |
-| MPC por metodologia | Semântico (grumbach) vs alfanumérico (siex/alta/ceeex) |
-| Security headers | nginx + Hono middleware |
-| Login rate limit | Postgres-backed, 5/15min por IP |
-| Hard delete | CASCADE para todos os dados associados |
-| Seed Railway | Executado em 04/Jun/2026 — banco Railway sincronizado |
+| TypeScript API + Web | Zero erros ✅ |
+| Stress test | 10/10 ✅ (CP-9 banco grumbach, CP-10 erro descritivo esg) |
+| Grumbach end-to-end | 9 fases executadas com sucesso em localhost |
+| ATHENA visível no chat | Canal onAthena → mensagem permanente ✅/⚠️/❌ por fase |
+| Fase 4 Delphi | Prompt corrigido — KLIO gera P(i) após tool retorna instruções |
+| Phase configs no banco | loadPhaseConfigs('grumbach') ✅ 9 fases, prompts OK |
+| nginx auto-healing | resolver 127.0.0.11 valid=300s — auto-heals após restart Docker |
+| Rate limit analysis | 20/hora (era 5 — insuficiente para 9 fases passos mode) |
+| Fix resume (isResuming) | sendMessage() bloqueado durante hitlGate |
+| Importar escopo via arquivo | POST /sessions/parse-scope + botão no modal |
+| vizMode 3 níveis | Etapa Completa · Processo Completo · Raciocínio Estendido |
+| tier mismatch | PATCH /settings/llm upserta llm_tiers automaticamente |
+| Railway seed | Executado em 05/Jun/2026 — banco Railway sincronizado |
 
 ### 🔲 Pendências
 
 | # | Item | Prioridade | Observação |
 |---|------|-----------|-----------|
-| P1 | **Validação completa Grumbach 9 fases** | 🔴 | Fases 1-2 OK; ainda não testado fases 3-9 end-to-end |
-| P2 | **PHASE_CONFIGS para ceeex** | 🟡 | Segunda após Grumbach validado; compartilha 70% da estrutura |
+| P1 | **HERMES compilar relatório final** | 🔴 | 9 fases validadas; HERMES não chegou a rodar (OOM antes do synthesisNode; fix 8k tokens deve resolver) |
+| P2 | **PHASE_CONFIGS para ceeex** | 🟡 | 2ª prioridade após Grumbach com HERMES validado; 70% da estrutura Grumbach |
 | P3 | **ATHENA LLM qualitativo** | 🟡 | `runQualitativeAudit()` retorna stub; implementar em 1.1 |
-| P4 | **Endpoint GET /api/v1/phases/:projectId** | 🟡 | Necessário para Tela ATHENA e Lastro na UI |
-| P5 | **Paginação sessions list** | 🟢 | Hard cap 200 itens; cursor-based pagination para escala |
-| P6 | **PHASE_CONFIGS demais metodologias** | 🟢 | Bloco A: godet, esg, mpo, alta, siex, gbn, ipea_buarque |
+| P4 | **PHASE_CONFIGS demais metodologias** | 🟢 | godet, esg, mpo, alta, siex, gbn, ipea_buarque |
+| P5 | **Paginação sessions list** | 🟢 | Hard cap 200 itens |
 
-### ⚠️ Bugs conhecidos (menores, não bloqueadores)
+### ⚠️ Bugs conhecidos
 
-| # | Descrição | Arquivo |
-|---|-----------|---------|
-| B1 | Fase 1 mostra fases do Grumbach erradas — **somente se Railway não tiver o seed atualizado** | Seed Railway foi rodado: OK ✅ |
-| B2 | HERMES aparece após KLIO durante análise (display issue, não lógica) | Investigação pendente |
-| B3 | Fases 1 e 2 somem da tela após mensagem ATHENA | Histórico de mensagens — investigação pendente |
-| B4 | RAG inoperante (vector(512) resolvido → vector(768), mas índice HNSW pode precisar rebuild) | Banco vazio = OK por ora |
+| # | Descrição | Arquivo | Status |
+|---|-----------|---------|--------|
+| B3 | Fases somem da tela após mensagem ATHENA | Histórico de mensagens | Investigação pendente |
+| RAG | RAG inoperante localmente (índice HNSW pode precisar rebuild) | schema.ts | Banco vazio = OK por ora |
 
 ---
 
-*Gerado por Claude Sonnet 4.6 — 04/06/2026 — Sprint 23 · Olympus 1.0*
-*Queries SQL executadas em `olympus_db` (postgres/olympus) · Containers inspecionados via `docker exec`*
+*Gerado por Claude Sonnet 4.6 — 05/06/2026 — Sprint 24 · Olympus 1.0*
+*Containers inspecionados via `docker exec` · Stress test executado · Testagem end-to-end 9 fases Grumbach*

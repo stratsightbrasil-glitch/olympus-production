@@ -462,6 +462,7 @@ services:
 | Pós-deploy | 31 Mai | Bug A (tool loop guard Agent.ts), Bug B (fase no CONFIRMAR), watermark ACESSO RESTRITO, EventsPanel flicker, batch/status order, T-10c pg-boss KRATOS |
 | **Sprint 22** | **02 Jun 2026** | **Olympus 1.0 — Migração arquitetural v4→v5:** phaseLoopNode substitui 6 nós especializados · PHASE_CONFIGS em código · phase_outputs (artefatos estruturados) · ATHENA determinística por fase · contexto ~268 tokens vs 40-60K · 5 agentes (remove SCOPUS/PYTHIA/MNEMOSYNE/THEMIS) · 12 metodologias (Bloco A/B) · migration idempotente em index.ts · stress test 10/10 · TypeScript zero erros · Railway deploy + fix clearCheckpointSql |
 | **Sprint 23** | **03–04 Jun 2026** | **Auditoria de segurança + performance + bugs de produção:** Sec: role injection bloqueado no register, 2FA sem userId leak, /health minimal, backup spawn() vs exec(), validação de input em users/auth, JWT secret guard no startup, headers CSP/HSTS/X-Frame no nginx + Hono, login rate limit migrado para Postgres. Perf: 3 caches module-level em phaseLoopNode (KLIO/projectName/tools), buildToolsForPhase cached, buildPhaseSummary O(1), sessions list com colunas seletivas, reloadCronJobs → cirúrgico. Bugs: 8 observações do teste Grumbach corrigidas (circular JSON EventsPanel, PYTHIA legado removido, MPC condicional por metodologia, ATHENA message descritiva, empty KLIO output fallback, fase 3 tool_register_event adicionado, guardrail fase-count no phase-configs e seed). |
+| **Sprint 24** | **04–05 Jun 2026** | **Motor genérico + testagem end-to-end Grumbach:** (1) PHASE_CONFIGS migrados para o banco — 5 colunas novas em `methodology_phases` (system_prompt_inject, allowed_tools, requires_hitl_before, requires_qualitative_audit, ats_codes); `loadPhaseConfigs(slug)` em phase-context.ts substitui objeto em código; builder.ts usa `state.totalPhases`; stress test 10/10 ✅ incluindo CP-9 (banco) e CP-10 (erro descritivo). (2) Fix root cause "KLIO volta à fase 1": `sendMessage()` bloqueado quando hitlGate ativo, evitando `isResuming=false` acidental; `streamingText` limpo no hitl_gate. (3) toolTadScoreCalculator commitada (score TAD paramétrico 6 subcritérios). (4) consultar_agente removido de todo o código (resíduo ReAct — helpers.ts + Agent.ts). (5) Tier mismatch cross-provider: PATCH /settings/llm agora upserta llm_tiers com defaults do novo provider. (6) nginx auto-healing: `resolver 127.0.0.11 valid=300s` + variável `$upstream` — auto-heals em ≤5min após reinício Docker Desktop sem `docker compose restart web`. (7) Rate limit analysis 5→20/hora (9 fases passos mode ≈ 10 POSTs). (8) UUID fallback em tool_grumbach_expert_simulation: UUID→nome→todos aprovados. (9) maxOutputTokens KLIO 32k→12k→8k + anchorContext limitado a 20 eventos (fix OOM exit 137 nas fases tardias). (10) HERMES streaming bubble: usa `progressAgent` em vez de "HERMES" hardcoded. (11) Agent lookup via `msg.agentName` em vez de getAgentInfo(content). (12) Fase 4 prompt reescrito: ferramenta retorna instruções, KLIO deve simular e GERAR P(i); `tool_register_event` adicionado a allowedTools. (13) POST /sessions/parse-scope: extrai 6 campos de escopo de PDF/DOCX via Gemini economy; botão "Importar escopo" no NewSessionModal. (14) Canal ATHENA: onAthena → SSE `athena` → mensagem permanente no chat (✅/⚠️/❌ por fase). (15) progressAgent resetado no início de callChatStream. (16) vizMode reduzido de 4 para 3 níveis (removido passos; supervisão via HITL gates). (17) getModel() exportada de packages/core. |
 
 ---
 
@@ -500,15 +501,25 @@ services:
 | Bug B — fase no CONFIRMAR (vizMode=passos) | Pós-deploy |
 | Watermark CONFIDENCIAL → ACESSO RESTRITO | Pós-deploy |
 | pg-boss KRATOS — isolamento de jobs | T-10c |
+| toolTadScoreCalculator (score TAD paramétrico) | Sprint 24 |
+| consultar_agente removido (resíduo ReAct) | Sprint 24 |
+| Tier mismatch cross-provider | Sprint 24 |
+| sendMessage bloqueado durante hitlGate | Sprint 24 |
+| UUID fallback tool_grumbach_expert_simulation | Sprint 24 |
+| maxOutputTokens KLIO 8k + anchorContext limit 20 | Sprint 24 |
+| PHASE_CONFIGS → banco (loadPhaseConfigs) | Sprint 24 |
+| nginx auto-healing valid=300s | Sprint 24 |
+| ATHENA visível via canal onAthena | Sprint 24 |
+| Fase 4 Delphi prompt corrigido | Sprint 24 |
+| POST /sessions/parse-scope (importar escopo) | Sprint 24 |
+| vizMode reduzido para 3 níveis | Sprint 24 |
 
-### 🔲 Pendente — Bugs confirmados em smoke test (30 Mai 2026)
+### 🔲 Pendente — Bugs ativos (05 Jun 2026)
 
 | # | Bug | Descrição |
 |---|-----|-----------|
-| #2/#3 | **Mensagem duplicada** | HERMES transcreve saída do especialista nos tokens E inclui na síntese → 2 mensagens salvas no banco. Afeta chat e DOCX exportado. |
-| D | **Páginas vazias PDF** | Mensagens `parcial` curtas (~800 chars) do HERMES entre fases exportadas como blocos quase vazios. |
-| #6 | **`---` repetido** | LLM artifact: traço horizontal repetido por dezenas de linhas em alguns outputs. |
-| C | **Bloco sem export visível** | Quando especialista retorna erro, HERMES gera resposta `parcial` — REPORT_PATTERNS não casa. |
+| B3 | **Fases somem da tela após ATHENA** | Histórico de mensagens — investigação pendente |
+| RAG | **RAG inoperante localmente** | vector(768) correto, mas índice HNSW pode precisar rebuild após troca Voyage→Ollama |
 
 ### 🔲 Pendente — Funcionalidades
 
