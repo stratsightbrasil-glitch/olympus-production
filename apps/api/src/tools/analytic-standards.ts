@@ -2,6 +2,9 @@
 // Base: McMahon, "Analytic Tradecraft Standards in an Age of AI" (Belfer Center/Harvard, 2024)
 // Padrão: Tool<any> puro — sem AI SDK tool(), sem Zod (ver HISTORICO_MIGRACAO.md §8.1)
 
+import { db } from "@olympus/db";
+import { projectEvents } from "@olympus/db";
+
 export const DECLARAR_JULGAMENTO_SCHEMA = {
   type: "object",
   properties: {
@@ -107,7 +110,7 @@ export const AVALIAR_FONTE_SCHEMA = {
 
 // ── Factory de tools com projectId ──────────────────────────────────────────
 
-export function createAnalyticStandardsTools(_projectId: string) {
+export function createAnalyticStandardsTools(projectId: string) {
 
   const declararJulgamento = {
     name: 'declarar_julgamento',
@@ -131,6 +134,21 @@ NÃO usar para afirmações factuais simples.`,
         `**[JULGAMENTO]** (${args.grauProbabilidade} | ${args.nivelConfianca}): ${args.julgamento}` +
         (args.premissaLinchpin ? `\n\n**[PREMISSA-LINCHPIN]** ${args.premissaLinchpin}` : '') +
         (args.indicadoresDeAlteracao?.length ? `\n\n**[INDICADORES DE ALTERAÇÃO]** ${args.indicadoresDeAlteracao.join('; ')}` : '');
+
+      // Quando premissaLinchpin é declarada, persistir como project_event para que
+      // ATHENA encontre "premissa-linchpin" nos keyFindings (ATS3 check).
+      if (args.premissaLinchpin && projectId) {
+        try {
+          await db.insert(projectEvents).values({
+            projectId,
+            name: `Premissa-Linchpin: ${String(args.premissaLinchpin).substring(0, 200)}`,
+            description: String(args.premissaLinchpin),
+            type: 'uncertainty',
+            status: 'proposed',
+            sourceEvaluation: { factStatus: 'SUPOSICAO', reliability: 'C', credibility: '3' },
+          });
+        } catch { /* não bloquear execução se falhar */ }
+      }
 
       return JSON.stringify({
         ok: true,

@@ -192,7 +192,7 @@ stress test: 10/10 ✅ (CP-9: banco, CP-10: erro descritivo)
 
 ## SEÇÃO 7 — DIAGNÓSTICO: ESTADO ATUAL
 
-### ✅ Funcionando (05/Jun/2026)
+### ✅ Funcionando (05/Jun/2026 — Sprint 25)
 
 | Item | Verificação |
 |------|-------------|
@@ -206,9 +206,11 @@ stress test: 10/10 ✅ (CP-9: banco, CP-10: erro descritivo)
 | Rate limit analysis | 20/hora (era 5 — insuficiente para 9 fases passos mode) |
 | Fix resume (isResuming) | sendMessage() bloqueado durante hitlGate |
 | Importar escopo via arquivo | POST /sessions/parse-scope + botão no modal |
-| vizMode 3 níveis | Etapa Completa · Processo Completo · Raciocínio Estendido |
+| vizMode default | 'etapa' (era 'passos' — removido do UI no Sprint 24) |
 | tier mismatch | PATCH /settings/llm upserta llm_tiers automaticamente |
 | Railway seed | Executado em 05/Jun/2026 — banco Railway sincronizado |
+| **ATHENA ATS3 linchpin** | **declarar_julgamento cria project_event com "Premissa-Linchpin" — Sprint 25** |
+| **Phase counter SSE** | **currentPhaseNum rastreado via eventos athena/hitl_gate — Sprint 25** |
 
 ### 🔲 Pendências
 
@@ -229,5 +231,5 @@ stress test: 10/10 ✅ (CP-9: banco, CP-10: erro descritivo)
 
 ---
 
-*Gerado por Claude Sonnet 4.6 — 05/06/2026 — Sprint 24 · Olympus 1.0*
-*Containers inspecionados via `docker exec` · Stress test executado · Testagem end-to-end 9 fases Grumbach*
+*Gerado por Claude Sonnet 4.6 — 05/06/2026 — Sprint 25 · Olympus 1.0*
+*Containers inspecionados via `docker exec` · TypeScript zero erros · 3 bugs corrigidos*

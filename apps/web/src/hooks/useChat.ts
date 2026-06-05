@@ -32,6 +32,11 @@ export function useChat({
   const [thinkingBlocks, setThinkingBlocks] = useState<Record<number, string>>({});
   const [thinkingOpen, setThinkingOpen] = useState<Record<number, boolean>>({});
 
+  // Número da fase atual, atualizado por eventos SSE ('athena', 'hitl_gate').
+  // Mais confiável que o scan de mensagens para step counter (evita false-positives
+  // quando múltiplas fases usam o mesmo agente, ex: todas as 9 fases do Grumbach → KLIO).
+  const [currentPhaseNum, setCurrentPhaseNum] = useState(0);
+
   // ── HITL gate — ativado quando /stream/graph emite hitl_gate ──
   // interruptType distingue os dois casos:
   //   'hitl_required'  → PYTHIA aguarda aprovação de eventos (EventsPanel)
@@ -82,6 +87,7 @@ export function useChat({
     setStepLog([]);
     setProgressAgent(''); // reset agente anterior — evita mostrar "HERMES raciocinando" no início
     setHitlGate(null);    // limpa gate anterior
+    setCurrentPhaseNum(0); // reset fase — será atualizado pelos eventos 'athena'/'hitl_gate'
     const res = await fetch(streamEndpoint, {
       method: 'POST',
       headers: reqHeaders,
@@ -127,6 +133,7 @@ export function useChat({
             const phaseNum: number = (event as any).phaseNum ?? 0;
             const label: string = (event as any).label ?? '';
             const emoji = verdict === 'APROVADO' ? '✅' : verdict === 'RESSALVAS' ? '⚠️' : '❌';
+            if (phaseNum > 0) setCurrentPhaseNum(phaseNum); // atualiza step counter autoritativamente
             setMessages(prev => [...prev, {
               role:        'assistant' as const,
               agentName:   'ATHENA',
@@ -135,6 +142,8 @@ export function useChat({
             }]);
           } else if (event.type === 'hitl_gate') {
             const interruptType = (event as any).interruptType || 'hitl_required';
+            const gatePhaseNum: number = (event as any).phaseNum ?? 0;
+            if (gatePhaseNum > 0) setCurrentPhaseNum(gatePhaseNum);
             // phase_complete: mostrar output do especialista como mensagem no chat
             if (interruptType === 'phase_complete' && (event as any).output) {
               setMessages(prev => [...prev, {
@@ -367,6 +376,7 @@ export function useChat({
     loading, progressAgent, streamingText, stepLog,
     thinkingBlocks, thinkingOpen,
     hitlGate, setHitlGate,
+    currentPhaseNum,
     sendMessage, deletarMensagem, gerarRelatorioKratos, iniciarSessao,
     toggleThinking, resumeGraph,
   };

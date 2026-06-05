@@ -44,7 +44,7 @@ function App() {
   const [mainView, setMainView] = useState<'chat' | 'kratos'>('chat');
   const [mode, setMode] = useState('production');
   const [cacheStatus, setCacheStatus] = useState<{ entries: number; oldestEntryAt: string | null; ttlSeconds: number } | null>(null);
-  const [vizMode, setVizMode] = useState('passos');
+  const [vizMode, setVizMode] = useState('etapa');
   const [reportLayout, setReportLayout] = useState<'standard' | 'extended'>('standard');
   const handleReportLayoutChange = (layout: 'standard' | 'extended') => {
     setReportLayout(layout);
@@ -178,11 +178,16 @@ function App() {
     [projectState.projeto.metodologia, methodologies],
   );
 
-  // Usa messages.length (número primitivo) como dep em vez do array inteiro.
-  // O scan só precisa re-executar quando uma mensagem é adicionada/removida,
-  // não em cada re-render que recria a referência do array (ex: durante streaming).
   const messageCount = chat.messages.length;
+
+  // currentPhaseNum (do SSE 'athena'/'hitl_gate') é a fonte autoritativa — evita
+  // false-positives do scan de mensagens quando todas as fases usam o mesmo agente
+  // (ex: Grumbach fase 1-8 = KLIO → qualquer mensagem com "KLIO" mapeava para fase 8).
+  // Fallback: scan de mensagens para sessões antigas sem currentPhaseNum rastreado.
   const currentStep = useMemo(() => {
+    if (chat.currentPhaseNum > 0) return chat.currentPhaseNum;
+    // Fallback: scan reverso de mensagens (legado — impreciso para metodologias
+    // onde múltiplas fases compartilham o mesmo agente)
     for (let i = currentMethodologySteps.length - 1; i >= 0; i--) {
       const agent = currentMethodologySteps[i].agent;
       const patterns = STEP_DETECTION_PATTERNS[agent] ?? [];
@@ -196,7 +201,7 @@ function App() {
     }
     return messageCount > 0 ? 1 : 0;
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [messageCount, currentMethodologySteps]);
+  }, [chat.currentPhaseNum, messageCount, currentMethodologySteps]);
 
   // Detecta quando o motor aguarda confirmação do analista.
   // Olympus 1.0: hitlGate é a fonte primária — evita scan de mensagens durante streaming.
