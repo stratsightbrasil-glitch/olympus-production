@@ -21,7 +21,7 @@ import {
   projectEvents,
   projects,
 } from "@olympus/db";
-import { eq, asc, gte, and, inArray, sql } from "drizzle-orm";
+import { eq, asc, gte, and, sql } from "drizzle-orm";
 import { athenaAuditPhase }           from "./athena-validator";
 import type { KeyFinding }            from "./athena-validator";
 import { loadPhaseContext, buildPhaseSummary, loadPhaseConfigs } from "./phase-context";
@@ -93,10 +93,11 @@ export async function phaseLoopNode(
   state:  OlympusState,
   config: RunnableConfig,
 ): Promise<Partial<OlympusState>> {
-  const onStep   = config?.configurable?.onStep   as ((msg: string) => void) | undefined;
-  const onToken  = config?.configurable?.onToken  as ((delta: string) => void) | undefined;
-  const onAgent  = config?.configurable?.onAgent  as ((name: string) => void) | undefined;
-  const onAthena = config?.configurable?.onAthena as ((data: { verdict: string; phaseNum: number; label: string; usedLlm: boolean }) => void) | undefined;
+  const onStep        = config?.configurable?.onStep        as ((msg: string) => void) | undefined;
+  const onToken       = config?.configurable?.onToken       as ((delta: string) => void) | undefined;
+  const onAgent       = config?.configurable?.onAgent       as ((name: string) => void) | undefined;
+  const onAthena      = config?.configurable?.onAthena      as ((data: { verdict: string; phaseNum: number; label: string; usedLlm: boolean }) => void) | undefined;
+  const onPhaseOutput = config?.configurable?.onPhaseOutput as ((data: { text: string; phaseNum: number; label: string }) => void) | undefined;
 
   const methodology  = state.methodology ?? "grumbach";
   // loadPhaseConfigs lê do banco (com cache 5min) — lança erro descritivo se
@@ -227,10 +228,11 @@ export async function phaseLoopNode(
   });
 
   const keyFindings: KeyFinding[] = recentEvents.map(e => ({
-    claim:      e.name ?? e.description ?? "evento sem descrição",
-    factStatus: ((e.sourceEvaluation as any)?.factStatus ?? "INDICIO") as KeyFinding["factStatus"],
-    tadScore:   (e.sourceEvaluation as any)?.alphanumericScore as string | undefined,
-    source:     (e.sourceEvaluation as any)?.sourceType as string | undefined,
+    claim:       e.name ?? "evento sem descrição",
+    description: e.description ?? undefined,  // inclui qualificadores Hendrikson, P(i) etc. para ATHENA
+    factStatus:  ((e.sourceEvaluation as any)?.factStatus ?? "INDICIO") as KeyFinding["factStatus"],
+    tadScore:    (e.sourceEvaluation as any)?.alphanumericScore as string | undefined,
+    source:      (e.sourceEvaluation as any)?.sourceType as string | undefined,
   }));
 
   const toolCallIds = recentEvents.map(e => e.id);
@@ -296,6 +298,11 @@ export async function phaseLoopNode(
       + `Consulte o painel de eventos para revisar os FPFs e dados coletados.`
     : rawOutput;
 
+  // Emitir output da fase como evento permanente no chat (independente do vizMode).
+  // Em etapa/passagem mode não há interrupt phase_complete, então o streaming bubble
+  // desaparece quando a fase termina sem deixar mensagem permanente (Bug B3).
+  onPhaseOutput?.({ text: phaseOutput, phaseNum: phaseConfig.phaseNum, label: phaseConfig.label });
+
   // ── Modo passos: interromper para revisão do analista ────────────────────
   if (state.vizMode === "passos" && process.env.TEST_MODE !== "true") {
     const verdictDisplay = athenaVerdict.verdict === "APROVADO"
@@ -336,22 +343,14 @@ export async function synthesisNode(
   const onStep  = config?.configurable?.onStep  as ((msg: string) => void) | undefined;
   const onToken = config?.configurable?.onToken as ((delta: string) => void) | undefined;
 
-  // ── Selecionar orquestrador (HERMES default; OLYMPUS se configurado) ──────
-  const orchestratorCandidates =
-    !state.agentMethodPrompts?.["OLYMPUS"] ? ["HERMES", "OLYMPUS"]
-    : ["OLYMPUS", "HERMES"];
-
-  const dbAgents = await db.query.agents.findMany({
-    where: inArray(agentsTable.name, ["HERMES", "OLYMPUS"]),
+  // HERMES é o compilador canônico do relatório final em Olympus 1.0.
+  // OLYMPUS é stub reservado para Olympus 2.0 — nunca usar aqui.
+  const orchestratorRow = await db.query.agents.findFirst({
+    where: eq(agentsTable.name, "HERMES"),
   });
-  const orchestratorRow =
-    orchestratorCandidates
-      .map(name => dbAgents.find(a => a.name === name))
-      .find(Boolean)
-    ?? dbAgents.find(a => a.type === "orchestrator");
 
   if (!orchestratorRow) {
-    throw new Error("[synthesisNode] Nenhum agente orquestrador encontrado no banco.");
+    throw new Error("[synthesisNode] Agente HERMES não encontrado no banco. Execute o seed.");
   }
 
   const orchestratorName = orchestratorRow.name;

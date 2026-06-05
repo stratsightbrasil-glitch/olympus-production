@@ -127,6 +127,22 @@ export function useChat({
             setStreamingText('');
             setStepLog([]);
             onDone({ text: event.text, agentName: event.agentName, thinking: event.thinking || '', messageType: event.messageType || 'parcial' });
+          } else if (event.type === 'phase_output') {
+            // Output de KLIO após cada fase — salva como mensagem permanente antes da ATHENA.
+            // Sem isso, em vizMode=etapa o streaming bubble desaparece sem deixar rastro (Bug B3).
+            const text: string = (event as any).text ?? '';
+            if (text.trim()) {
+              // Cancela RAF pendente: o token buffer do streaming ainda pode ter conteúdo acumulado
+              if (rafIdRef.current !== null) { cancelAnimationFrame(rafIdRef.current); rafIdRef.current = null; }
+              tokenBufferRef.current = '';
+              setStreamingText(''); // limpa streaming bubble — fase concluída
+              setMessages(prev => [...prev, {
+                role:        'assistant' as const,
+                agentName:   'KLIO',
+                messageType: 'parcial',
+                content:     text,
+              }]);
+            }
           } else if (event.type === 'athena') {
             // Veredicto ATHENA após cada fase — persiste no chat como mensagem AT
             const verdict: string = (event as any).verdict ?? '';

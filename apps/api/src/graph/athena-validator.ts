@@ -10,10 +10,11 @@
  */
 
 export interface KeyFinding {
-  claim:      string;
-  factStatus: "FATO" | "INDICIO" | "SUPOSICAO";
-  tadScore?:  string;   // ex: "B2", "A1", "F6"
-  source?:    string;
+  claim:       string;
+  description?: string;  // texto completo do evento — inclui qualificadores Hendrikson, P(i), etc.
+  factStatus:  "FATO" | "INDICIO" | "SUPOSICAO";
+  tadScore?:   string;   // ex: "B2", "A1", "F6"
+  source?:     string;
 }
 
 export interface AthenaCheck {
