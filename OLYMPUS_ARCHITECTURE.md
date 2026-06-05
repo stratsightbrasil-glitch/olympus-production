@@ -90,7 +90,7 @@
 | `audit_logs` | id, userId, userName, action, resourceType... (+4) |
 | `platform_settings` | key, value, updatedAt |
 | `methodology_types` | id, methodologyId, category |
-| `methodology_phases` | id, methodologyId, phaseNum, label, agentRole... (+3) |
+| `methodology_phases` | id, methodologyId, phaseNum, label, agentRole... (+8) |
 | `phase_techniques` | phaseId, techniqueId, priority |
 | `agent_method_prompts` | id, agentId, methodologyId, extraInstructions |
 | `teams` | id, name, description, createdAt |

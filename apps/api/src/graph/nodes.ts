@@ -24,16 +24,9 @@ import {
 import { eq, asc, gte, and, inArray, sql } from "drizzle-orm";
 import { athenaAuditPhase }           from "./athena-validator";
 import type { KeyFinding }            from "./athena-validator";
-import { loadPhaseContext, buildPhaseSummary } from "./phase-context";
+import { loadPhaseContext, buildPhaseSummary, loadPhaseConfigs } from "./phase-context";
 import { buildToolsForPhase, buildAnchorCtx } from "./helpers";
-import { GRUMBACH_PHASES }            from "./phase-configs/grumbach";
 import type { PhaseConfig }           from "./phase-configs/grumbach";
-
-// ── Registro de phase configs ──────────────────────────────────────────────────
-// Adicionar novas metodologias aqui quando implementadas.
-export const PHASE_CONFIGS: Record<string, PhaseConfig[]> = {
-  grumbach: GRUMBACH_PHASES,
-};
 
 // ── Caches de dados estáticos por análise ──────────────────────────────────────
 // KLIO e project name são consultados em CADA uma das 9 fases — dados estáticos.
@@ -105,14 +98,9 @@ export async function phaseLoopNode(
   const onAgent = config?.configurable?.onAgent as ((name: string) => void) | undefined;
 
   const methodology  = state.methodology ?? "grumbach";
-  const phaseConfigs = PHASE_CONFIGS[methodology];
-
-  if (!phaseConfigs) {
-    throw new Error(
-      `[phaseLoopNode] Metodologia '${methodology}' não tem phase configs implementados. `
-      + `Metodologias disponíveis: ${Object.keys(PHASE_CONFIGS).join(", ")}.`
-    );
-  }
+  // loadPhaseConfigs lê do banco (com cache 5min) — lança erro descritivo se
+  // a metodologia não tem systemPromptInject configurado via seed.
+  const phaseConfigs = await loadPhaseConfigs(methodology);
 
   const currentIndex = state.currentPhaseIndex ?? 0;
 
@@ -327,6 +315,7 @@ export async function phaseLoopNode(
   // ── Avançar cursor ────────────────────────────────────────────────────────
   return {
     currentPhaseIndex: currentIndex + 1,
+    totalPhases:       phaseConfigs.length,    // atualiza total para o roteador
     currentNodeSlug:   phaseConfig.phaseSlug,  // compat SSE chat.ts
     lastOutput:        phaseOutput,
     agentName:         "KLIO",
@@ -377,8 +366,8 @@ export async function synthesisNode(
     throw new Error(
       `[synthesisNode] Nenhum phase_output para projeto '${state.projectId}' (metodologia: '${state.methodology}'). ` +
       `Causas possíveis: (1) phaseLoopNode falhou antes de persistir artefatos — ver logs acima; ` +
-      `(2) metodologia '${state.methodology}' não tem PHASE_CONFIGS implementados ` +
-      `— disponíveis: [${Object.keys(PHASE_CONFIGS).join(", ")}]; ` +
+      `(2) metodologia '${state.methodology}' não tem fases com systemPromptInject configurados ` +
+      `— execute o seed para popular as fases no banco; ` +
       `(3) o seed ainda não foi executado no ambiente Railway.`
     );
   }

@@ -133,12 +133,13 @@ export function useChat({
             }
             setHitlGate({
               message:       event.message   || 'Fase concluída. Confirme para prosseguir.',
-              agent:         event.agent     || 'KLIO',   // era 'PYTHIA' — KLIO é o agente ativo em Olympus 1.0
+              agent:         event.agent     || 'KLIO',
               projectId:     event.projectId || '',
               interruptType,
               output:        (event as any).output,
             });
             setProgressAgent('');
+            setStreamingText('');  // limpa streaming bubble — o conteúdo foi salvo na mensagem acima
             // Não chama onDone — stream encerra sem mensagem final (o grafo continua depois do resume)
             return;
           } else if (event.type === 'error') {
@@ -164,6 +165,10 @@ export function useChat({
   const sendMessage = async (textOverride: string, attachedFiles: AttachedFile[] = [], onFilesClear?: () => void) => {
     if (!textOverride.trim() && attachedFiles.length === 0) return;
     if (loading) return;
+    // Bloquear sendMessage enquanto o motor está pausado em gate HITL.
+    // Sem este guard, o usuário pode usar o InputZone acidentalmente e disparar
+    // isResuming=false, limpando checkpoints e recomeçando do zero.
+    if (hitlGate) return;
 
     const textToProcess = textOverride;
 

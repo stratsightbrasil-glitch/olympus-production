@@ -262,6 +262,15 @@ export const methodologyPhases = pgTable("methodology_phases", {
   description:   text("description"),
   slug:          text("slug").unique(),        // identificador URL-safe para upsert, ex: 'msef_triagem'
   nodeSlug:      text("node_slug"),            // nó LangGraph futuro: 'node_framing', 'node_modeling', etc.
+
+  // ── Sprint 24: PHASE_CONFIGS migrados para o banco ───────────────────────────
+  // Antes esses campos viviam em phase-configs/grumbach.ts (só Grumbach implementado).
+  // Com eles no banco, qualquer metodologia pode ser configurada via seed sem rebuild.
+  systemPromptInject:       text("system_prompt_inject"),
+  allowedTools:             jsonb("allowed_tools").$type<string[]>().default([]),
+  requiresHitlBefore:       boolean("requires_hitl_before").default(false),
+  requiresQualitativeAudit: boolean("requires_qualitative_audit").default(false),
+  atsCodes:                 jsonb("ats_codes").$type<string[]>().default([]),
 });
 
 // Técnicas recomendadas por fase — pool livre (não obrigatório)

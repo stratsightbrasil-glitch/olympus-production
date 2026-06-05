@@ -1,12 +1,13 @@
 /**
- * phase-context.ts — Contexto compacto entre fases (substitui loadMemoryWindow)
+ * phase-context.ts — Contexto compacto entre fases + carregamento de PhaseConfig do banco
  *
  * Budget máximo: ~6K tokens para contexto acumulado completo (9 fases Grumbach).
  * Summary construído deterministicamente — nunca gerado por LLM.
  */
 
-import { db, phaseOutputs } from "@olympus/db";
-import { eq, asc }           from "drizzle-orm";
+import { db, phaseOutputs, methodologyPhases, methodologies } from "@olympus/db";
+import { eq, asc }                                            from "drizzle-orm";
+import type { PhaseConfig }                                    from "./phase-configs/grumbach";
 
 export interface PhaseContext {
   contextText:     string;
@@ -73,4 +74,72 @@ export async function loadPhaseContext(projectId: string): Promise<PhaseContext>
   const estimatedTokens = Math.ceil(contextText.length / 4);
 
   return { contextText, estimatedTokens, phaseCount: outputs.length };
+}
+
+// ── Cache de phase configs por metodologia (TTL 5 min) ──────────────────────
+const _phaseConfigCache = new Map<string, { data: PhaseConfig[]; ts: number }>();
+const PHASE_CONFIG_TTL_MS = 5 * 60 * 1000;
+
+/**
+ * Carrega PhaseConfig[] de uma metodologia a partir do banco.
+ * Substitui PHASE_CONFIGS[slug] em código — permite configurar qualquer metodologia via seed.
+ * Lança erro descritivo se a metodologia não existe ou não tem prompts configurados.
+ */
+export async function loadPhaseConfigs(methodologySlug: string): Promise<PhaseConfig[]> {
+  const cached = _phaseConfigCache.get(methodologySlug);
+  if (cached && Date.now() - cached.ts < PHASE_CONFIG_TTL_MS) return cached.data;
+
+  const method = await db.query.methodologies.findFirst({
+    where:   eq(methodologies.slug, methodologySlug),
+    columns: { id: true },
+  });
+  if (!method) {
+    throw new Error(
+      `[loadPhaseConfigs] Metodologia '${methodologySlug}' não encontrada no banco. ` +
+      `Execute o seed para registrá-la.`
+    );
+  }
+
+  const phases = await db
+    .select()
+    .from(methodologyPhases)
+    .where(eq(methodologyPhases.methodologyId, method.id))
+    .orderBy(asc(methodologyPhases.phaseNum));
+
+  if (phases.length === 0) {
+    throw new Error(
+      `[loadPhaseConfigs] Metodologia '${methodologySlug}' não tem fases no banco. ` +
+      `Execute o seed para popular as fases.`
+    );
+  }
+
+  const incomplete = phases.filter(p => !p.systemPromptInject);
+  if (incomplete.length > 0) {
+    throw new Error(
+      `[loadPhaseConfigs] Fases sem systemPromptInject em '${methodologySlug}': ` +
+      incomplete.map(p => `fase ${p.phaseNum} (${p.slug})`).join(', ') +
+      `. Execute o seed para completar a configuração.`
+    );
+  }
+
+  const configs: PhaseConfig[] = phases.map(p => ({
+    phaseSlug:               p.slug ?? `${methodologySlug}_p${p.phaseNum}`,
+    phaseNum:                p.phaseNum,
+    nodeSlug:                p.nodeSlug ?? 'node_framing',
+    label:                   p.label,
+    systemPromptInject:      p.systemPromptInject!,
+    allowedTools:            (p.allowedTools as string[]) ?? [],
+    requiresHitlBefore:      p.requiresHitlBefore ?? false,
+    requiresQualitativeAudit: p.requiresQualitativeAudit ?? false,
+    atsCodes:                (p.atsCodes as string[]) ?? [],
+  }));
+
+  _phaseConfigCache.set(methodologySlug, { data: configs, ts: Date.now() });
+  return configs;
+}
+
+/** Invalida cache de uma metodologia (útil após rodar seed sem restart) */
+export function invalidatePhaseConfigCache(methodologySlug?: string) {
+  if (methodologySlug) _phaseConfigCache.delete(methodologySlug);
+  else _phaseConfigCache.clear();
 }

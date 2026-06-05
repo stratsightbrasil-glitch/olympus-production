@@ -18,9 +18,8 @@
 import { db, phaseOutputs, agents } from "@olympus/db";
 import { eq }                        from "drizzle-orm";
 import { validateStructuralCompliance, athenaAuditPhase } from "../graph/athena-validator";
-import { buildPhaseSummary }          from "../graph/phase-context";
+import { buildPhaseSummary, loadPhaseConfigs } from "../graph/phase-context";
 import { GRUMBACH_PHASES }            from "../graph/phase-configs/grumbach";
-import { PHASE_CONFIGS }              from "../graph/nodes";
 import { getOlympusGraph }            from "../graph";
 
 async function runStressTest() {
@@ -105,28 +104,31 @@ async function runStressTest() {
     check("CP-8", false, `Grafo falhou ao compilar: ${e.message}`);
   }
 
-  // CP-9: 'grumbach' tem PHASE_CONFIGS
-  check("CP-9", !!PHASE_CONFIGS["grumbach"],
-    PHASE_CONFIGS["grumbach"]
-      ? `PHASE_CONFIGS['grumbach'] presente com ${PHASE_CONFIGS["grumbach"].length} fases.`
-      : "FALHA: PHASE_CONFIGS['grumbach'] não encontrado."
-  );
-
-  // CP-10: 'esg' lança erro explícito
-  let esgThrewError = false;
+  // CP-9: 'grumbach' carregado do banco com 9 fases e campos Sprint 24
   try {
-    const esgConfigs = PHASE_CONFIGS["esg"];
-    if (!esgConfigs) {
-      // Simula o erro que phaseLoopNode lançaria
-      throw new Error("[OLYMPUS 1.0] Phase configs não implementados para metodologia 'esg'.");
-    }
+    const grumbachFromDB = await loadPhaseConfigs('grumbach');
+    const allHavePrompt  = grumbachFromDB.every(p => p.systemPromptInject?.length > 50);
+    const allHaveTools   = grumbachFromDB.every(p => p.allowedTools.length > 0);
+    check("CP-9",
+      grumbachFromDB.length === 9 && allHavePrompt && allHaveTools,
+      grumbachFromDB.length === 9 && allHavePrompt && allHaveTools
+        ? `Grumbach do banco: ${grumbachFromDB.length} fases, prompts OK, tools OK`
+        : `FALHA: ${grumbachFromDB.length} fases, prompts=${allHavePrompt}, tools=${allHaveTools}`
+    );
   } catch (e: any) {
-    esgThrewError = e.message.includes("esg") || e.message.includes("Phase configs");
+    check("CP-9", false, `FALHA ao carregar grumbach do banco: ${e.message}`);
   }
+
+  // CP-10: 'esg' lança erro descritivo (sem systemPromptInject configurado)
+  let esgThrewError = false;
+  let esgErrorMsg   = '';
+  try {
+    await loadPhaseConfigs('esg');
+  } catch (e: any) { esgThrewError = true; esgErrorMsg = e.message; }
   check("CP-10", esgThrewError,
     esgThrewError
-      ? "Metodologia 'esg' corretamente não tem PHASE_CONFIGS (lança erro explícito)."
-      : "FALHA: 'esg' deveria não ter PHASE_CONFIGS em Olympus 1.0."
+      ? `'esg' lança erro descritivo: "${esgErrorMsg.slice(0, 80)}"`
+      : "FALHA: 'esg' deveria lançar erro (sem systemPromptInject configurado)."
   );
 
   // ── Resultado final ────────────────────────────────────────────────────────

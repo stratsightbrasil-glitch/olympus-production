@@ -1,6 +1,18 @@
 /**
  * grumbach.ts — Configuração das 9 fases do Método Grumbach (Olympus 1.0)
  *
+ * @deprecated Sprint 24 (04 Jun 2026): os dados deste arquivo foram migrados para
+ * o banco via seed.ts (colunas system_prompt_inject, allowed_tools, etc. em
+ * methodology_phases). O phaseLoopNode agora carrega do banco via loadPhaseConfigs().
+ *
+ * Este arquivo é mantido como:
+ *   1. Referência documental da estrutura original
+ *   2. Fonte para o seed.ts migrar para o banco (import dinâmico)
+ *   3. Fallback de emergência caso o banco perca os dados
+ *
+ * NÃO modificar os prompts aqui — alterar diretamente no banco via seed.ts.
+ * Este arquivo será removido em sprint futura após todas as metodologias migrarem.
+ *
  * Fonte: METODOLOGIAS_VERIFICADAS_v4.md — Parte III (systemPromptInject verificado).
  * Motor matemático: Delphi + Impactos Cruzados (odds-ratio) + Simulação Monte Carlo.
  * 4 cenas: Mais Provável (A) · Projetivo (B) · Ideal (C) · Alvo (D)

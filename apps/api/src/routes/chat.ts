@@ -17,6 +17,7 @@ import { getOlympusGraph, graphConfig } from '../graph';
 import { getPostgresSaver, clearCheckpointSql } from '../graph/postgresSaver';
 import { getLLMConfig, getLLMTiers } from './settings';
 import { loadMethodology } from '../services/analysis.service';
+import { loadPhaseConfigs } from '../graph/phase-context';
 
 // Re-exports mantidos para compatibilidade com settings.ts
 export { invalidateMethodologyCache, getMethodologyCacheStatus } from '../services/analysis.service';
@@ -160,9 +161,12 @@ chatRoutes.post('/stream/graph', async (c) => {
       const [llmConfig, llmTiers] = await Promise.all([getLLMConfig(), getLLMTiers()]);
       const { method, phases, agentMethodPrompts: agentPromptMap } = await loadMethodology(metodologiaName);
       // Usa o slug canônico do banco (não o valor bruto do frontend).
-      // Garante que PHASE_CONFIGS[methodology] funcione mesmo que o frontend envie
-      // o nome completo ("Grumbach: Produção de Cenários") ou um valor legado ("MSEF").
       const methodologySlug = method.slug ?? metodologiaName;
+
+      // Carrega total de fases para o roteador (Sprint 24 — fases no banco).
+      // Lança erro descritivo se a metodologia não tem systemPromptInject configurado.
+      const phaseConfigs  = await loadPhaseConfigs(methodologySlug);
+      const totalPhases   = phaseConfigs.length;
 
       const projectRow = await db.query.projects.findFirst({
         columns: { connectivityMode: true },
@@ -179,11 +183,11 @@ chatRoutes.post('/stream/graph', async (c) => {
 
       const initialState = {
         projectId,
-        methodology:       methodologySlug,   // slug canônico do banco
+        methodology:       methodologySlug,
         connectivityMode,
         llmConfig, llmTiers, phases, agentMethodPrompts: agentPromptMap,
         userInput: userInputStr, vizMode,
-        // Cursores: currentNodeSlug (v4 compat) + currentPhaseIndex (v5)
+        totalPhases,          // total de fases para o roteador (Sprint 24)
         currentNodeSlug:   null as string | null,
         currentPhaseIndex: null as number | null,
       };

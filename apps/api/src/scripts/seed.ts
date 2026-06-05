@@ -1953,6 +1953,42 @@ Produto: Relatório de consistência por cenário + Cenário Mais Plausível com
 
     console.log('   ✓ agent_method_prompts inseridos/atualizados');
 
+    // ── Sprint 24: Migrar GRUMBACH_PHASES para o banco ──────────────────────────
+    // Os 5 campos novos (systemPromptInject, allowedTools, requiresHitlBefore,
+    // requiresQualitativeAudit, atsCodes) são populados a partir do arquivo
+    // phase-configs/grumbach.ts — fonte canônica até este seed rodar.
+    // Após este seed: o banco É a fonte de verdade; grumbach.ts é referência/fallback.
+    {
+      const { GRUMBACH_PHASES } = await import('../graph/phase-configs/grumbach');
+      const grumbachMethod = await db.query.methodologies.findFirst({
+        where: eq(methodologies.slug, 'grumbach'),
+        columns: { id: true },
+      });
+      if (!grumbachMethod) {
+        console.warn('  ⚠ Metodologia grumbach não encontrada — pulando migração de phase configs');
+      } else {
+        console.log('   Migrando GRUMBACH_PHASES para o banco...');
+        let migrated = 0;
+        for (const phase of GRUMBACH_PHASES) {
+          const updated = await db.update(methodologyPhases).set({
+            systemPromptInject:       phase.systemPromptInject,
+            allowedTools:             phase.allowedTools as any,
+            requiresHitlBefore:       phase.requiresHitlBefore,
+            requiresQualitativeAudit: phase.requiresQualitativeAudit,
+            atsCodes:                 phase.atsCodes as any,
+          }).where(
+            and(
+              eq(methodologyPhases.methodologyId, grumbachMethod.id),
+              eq(methodologyPhases.phaseNum, phase.phaseNum),
+            )
+          ).returning({ id: methodologyPhases.id });
+          if (updated.length > 0) migrated++;
+          else console.warn(`  ⚠ Fase ${phase.phaseNum} não encontrada no banco`);
+        }
+        console.log(`   ✓ ${migrated}/${GRUMBACH_PHASES.length} fases Grumbach migradas para o banco`);
+      }
+    }
+
     console.log('✅ Seed concluído com sucesso!');
     process.exit(0);
   } catch (error) {

@@ -79,6 +79,15 @@ export const OlympusStateAnnotation = Annotation.Root({
   messageType: Annotation<string>({ reducer: (_c, u) => u, default: () => "parcial" }),
   /** Modo de profundidade (etapa / passos / passagem / thinking) */
   vizMode:     Annotation<string>({ reducer: (c, u) => u ?? c, default: () => "etapa" }),
+
+  /**
+   * Total de fases da metodologia (Sprint 24).
+   * Populado pelo chat.ts no initialState via loadPhaseConfigs().
+   * Atualizado pelo phaseLoopNode após cada fase (garante consistência em resumes).
+   * O roteador em builder.ts usa este valor em vez de PHASE_CONFIGS em código.
+   * Fallback 9 = fases do Grumbach (preserva checkpoints antigos sem este campo).
+   */
+  totalPhases: Annotation<number>({ reducer: (_c, u) => u, default: () => 9 }),
 });
 
 export type OlympusState = typeof OlympusStateAnnotation.State;

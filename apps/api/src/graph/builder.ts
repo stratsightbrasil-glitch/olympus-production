@@ -1,16 +1,17 @@
 /**
- * builder.ts v5 (Olympus 1.0)
+ * builder.ts v6 (Olympus 1.0 — Sprint 24)
  *
  * Topologia simplificada:
  *   START → phase_loop (loop até esgotar fases) → synthesis → END
  *
- * Dois nós. Sem ALL_SPECIALIST_NODES. Sem routeFromState complexo.
- * PHASE_CONFIGS drive o roteamento (não node_slug do banco).
+ * Dois nós. Roteamento via state.totalPhases (populado pelo chat.ts no initialState
+ * e atualizado pelo phaseLoopNode após cada fase). Não depende mais de PHASE_CONFIGS
+ * em código — as fases vivem no banco e são carregadas via loadPhaseConfigs().
  */
 
 import { StateGraph, START, END }       from "@langchain/langgraph";
 import { OlympusStateAnnotation }        from "@olympus/core";
-import { phaseLoopNode, synthesisNode, PHASE_CONFIGS } from "./nodes";
+import { phaseLoopNode, synthesisNode }  from "./nodes";
 import { getPostgresSaver }              from "./postgresSaver";
 
 // ── Singleton do grafo compilado ───────────────────────────────────────────────
@@ -28,24 +29,20 @@ function buildGraph(checkpointer: Awaited<ReturnType<typeof getPostgresSaver>>) 
     .compile({ checkpointer });
 }
 
+// totalPhases vem do initialState (chat.ts) e é mantido pelo phaseLoopNode.
+// Fallback 9 garante que análises em andamento (checkpoints antigos sem totalPhases)
+// não quebrem — Grumbach tem exatamente 9 fases.
 function routeFromStart(state: any): "phase_loop" | "synthesis" {
-  const idx    = state.currentPhaseIndex ?? 0;
-  const config = PHASE_CONFIGS[state.methodology ?? "grumbach"] ?? [];
-  if (config.length === 0) {
-    console.error(
-      `[routeFromStart] PHASE_CONFIGS não encontrado para metodologia '${state.methodology}'. ` +
-      `Disponíveis: [${Object.keys(PHASE_CONFIGS).join(", ")}]. ` +
-      `Roteando para synthesis — vai falhar com mensagem clara.`
-    );
-  }
-  if (idx >= config.length) return "synthesis";
+  const idx         = state.currentPhaseIndex ?? 0;
+  const totalPhases = state.totalPhases ?? 9;
+  if (idx >= totalPhases) return "synthesis";
   return "phase_loop";
 }
 
 function routeAfterPhase(state: any): "phase_loop" | "synthesis" {
-  const idx    = state.currentPhaseIndex ?? 0;
-  const config = PHASE_CONFIGS[state.methodology ?? "grumbach"] ?? [];
-  if (idx >= config.length) return "synthesis";
+  const idx         = state.currentPhaseIndex ?? 0;
+  const totalPhases = state.totalPhases ?? 9;
+  if (idx >= totalPhases) return "synthesis";
   return "phase_loop";
 }
 
