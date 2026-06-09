@@ -33,11 +33,11 @@ function getSemanticLabel(event: ProjectEvent): string {
   const n = event.name.toLowerCase();
   if (n.startsWith('p(i)'))               return 'Delphi P(i)';
   if (n.startsWith('impacto '))           return 'Impacto Cruzado';
-  if (n.startsWith('cena ') || n.startsWith('cena a') || n.startsWith('cena b') ||
-      n.startsWith('cena c') || n.startsWith('cena d')) return 'Cena';
-  if (n.startsWith('narrativa '))         return 'Narrativa';
+  if (n.startsWith('cenário ') || n.startsWith('cenário a') || n.startsWith('cenário b') ||
+      n.startsWith('cenário c') || n.startsWith('cenário d')) return 'Cenário';
+  if (n.startsWith('narrativa cenário ') || n.startsWith('narrativa ')) return 'Narrativa';
   if (n.startsWith('se ') && n.includes('então')) return 'Signpost';
-  if (n.startsWith('premissa-linchpin:')) return 'Linchpin';
+  if (n.startsWith('premissa-âncora:')) return 'Âncora';
   return TYPE_LABELS[event.type] ?? event.type;
 }
 

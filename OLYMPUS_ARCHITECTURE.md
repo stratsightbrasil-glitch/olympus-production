@@ -2,7 +2,7 @@
 **StratSight Brasil · Strategic Foresight · IA Agêntica**
 
 <!-- AUTO:versao:START -->
-**Versão:** `4.0.0` · **Atualizado:** 05 de junho de 2026 · Gerado automaticamente
+**Versão:** `4.0.0` · **Atualizado:** 09 de junho de 2026 · Gerado automaticamente
 
 | Dependência | Versão |
 |-------------|--------|
@@ -32,6 +32,8 @@
 | GET    | `/api/v1/:projectId` | Público | GET /api/v1/reviews/:projectId — última revisão do projeto | reviews.ts |
 | GET    | `/api/v1/:projectId/count` | Público | GET /api/v1/embeddings/:projectId/count | embeddings.ts |
 | GET    | `/api/v1/:projectId/dashboard` | Público | Lista/busca :projectId | kratos.ts |
+| GET    | `/api/v1/:projectId/delphi` | Público | Retorna todos os events com name começando por 'P(i)' para renderização da DelphiMatrix | analytics.ts |
+| GET    | `/api/v1/:projectId/impacts` | Público | Retorna FPFs aprovados + matriz de impactos diretos para o ImpactMatrix | analytics.ts |
 | POST   | `/api/v1/:projectId/report` | Público | Cria :projectId | kratos.ts |
 | GET    | `/api/v1/:projectId/report/html` | Público | Lista/busca :projectId | kratos.ts |
 | POST   | `/api/v1/2fa/enable` | Público | Cria 2fa | auth.ts |
@@ -131,9 +133,9 @@
 <!-- AUTO:metodologias:START -->
 | Metodologia | Orquestrador | Fases | Categoria | Agentes |
 |-------------|-------------|-------|-----------|---------|
+| Godet: Escola Estrutural | HERMES | 7 | Cenários Prospectivos |  |
 | SIEx: Conhecimento Estimativa EB | HERMES | 7 | Produção do Conhecimento |  |
 | Grumbach: Produção de Cenários | HERMES | 9 | Cenários Prospectivos |  |
-| Godet: Escola Estrutural | HERMES | 7 | Cenários Prospectivos |  |
 | SIPLEx: Sistema de Planejamento do Exército | HERMES | 7 | Planejamento Estratégico |  |
 | GBN — Global Business Network (Schwartz) | HERMES | ? | Cenários Prospectivos |  |
 | SPED/PESD: Planejamento Estratégico Setorial de Defesa | HERMES | ? | Planejamento Estratégico |  |
@@ -152,11 +154,11 @@
 <!-- AUTO:tecnicas:START -->
 | # | Nome | Descrição |
 |---|------|-----------|
-| 1 | Análise Pré-Mortem | Simula mentalmente o fracasso de um plano ou análise e trabalha retrospectivamen |
-| 2 | Análise E-Se | Assume que um evento (positivo ou negativo) já ocorreu e explora como poderia te |
-| 3 | Análise SWOT | Avalia forças, fraquezas, oportunidades e ameaças de um projeto, decisão ou estr |
-| 4 | Cinco Porquês | Identifica a causa-raiz de um problema perguntando "por quê?" cinco vezes, quebr |
-| 5 | Advocacia do Diabo | Um analista assume o papel de crítico e constrói o melhor argumento possível con |
+| 1 | Advocacia do Diabo | Um analista assume o papel de crítico e constrói o melhor argumento possível con |
+| 2 | Análise Pré-Mortem | Simula mentalmente o fracasso de um plano ou análise e trabalha retrospectivamen |
+| 3 | Análise E-Se | Assume que um evento (positivo ou negativo) já ocorreu e explora como poderia te |
+| 4 | Análise SWOT | Avalia forças, fraquezas, oportunidades e ameaças de um projeto, decisão ou estr |
+| 5 | Cinco Porquês | Identifica a causa-raiz de um problema perguntando "por quê?" cinco vezes, quebr |
 | 6 | Verificação de Qualidade da Informação | Avalia a completude, precisão, credibilidade e confiabilidade das fontes de info |
 | 7 | PMI — Prós, Contras e Pontos Interessantes | Técnica rápida que avalia os aspectos positivos, negativos e interessantes de um |
 | 8 | Adversário Substituto | Modela o comportamento de atores externos (adversários, competidores, neutros) r |

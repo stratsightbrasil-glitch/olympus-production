@@ -28,6 +28,7 @@ export interface PhaseConfig {
   requiresHitlBefore:      boolean;
   requiresQualitativeAudit: boolean;
   atsCodes:                string[];
+  maxSteps?:               number;
 }
 
 export const GRUMBACH_PHASES: PhaseConfig[] = [
@@ -40,41 +41,33 @@ export const GRUMBACH_PHASES: PhaseConfig[] = [
     systemPromptInject: `
 [FASE 1 — DELIMITAÇÃO DO SISTEMA E ESCOPO]
 
-Você está executando a fase de enquadramento do Método Grumbach.
+Você está executando o enquadramento inicial do Método Grumbach.
+O PRODUTO desta fase é a PREMISSA-ÂNCORA e o ESCOPO — não os FPFs.
+FPFs serão registrados na Fase 2. NÃO use tool_register_event aqui.
 
-REGRA ABSOLUTA — ESCOPO DESTA FASE:
-Execute SOMENTE esta fase. NÃO descreva as demais fases da metodologia,
-NÃO informe o número total de etapas, NÃO cite fases futuras.
-O fluxo das fases é gerenciado pelo sistema — KLIO executa uma fase por vez.
-Qualquer listagem de "etapas 1 a N" é proibida neste contexto.
+MISSÃO (sequência obrigatória):
+1. Ler o escopo do projeto via buscar_documentos_internos
+2. Identificar: sistema analisado, horizonte temporal (anos), ponto de decisão
+3. Listar 3-5 FPFs PRELIMINARES como texto narrativo (não como eventos)
+4. Formular a premissa-âncora: a hipótese central que, se falsa, invalida toda a análise
+5. Chamar declarar_julgamento com premissaAncora preenchida
 
-CONTEXTO: Esta metodologia é usada para consultorias estratégicas em
-empresas e órgãos civis. O produto final orienta decisões de longo prazo.
+FORMATO DO declarar_julgamento:
+  premissaAncora: "[hipótese central em 1 frase assertiva]"
+  julgamento: "FATO" | "INDÍCIO" | "SUPOSIÇÃO"
+  justificativa: "Por que esta premissa é válida como ponto de partida"
 
-MISSÃO:
-- Identificar o sistema e delimitar o escopo da análise
-- Estabelecer o horizonte temporal (tipicamente 10-20 anos)
-- Definir o ponto de tomada de decisão estratégica da organização
-  (o nível que, se ultrapassado, altera o comportamento estratégico)
-- Formular Fatos Portadores de Futuro (FPF) preliminares como
-  questões binárias: ocorre / não ocorre no horizonte definido
-- Isolar a premissa-linchpin do enquadramento
-
-PRODUTO OBRIGATÓRIO:
-1. Apresentar no texto de saída:
-   - Sistema e escopo da análise (1 parágrafo)
-   - Horizonte temporal
-   - Ponto de tomada de decisão estratégica
-   - Lista de FPFs PRELIMINARES identificados no escopo (apenas no texto, NÃO registrar como eventos)
-   - Premissa-linchpin do enquadramento
-2. OBRIGATÓRIO: chamar declarar_julgamento com premissaLinchpin preenchida.
-   O linchpin identifica a premissa central cuja ausência invalida o enquadramento.
-   Sem esta chamada a fase FALHA na auditoria ATHENA (ATS3).
+EXEMPLO:
+  premissaAncora: "A competição geopolítica por tecnologias críticas será o principal
+  estruturante das relações internacionais no horizonte 2025-2045"
+  julgamento: "INDÍCIO"
+  justificativa: "Evidenciado por padrões de desinvestimento cruzado EUA-China..."
 
 PROIBIDO:
-- Chamar tool_register_event nesta fase — FPFs preliminares são NÃO CONFIRMADOS.
-  Os FPFs oficiais serão pesquisados e registrados na Fase 2 (Varredura).
-- Encerrar sem chamar declarar_julgamento.
+- Registrar eventos com tool_register_event
+- Usar "âncora" sem preencher o campo premissaAncora no declarar_julgamento
+- Produzir apenas texto narrativo sem chamar declarar_julgamento
+- Usar o termo "premissa-linchpin" (termo obsoleto)
 `,
     allowedTools: [
       "buscar_documentos_internos",
@@ -84,6 +77,7 @@ PROIBIDO:
     requiresHitlBefore:       false,
     requiresQualitativeAudit: false,
     atsCodes: ["ATS3", "ATS5"],
+    maxSteps: 8,
   },
 
   // ── Fase 2 — Varredura FPF ──────────────────────────────────────────────────
@@ -95,25 +89,48 @@ PROIBIDO:
     systemPromptInject: `
 [FASE 2 — VARREDURA DE FATOS PORTADORES DE FUTURO]
 
-Você está executando a pesquisa prospectiva do Método Grumbach.
+Você está catalogando os FPFs do Método Grumbach.
+Meta: entre 10 e 15 FPFs. Acima de 15 = inviável para análise humana.
 
-MISSÃO:
-- Pesquisar FPFs relevantes via tool_unified_search_engine e web_search
-- Para CADA FPF identificado:
-  1. Avaliar confiabilidade e veracidade da fonte
-  2. Registrar via tool_register_event
-  3. Aplicar segregação FATO / INDÍCIO / SUPOSIÇÃO
-- Calcular score TAD via tool_tad_score_calculator para cada FATO
-- Recomendação: entre 10 e 15 FPFs finais (2^10 = 1.024 cenários;
-  2^15 = 32.768 cenários; acima de 15 a análise humana torna-se impraticável)
+REGRA DE ECONOMIA DE PASSOS (crítico para eficiência):
+- Para FPFs com factStatus=FATO: chamar tool_tad_score_calculator ANTES de registrar
+- Para FPFs com factStatus=INDÍCIO ou SUPOSIÇÃO: calcular TAD INLINE no description
+  Formato inline: "TAD estimado: B3 (confiabilidade B, credibilidade 3)"
+  NÃO chamar tool_tad_score_calculator para estes — economiza 1 step por FPF
 
-FORMATO DO CLAIM:
-"[FPF-N] [descrição em uma frase] — fonte: [nome] [grau de confiabilidade]"
-Exemplo: "[FPF-3] Adoção massiva de IA em gestão pública — fonte: RAND B2"
+SEQUÊNCIA POR FPF:
+  1. Buscar evidência (web_search ou tool_unified_search_engine)
+  2. Classificar: FATO / INDÍCIO / SUPOSIÇÃO
+  3a. Se FATO: chamar tool_tad_score_calculator → registrar com score alfanumérico
+  3b. Se INDÍCIO/SUPOSIÇÃO: registrar diretamente com TAD inline no description
 
-PRODUTO OBRIGATÓRIO:
-- Mínimo 8 FPFs (para ter ao menos 10-15 aprovados após HITL)
-- Todo finding com factStatus="FATO" DEVE ter tadScore preenchido
+FORMATO OBRIGATÓRIO do tool_register_event para cada FPF:
+  name:        "[FPF-N] [descrição em 1 frase de alto nível — questão binária]"
+  type:        "fpf"
+  reliability: letra A-F (confiabilidade da fonte)
+  credibility: número 1-6 (credibilidade da informação)
+  description: "[FPF-N] '[nome]': [qualificador Hendrikson] (P estimada ~0.XX)
+               Fonte: [nome]. TAD: [score ou 'estimado B3'].
+               Binário: OCORRE = [o que significa]. NÃO OCORRE = [o que significa]."
+
+QUALIFICADORES HENDRIKSON OBRIGATÓRIOS no description:
+  "quase certo" (P > 0.95) | "muito provável" (0.80-0.95) | "provável" (0.55-0.80)
+  "possível" (0.45-0.55) | "improvável" (0.20-0.45) | "remoto" (P < 0.20)
+
+REGRA DE GRANULARIDADE (evitar FPFs duplicados):
+  Cada FPF = UMA questão estratégica binária de alto nível
+  ERRADO: "Adoção de IA no setor público" + "Adoção de IA em defesa" (muito granular)
+  CERTO: "Adoção ampla de IA em órgãos estratégicos do Estado" (1 FPF)
+  Se você ultrapassar 15 FPFs, pare e consolide antes de continuar.
+
+AO FINAL: chamar declarar_julgamento com síntese:
+  "Total: N FPFs registrados. Cobertura: [áreas temáticas].
+  FPF com maior incerteza: [nome]. FPF mais estruturante: [nome]."
+
+PROIBIDO:
+- Registrar sub-elementos de um FPF como FPFs separados
+- FPFs sem formulação binária explícita (OCORRE / NÃO OCORRE)
+- Usar tool_tad_score_calculator para INDÍCIOS e SUPOSIÇÕES
 `,
     allowedTools: [
       "tool_unified_search_engine",
@@ -122,12 +139,12 @@ PRODUTO OBRIGATÓRIO:
       "tool_tad_score_calculator",
       "tool_register_event",
       "tool_mpc_source_evaluator",
-      "registrar_sinal",
       "declarar_julgamento",
     ],
     requiresHitlBefore:       false,
     requiresQualitativeAudit: false,
-    atsCodes: ["ATS1"],
+    atsCodes: ["ATS1", "ATS_COUNT"],
+    maxSteps: 25,
   },
 
   // ── Fase 3 — HITL: Seleção de FPFs ─────────────────────────────────────────
@@ -137,28 +154,32 @@ PRODUTO OBRIGATÓRIO:
     nodeSlug:  "node_scanning_forces",
     label:     "Seleção de FPFs (HITL)",
     systemPromptInject: `
-[FASE 3 — CONFIRMAÇÃO PÓS-HITL: SELEÇÃO DOS FPFs]
+[FASE 3 — AVALIAÇÃO DO CONJUNTO DE FPFs APROVADOS]
 
-O analista humano acabou de aprovar os FPFs na etapa HITL anterior.
-Os FPFs com status='approved' na Âncora de Contexto são o conjunto final
-para as próximas fases. A banca de 7 especialistas é gerada internamente
-pela tool_grumbach_expert_simulation na Fase 4 — NÃO precisa ser registrada aqui.
+O analista acabou de selecionar os FPFs. Você recebe no anchorContext
+todos os FPFs com status='approved'. Sua missão é avaliar o conjunto.
 
 MISSÃO:
-1. Usar declarar_julgamento para registrar o julgamento sobre a qualidade e
-   completude do conjunto de FPFs aprovados pelo analista.
-2. Verificar se os FPFs cobrem adequadamente o espaço de incerteza do sistema.
-3. Identificar a premissa-linchpin que une o enquadramento da Fase 1 ao
-   conjunto de FPFs aprovados.
+1. Verificar cobertura temática: o conjunto cobre os principais domínios
+   de incerteza do sistema? Há sobreposição entre FPFs?
+2. Verificar distribuição de probabilidades: o conjunto tem FPFs
+   com P variada (não todos "prováveis")? Há FPFs de baixa probabilidade
+   com alto impacto potencial?
+3. Verificar formulação binária: todos os FPFs têm formulação booleana clara?
+4. Chamar declarar_julgamento com avaliação consolidada:
+
+FORMATO DO declarar_julgamento:
+  julgamento: "FATO" | "INDÍCIO" | "SUPOSIÇÃO"
+  justificativa: "Conjunto de N FPFs aprovados.
+    Cobertura: [domínios cobertos].
+    Gap identificado: [o que ficou de fora, se relevante].
+    FPF mais estruturante: [nome + por quê].
+    FPF mais incerto: [nome + P estimada].
+    Conjunto APTO / REQUER ATENÇÃO para prosseguir ao Delphi."
 
 PROIBIDO:
-- NÃO registrar personas, especialistas ou configurações de banca via tool_register_event.
-- NÃO criar novos FPFs ou eventos — o conjunto foi finalizado pelo analista no HITL.
-- NÃO chamar tool_register_event nesta fase.
-
-PRODUTO OBRIGATÓRIO:
-- 1 chamada a declarar_julgamento com avaliação do conjunto de FPFs aprovados,
-  incluindo premissaLinchpin e grauProbabilidade calibrado (vocabulário Hendrikson).
+- Registrar novos FPFs (tool_register_event proibido)
+- Alterar os FPFs aprovados pelo analista
 `,
     allowedTools: [
       "tool_mpc_source_evaluator",
@@ -166,7 +187,8 @@ PRODUTO OBRIGATÓRIO:
     ],
     requiresHitlBefore:       true,
     requiresQualitativeAudit: false,
-    atsCodes: [],
+    atsCodes: ["ATS_COVERAGE"],
+    maxSteps: 6,
   },
 
   // ── Fase 4 — Delphi P(i) ────────────────────────────────────────────────────
@@ -179,33 +201,42 @@ PRODUTO OBRIGATÓRIO:
 [FASE 4 — DELPHI: PROBABILIDADES P(i)]
 
 Você está executando a consulta Delphi do Método Grumbach.
+tool_grumbach_expert_simulation retorna INSTRUÇÕES e a lista de FPFs.
+KLIO deve SIMULAR as 7 personas e GERAR as probabilidades — a ferramenta NÃO calcula.
 
-IMPORTANTE — como a ferramenta funciona:
-A tool_grumbach_expert_simulation NÃO retorna probabilidades prontas.
-Ela retorna INSTRUÇÕES + a lista de "eventNames" (nomes dos FPFs aprovados)
-+ as 7 personas configuradas. Após chamá-la, VOCÊ deve SIMULAR o painel
-e GERAR os P(i) para cada FPF listado em eventNames.
+SEQUÊNCIA OBRIGATÓRIA:
+1. Chamar tool_grumbach_expert_simulation (recebe as instruções e nomes dos FPFs)
+2. Para CADA FPF aprovado, simular o debate das 7 personas e calcular P(i) por consenso
+3. Registrar via tool_register_event (1 evento por FPF)
+4. Ao final: declarar_julgamento com síntese do Delphi
 
-MISSÃO:
-1. Invocar tool_grumbach_expert_simulation (use os nomes dos FPFs como eventIds — o
-   sistema resolve automaticamente para os UUIDs aprovados)
-2. A ferramenta retorna "eventNames": lista dos FPFs para analisar
-3. Para cada FPF em eventNames: simular as 7 personas votando conforme seus vieses
-   definidos na Fase 3 e calcular consenso → P(i) [0.0–1.0]
-4. Usar vocabulário calibrado OBRIGATORIAMENTE:
-   "quase certo" (>0.95) / "muito provável" (0.80–0.95) / "provável" (0.55–0.80) /
-   "possível" (0.45–0.55) / "improvável" (0.20–0.45) / "remoto" (<0.20)
-5. Registrar cada P(i) via tool_register_event
-
-PRODUTO OBRIGATÓRIO — um tool_register_event por FPF:
-  name:        "P(i) [nome curto do FPF]"
-  description: "[FPF-N] '[nome completo]': [vocabulário] (P=[0.XX]) — consenso X/7 personas"
+FORMATO OBRIGATÓRIO do tool_register_event:
+  name:        "P(i) — [nome curto do FPF]"
   type:        "fpf"
-  reliability: "A"
-  credibility: "1"
+  reliability: "B"
+  credibility: "2"
+  description: "[FPF-N] '[nome completo]': [QUALIFICADOR] (P=[0.XX])
+               Consenso: X/7 personas.
+               Posição majoritária: [síntese do argumento dominante].
+               Dissidência: [argumento da minoria, se relevante]."
 
-PROIBIDO: percentagens sem qualificador textual.
-PROIBIDO: pular FPFs da lista eventNames.
+QUALIFICADORES OBRIGATÓRIOS (Hendrikson — usar exatamente estas palavras):
+  P > 0.95  → "quase certo"
+  0.80-0.95 → "muito provável"
+  0.55-0.80 → "provável"
+  0.45-0.55 → "possível"
+  0.20-0.45 → "improvável"
+  P < 0.20  → "remoto"
+
+PROIBIDO:
+- Usar percentagens sem qualificador textual (ex: "70%" sem "provável")
+- Deixar de registrar algum FPF aprovado
+- Fabricar consenso sem simular o debate das personas
+
+AO FINAL: declarar_julgamento:
+  "Delphi concluído. N FPFs avaliados.
+   Mais provável: [FPF + P]. Mais incerto: [FPF + P].
+   Distribuição: [N] prováveis/quase certos, [N] possíveis, [N] improváveis/remotos."
 `,
     allowedTools: [
       "tool_grumbach_expert_simulation",
@@ -214,7 +245,8 @@ PROIBIDO: pular FPFs da lista eventNames.
     ],
     requiresHitlBefore:       false,
     requiresQualitativeAudit: true,
-    atsCodes: ["ATS2"],
+    atsCodes: ["ATS2", "ATS_DELPHI_COUNT"],
+    maxSteps: 15,
   },
 
   // ── Fase 5 — Impacto Cruzado ────────────────────────────────────────────────
@@ -227,38 +259,60 @@ PROIBIDO: pular FPFs da lista eventNames.
 [FASE 5 — IMPACTO CRUZADO: PROBABILIDADES CONDICIONAIS P(i|j)]
 
 Você está executando a análise de Impactos Cruzados do Método Grumbach.
+Esta fase tem DUAS saídas obrigatórias: (1) a matriz de impactos par a par,
+e (2) a classificação de cada FPF na Matriz Motricidade × Dependência.
 
-DIVERGÊNCIA CRÍTICA (G-1): A fórmula é via odds-ratio, NÃO Teorema de Bayes direto.
+FÓRMULA OBRIGATÓRIA — odds-ratio (NÃO é Teorema de Bayes direto):
+  Chance base:     C(j) = P(j) / (1 - P(j))
+  Chance ajustada: C(j|i) = C(j) × (1 + I)
+  P condicional:   P(j|i) = C(j|i) / (1 + C(j|i))
+  onde I = coeficiente de impacto (-3 a +3, inteiro)
 
-FÓRMULA OBRIGATÓRIA:
-  Chance base:      C(j) = P(j) / (1 - P(j))
-  Chance ajustada:  C(j|i ocorre) = C(j) × (1 + I)   onde I = coeficiente de impacto
-  P(j|i ocorre) = C_ajustada / (1 + C_ajustada)
-  Exemplo (livro Cap.13.2): P(A)=30%, I=2 → C=0,428 → C_aj=0,857 → P(A|B)=46%
+EXEMPLO:
+  FPF-3: P=0.30. FPF-1 ocorre com I=2 (dobra a chance).
+  C(3) = 0.30/0.70 = 0.428
+  C(3|1) = 0.428 × (1+2) = 1.286
+  P(3|1) = 1.286 / (1+1.286) = 0.56 → "possível" → antes era "improvável"
 
-MISSÃO:
-- Segunda rodada de tool_grumbach_expert_simulation em modo Impacto Cruzado
-- Para pares relevantes de FPFs, estimar coeficiente de impacto I(i,j):
-  * I = 0: evento i não altera a chance de j
-  * I = 1: dobra a chance de j (+100%)
-  * I = 2: triplica a chance de j (+200%)
-  * I negativo: reduz a chance de j
-- Classificar cada FPF na Matriz Motricidade × Dependência:
-  * Explicativos: alta motricidade, baixa dependência
-  * Ligação: alta motricidade, alta dependência (amplificadores de instabilidade)
-  * Resultado: baixa motricidade, alta dependência
-  * Autônomos: baixa motricidade, baixa dependência
-- Documentar elos mais fracos da cadeia de raciocínio
+PASSO 1 — MATRIZ DE IMPACTOS (tool_register_impact_relation):
+  Para cada par (FPFi → FPFj) onde |I| >= 1:
+  - Chamar tool_register_impact_relation com:
+      fromEventName: "[nome exato do FPFi como registrado na Fase 2]"
+      toEventName:   "[nome exato do FPFj como registrado na Fase 2]"
+      impactScore:   [I inteiro de -3 a +3]
+      direction:     "positive" | "negative" | "neutral"
+      rationale:     "[por que FPFi afeta FPFj]"
+  - Fazer isso para TODOS os pares relevantes (I != 0)
+  - Use os nomes EXATOS como aparecem no anchorContext (seção FATOS PORTADORES DE FUTURO)
 
-PRODUTO OBRIGATÓRIO — AMBAS as chamadas são exigidas:
-1. tool_register_event para cada FPF classificado (OBRIGATÓRIO — sem isso ATHENA reprovará):
-   - name: "Impacto [nome curto FPF]: [quadrante Motricidade×Dependência]"
-   - description: "motricidade [X]% dependência [Y]% — [vocabulário Hendrikson] (ex: provável impacto)"
-   - type: "fpf" | reliability: "A" | credibility: "1"
-2. declarar_julgamento para os elos mais fracos com premissaLinchpin e grauProbabilidade calibrado.
+PASSO 2 — CLASSIFICAÇÃO MOTRICIDADE×DEPENDÊNCIA (tool_register_event):
+  Para cada FPF, calcular:
+    Motricidade = Σ |I(FPF → outros)|   (soma dos impactos que ele CAUSA)
+    Dependência = Σ |I(outros → FPF)|   (soma dos impactos que ele RECEBE)
 
-PROIBIDO: encerrar a fase sem ao menos 1 chamada a tool_register_event.
-PROIBIDO: omitir vocabulário Hendrikson nas descriptions dos eventos.
+  Classificar em quadrante:
+    Explicativo:  motricidade alta, dependência baixa → força estruturante
+    Ligação:      motricidade alta, dependência alta  → amplificador instável
+    Resultado:    motricidade baixa, dependência alta → consequência
+    Autônomo:     motricidade baixa, dependência baixa → periférico
+
+  Formato do tool_register_event:
+    name:        "Impacto [nome curto FPF]: [quadrante]"
+    type:        "fpf"
+    description: "Motricidade: [score]. Dependência: [score]. Quadrante: [nome].
+                 P(i) original: [provável/improvável etc.].
+                 Impacto recebido mais forte: [FPFj→FPFi, I=X].
+                 Impacto emitido mais forte: [FPFi→FPFk, I=X]."
+
+PASSO 3 — ELOS FRACOS (declarar_julgamento):
+  Identificar os 2-3 pares de impacto com maior incerteza.
+  declarar_julgamento: "Elos mais fracos: [FPFi→FPFj, I estimado com baixa confiança].
+  Motivo: [por que o impacto entre estes FPFs é incerto]."
+
+PROIBIDO:
+- Registrar impactos par a par APENAS via tool_register_event (sem tool_register_impact_relation)
+- Calcular P(j|i) com Bayes direto (usar sempre odds-ratio)
+- Deixar matrix_direct_impacts vazia (PASSO 1 é obrigatório)
 `,
     allowedTools: [
       "tool_grumbach_expert_simulation",
@@ -268,7 +322,8 @@ PROIBIDO: omitir vocabulário Hendrikson nas descriptions dos eventos.
     ],
     requiresHitlBefore:       false,
     requiresQualitativeAudit: true,
-    atsCodes: ["ATS8"],
+    atsCodes: ["ATS2", "ATS_IMPACT_MATRIX", "ATS_QUADRANTS"],
+    maxSteps: 30,
   },
 
   // ── Fase 6 — Seleção das 4 Cenas ────────────────────────────────────────────
@@ -276,56 +331,63 @@ PROIBIDO: omitir vocabulário Hendrikson nas descriptions dos eventos.
     phaseSlug: "grumbach_p6",
     phaseNum:  6,
     nodeSlug:  "node_matrix_design",
-    label:     "Seleção das 4 Cenas",
+    label:     "Seleção dos 4 Cenários",
     systemPromptInject: `
-[FASE 6 — SELEÇÃO DAS 4 CENAS — MÉTODO GRUMBACH]
+[FASE 6 — SELEÇÃO DOS 4 CENÁRIOS GRUMBACH]
 
-Você está selecionando as cenas finais do Método Grumbach.
+Você está selecionando os 4 cenários canônicos do Método Grumbach.
+O produto desta fase é a FONTE DA VERDADE para as narrativas da Fase 7.
 
-MISSÃO:
-- Processar o histograma combinatório das probabilidades calculadas
-- Selecionar as 4 cenas canônicas do Método Grumbach:
+OS 4 CENÁRIOS OBRIGATÓRIOS:
 
-  CENA A — MAIS PROVÁVEL
-  Critério: maior massa probabilística no mapa de simulação Monte Carlo
-  Papel: cenário de referência para análise pré-ativa
+CENÁRIO A — MAIS PROVÁVEL
+  Critério: maior massa probabilística na simulação Monte Carlo (combinação de FPFs
+  com maior probabilidade conjunta dado os P(i) e impactos cruzados calculados)
+  Uso: cenário de referência para medidas pré-ativas
 
-  CENA B — PROJETIVO
-  Critério: extrapolação das tendências históricas passadas (abordagem projetiva)
-  Não é extraída do mapa de simulação — é um benchmark externo de continuidade
-  Papel: permite o confronto Mais Provável × Projetivo para revelar
-  se há ruptura ou manutenção de tendência
+CENÁRIO B — PROJETIVO
+  Critério: extrapolação das tendências históricas passadas (abordagem projetiva —
+  NÃO é extraído do mapa de simulação, é um benchmark externo de continuidade)
+  Uso: confronto Mais Provável × Projetivo → ruptura ou continuidade de tendência?
 
-  CENA C — IDEAL
+CENÁRIO C — IDEAL
   Critério: combinação de FPFs que maximiza os resultados para a organização
-  (independente de sua probabilidade)
-  Papel: balizador normativo; indica o melhor futuro possível
+  (independente de probabilidade — é o melhor futuro possível)
+  Uso: balizador normativo
 
-  CENA D — ALVO
-  Critério: cenário factível situado entre Mais Provável e Ideal;
-  construído via análise de interações estratégicas e identificação de parcerias
-  Papel: o futuro que a organização se propõe a construir ativamente
+CENÁRIO D — ALVO
+  Critério: cenário factível entre Mais Provável e Ideal, construído via análise
+  de interações estratégicas (quais FPFs podem ser influenciados pela organização?)
+  Uso: cenário que a organização se propõe a construir ativamente
 
-- Registrar cada cena via tool_register_scenario
-- Para Cenas A, C, D: listar FPFs com [OCORRE] ou [NÃO OCORRE]
-- Para Cena B: descrever configuração tendencial (extrapolação histórica)
+SEQUÊNCIA OBRIGATÓRIA para CADA cenário:
 
-ANÁLISE COMPARATIVA obrigatória (registrar nos keyFindings):
-- Mais Provável × Projetivo → ruptura ou continuidade de tendência?
-- Ideal × Mais Provável → futuro é oportunidade ou ameaça?
+1. Chamar tool_register_scenario:
+   name:        "Cenário [A/B/C/D] — [Mais Provável/Projetivo/Ideal/Alvo]"
+   type:        "most_probable" | "trend" | "ideal" | "target"
+   description: [configuração booleana dos FPFs]
 
-PRODUTO OBRIGATÓRIO:
-1. Registrar cada cena via tool_register_scenario (para o banco de cenários).
-2. Registrar cada cena também via tool_register_event para ATHENA verificar:
-   - name: "Cena A — Mais Provável: [FPF1=SIM, FPF2=NÃO, ...]"
-   - name: "Cena B — Projetivo: [descrição tendencial]"
-   - name: "Cena C — Ideal: [FPF1=SIM, FPF2=NÃO, ...]"
-   - name: "Cena D — Alvo: [FPF1=SIM, FPF2=NÃO, ...]"
-   - type: "fpf" | reliability: "A" | credibility: "1"
-3. Análise comparativa via declarar_julgamento.
+2. Chamar tool_register_event (para ATHENA verificar):
+   name: "Cenário A — Mais Provável: [FPF1=SIM, FPF2=NÃO, FPF3=SIM, ...]"
+   name: "Cenário B — Projetivo: [descrição da extrapolação tendencial]"
+   name: "Cenário C — Ideal: [FPF1=SIM, FPF2=SIM, FPF3=SIM, ...]"
+   name: "Cenário D — Alvo: [FPF1=SIM, FPF2=NÃO, FPF3=SIM, ...]"
+   type: "fpf"
+   description: [probabilidade conjunta estimada + lógica de seleção]
 
-REGRA CRÍTICA: A configuração booleana desta fase é a FONTE DA VERDADE
-para as crônicas da Fase 7. As narrativas NÃO PODEM contradizer estas configurações.
+3. Chamar declarar_julgamento com análise comparativa:
+   "Cenário A × B: [ruptura ou continuidade?]
+    Cenário C × A: [o que precisaria mudar para atingir o ideal?]
+    Cenário D: [quais FPFs a organização pode influenciar?]"
+
+REGRA CRÍTICA — FONTE DA VERDADE:
+  A configuração booleana de CADA cenário (FPFn=SIM/NÃO) registrada aqui
+  é IMUTÁVEL para a Fase 7. As narrativas NÃO PODEM contradizer estes valores.
+
+PROIBIDO:
+- Registrar apenas via tool_register_scenario sem tool_register_event
+- Cenários com nomes que não incluam "Mais Provável", "Projetivo", "Ideal" ou "Alvo"
+- Criar mais de 4 cenários
 `,
     allowedTools: [
       "tool_register_scenario",
@@ -334,7 +396,8 @@ para as crônicas da Fase 7. As narrativas NÃO PODEM contradizer estas configur
     ],
     requiresHitlBefore:       false,
     requiresQualitativeAudit: false,
-    atsCodes: ["ATS8"],
+    atsCodes: ["ATS8", "ATS_SCENARIO_TYPES", "ATS_SCENARIO_BOOL"],
+    maxSteps: 12,
   },
 
   // ── Fase 7 — Narrativas ─────────────────────────────────────────────────────
@@ -342,37 +405,43 @@ para as crônicas da Fase 7. As narrativas NÃO PODEM contradizer estas configur
     phaseSlug: "grumbach_p7",
     phaseNum:  7,
     nodeSlug:  "node_narrative",
-    label:     "Narrativas das 4 Cenas",
+    label:     "Narrativas dos 4 Cenários",
     systemPromptInject: `
-[FASE 7 — NARRATIVAS DAS 4 CENAS]
+[FASE 7 — NARRATIVAS DOS 4 CENÁRIOS GRUMBACH]
 
-Você está escrevendo as crônicas do Método Grumbach.
+Você está redigindo as crônicas dos 4 cenários.
+PRIMEIRO: leia o anchorContext — a seção "FATOS PORTADORES DE FUTURO" contém
+os eventos registrados na Fase 6, incluindo os 4 cenários com suas configurações
+booleanas (FPF1=SIM, FPF2=NÃO, etc.). USE esses nomes e configurações.
 
-MISSÃO:
-- Para cada uma das 4 cenas: redigir crônica em primeira pessoa do futuro
-  Estrutura: "Estamos em [ano]..." (300-500 palavras)
-  Início (condições que levaram a este futuro) →
-  Desenvolvimento (reorganização em curso) →
-  Estado atual (como a organização opera neste ambiente)
+PARA CADA CENÁRIO (sequência obrigatória):
 
-- REGRA BOOLEANA ABSOLUTA: cada FPF deve se comportar na narrativa
-  EXATAMENTE conforme declarado na configuração booleana da Fase 6:
-  [OCORRE] = evento mencionado como tendo ocorrido
-  [NÃO OCORRE] = evento ausente ou explicitamente descartado
+1. Identificar no anchorContext o evento "Cenário [A/B/C/D] — [tipo]: [booleanos]"
+2. Redigir crônica de 300-500 palavras:
+   Abertura: "Estamos em [ano]. [Situação atual no mundo deste cenário]."
+   Desenvolvimento: [Como chegamos aqui — quais forças agiram]
+   Estado atual: [Como a organização opera neste ambiente]
+3. Chamar tool_register_event:
+   name: "Narrativa Cenário [A] — [título evocativo]: [1 frase causal]"
+   type: "fpf"
+   description: [2-3 frases do enredo central — o que HERMES vai usar no relatório]
 
-PRODUTO OBRIGATÓRIO nos keyFindings — registre via tool_register_event:
-- 4 findings, um por cena:
-  - name: "Narrativa Cena A — [nome]: [1 frase resumindo a lógica causal central]"
-  - name: "Narrativa Cena B — [nome]: [1 frase resumindo a lógica causal central]"
-  - name: "Narrativa Cena C — [nome]: [1 frase resumindo a lógica causal central]"
-  - name: "Narrativa Cena D — [nome]: [1 frase resumindo a lógica causal central]"
-  - type: "fpf" | reliability: "A" | credibility: "1"
-  - description: parágrafo de 2-3 frases com o enredo central da crônica
+TÍTULOS EVOCATIVOS: o título após o "—" é criativo e livre
+  Ex: "Narrativa Cenário A — Brasil Potência da Nova Ordem: A estratégia de
+  reshoring atraiu investimento e redefiniu cadeias produtivas."
+
+REGRA BOOLEANA ABSOLUTA (verificada por ATHENA):
+  Para cada FPF marcado na Fase 6:
+  [OCORRE] → FPF mencionado como tendo ocorrido na narrativa
+  [NÃO OCORRE] → FPF ausente da narrativa ou explicitamente descartado
+  Contradição = reprovação automática
 
 PROIBIDO:
-- Mencionar FPF como ocorrido se marcado [NÃO OCORRE]
+- Inventar nomes de cenários diferentes dos registrados na Fase 6
+- Mencionar FPF como ocorrido se está marcado [NÃO OCORRE]
+- Narrativas sem conexão causal com os FPFs
 - Saltos temporais sem força motriz identificável
-- Melhorias ou pioras inexplicáveis sem vínculo a FPF
+- Escrever "Cena" (usar sempre "Cenário")
 `,
     allowedTools: [
       "buscar_documentos_internos",
@@ -381,7 +450,8 @@ PROIBIDO:
     ],
     requiresHitlBefore:       false,
     requiresQualitativeAudit: true,
-    atsCodes: ["ATS6"],
+    atsCodes: ["ATS6", "ATS_BOOL_CONSISTENCY"],
+    maxSteps: 20,
   },
 
   // ── Fase 8 — Indicações Estratégicas ────────────────────────────────────────
@@ -391,41 +461,60 @@ PROIBIDO:
     nodeSlug:  "node_integration",
     label:     "Indicações Estratégicas",
     systemPromptInject: `
-[FASE 8 — INDICAÇÕES ESTRATÉGICAS E ANÁLISE PRÉ-ATIVA]
+[FASE 8 — INDICAÇÕES ESTRATÉGICAS]
 
 Você está conectando os cenários às recomendações estratégicas.
+Esta fase produz TRÊS tipos de output com factStatus distintos:
 
-MISSÃO:
-- Análise pré-ativa (preparação): comparar Cenas para identificar
-  o que a organização deve fazer independente do cenário que se realize
-  * Ideal × Mais Provável → oportunidades ou ameaças a antecipar?
-  * Mais Provável × Projetivo → ruptura de tendência exige adaptação?
-  Resultado: MEDIDAS PRÉ-ATIVAS (ações de preparação)
+TIPO 1 — MEDIDAS PRÉ-ATIVAS (ao menos 5)
+  O que a organização deve fazer INDEPENDENTE de qual cenário se realize.
+  Derivadas da análise Mais Provável × Projetivo (ruptura?) e Ideal × Mais Provável.
+  factStatus: SUPOSIÇÃO (são recomendações, não fatos verificados)
 
-- Análise proativa (construção): para o Cenário Alvo (Cena D),
-  identificar linhas de ação e parcerias estratégicas para elevar
-  a probabilidade dos FPFs desejados
-  Resultado: MEDIDAS PROATIVAS (ações de construção do futuro desejado)
+  Formato tool_register_event:
+    name:        "mp_[NN] — [ação clara e específica]"
+    type:        "fpf"
+    reliability: "C"
+    credibility: "3"
+    description: "Medida pré-ativa. Fundamentada no confronto [Cenário X × Cenário Y].
+                 Objetivo: [o que esta ação prepara ou antecipa].
+                 Responsável sugerido: [área/função]. Prazo: [curto/médio/longo]."
 
-- Para cada FPF relevante do Cenário Alvo:
-  Tabela: FPF × Oportunidades × Ameaças × Indicação estratégica
+TIPO 2 — MEDIDAS PROATIVAS (ao menos 3)
+  O que a organização deve fazer para CONSTRUIR o Cenário Alvo (D).
+  Identificar quais FPFs do Cenário D a organização pode influenciar.
+  factStatus: SUPOSIÇÃO
 
-- Signposts of Change com limiares EMPIRICAMENTE OBSERVÁVEIS:
-  Formato: "SE [condição específica] > [limiar] ENTÃO [cenário se aproxima]"
-  Exemplo: "SE gastos em P&D / PIB > 2,5% ENTÃO Cena C +20%"
+  Formato tool_register_event:
+    name:        "mpro_[NN] — [ação de construção do futuro desejado]"
+    type:        "fpf"
+    reliability: "C"
+    credibility: "3"
+    description: "Medida proativa. Visa elevar P([FPF-N]) no sentido do Cenário D.
+                 Parceria estratégica: [atores a engajar]. Mecanismo: [como age]."
 
-PRODUTO OBRIGATÓRIO — USE tool_register_event para CADA item abaixo:
-1. Medidas pré-ativas (ao menos 5): name "mp_01 — [ação]", description com análise comparativa
-2. Medidas proativas (ao menos 3): name "mpro_01 — [ação]", description com FPF alvo
-3. Signposts (ao menos 3) — USE tool_register_event com o padrão EXATO no nome:
-   - name: "SE [indicador] > [limiar] ENTÃO Cena [X] +[N]%"
-   - description: URL rastreável + frequência de revisão
-   - type: "fpf" | reliability: "A" | credibility: "1"
+TIPO 3 — SIGNPOSTS (ao menos 3)
+  Indicadores observáveis que sinalizam qual cenário está se materializando.
+  factStatus: INDÍCIO (são sinais empíricos, não certezas)
+
+  Formato tool_register_event (OBRIGATÓRIO — ATHENA verifica este padrão):
+    name: "SE [indicador específico e mensurável] > [limiar numérico]
+           ENTÃO Cenário [A/B/C/D] se aproxima (+[N]% de probabilidade)"
+    type: "fpf"
+    reliability: "B"
+    credibility: "2"
+    description: "Fonte de dados: [URL ou nome da fonte].
+                 Frequência de revisão: [mensal/trimestral/anual].
+                 Responsável pelo monitoramento: [área]."
+
+EXEMPLO de signpost válido:
+  name: "SE IED em reshoring tecnológico > US$ 3bi/ano ENTÃO Cenário A +20%"
 
 PROIBIDO:
-- Signposts apenas no texto narrativo sem chamada a tool_register_event.
-- Signposts sem limiar específico e quantificável.
-- Indicações sem vínculo a cena ou FPF específico.
+- Signposts sem limiar numérico específico ("monitorar a situação" é inválido)
+- Medidas sem vínculo a um cenário específico ou FPF
+- Usar factStatus=FATO para medidas (são SUPOSIÇÃO) ou signposts (são INDÍCIO)
+- Usar "Cena" em vez de "Cenário"
 `,
     allowedTools: [
       "registrar_sinal",
@@ -436,7 +525,8 @@ PROIBIDO:
     ],
     requiresHitlBefore:       false,
     requiresQualitativeAudit: true,
-    atsCodes: ["ATS5", "ATS9"],
+    atsCodes: ["ATS5", "ATS9", "ATS_MEASURES"],
+    maxSteps: 20,
   },
 
   // ── Fase 9 — Monitoramento ──────────────────────────────────────────────────
@@ -448,25 +538,43 @@ PROIBIDO:
     systemPromptInject: `
 [FASE 9 — PAINEL DE MONITORAMENTO ESTRATÉGICO]
 
-Você está produzindo o painel de monitoramento para KRATOS.
+Você está configurando o monitoramento contínuo para KRATOS.
+Esta fase NÃO repete os signposts da Fase 8 — ela os OPERACIONALIZA.
+
+DISTINÇÃO CRÍTICA:
+  Fase 8: Define QUAIS indicadores monitorar (signposts como recomendação)
+  Fase 9: Configura COMO monitorar (registrar_sinal alimenta KRATOS com URLs e frequências)
 
 MISSÃO:
-- Para cada FPF aprovado: definir indicador de monitoramento
-- Para cada indicador: fonte primária, limiar de alerta, frequência sugerida
-- Configurar payload para KRATOS (lista de signposts com URLs rastreáveis)
 
-PRODUTO OBRIGATÓRIO:
-1. registrar_sinal para cada indicador de monitoramento.
-2. Registrar via tool_register_event os signposts principais:
-   - name: "SE [indicador] > [limiar] ENTÃO Cena [X] +[N]%"
-   Exemplos:
-   - "SE IED manufatura média tecnologia > US$ 5bi/ano ENTÃO Cena A +15%"
-   - "SE licença ambiental mineração Amazônia > 5 anos ENTÃO Cena A -20%"
-   - type: "fpf" | reliability: "A" | credibility: "1"
-   - description: URL rastreável + frequência de revisão sugerida
-3. Frequência de revisão sugerida para o painel completo via declarar_julgamento.
+PASSO 1 — Recuperar sinais existentes (buscar_sinais):
+  Verificar se já há sinais registrados para este projeto.
 
-PRODUTO MÍNIMO: ao menos 3 signposts registrados via tool_register_event.
+PASSO 2 — Para cada FPF aprovado, registrar_sinal:
+  Chamar registrar_sinal com:
+    fpfName:     [nome do FPF — exatamente como registrado na Fase 2]
+    indicator:   [o que monitorar para saber se este FPF está se realizando]
+    sourceUrl:   [URL da fonte primária do indicador]
+    threshold:   [limiar numérico que dispara alerta]
+    frequency:   "mensal" | "trimestral" | "semestral" | "anual"
+
+  Priorizar FPFs explicativos e de ligação (quadrantes da Fase 5).
+
+PASSO 3 — Registrar evento de consolidação (tool_register_event):
+  Um evento por FPF monitorado:
+    name: "SE [indicador] > [limiar] ENTÃO [FPF] se materializa"
+    description: "Fonte: [URL]. Freq: [frequência]. Próx revisão: [data]."
+
+PASSO 4 — declarar_julgamento com frequência de revisão do painel:
+  "Painel configurado com N sinais. Frequência mínima: [X].
+   FPFs prioritários para monitoramento: [lista dos mais estruturantes].
+   Próxima revisão programada: [data sugerida]."
+
+PROIBIDO:
+- Repetir os signposts da Fase 8 sem diferenciação (Fase 9 = operacionalização)
+- Chamar registrar_sinal sem sourceUrl rastreável
+- Deixar FPFs estruturantes (explicativos/ligação) sem sentinela configurada
+- Usar "Cena" em vez de "Cenário"
 `,
     allowedTools: [
       "registrar_sinal",
@@ -477,7 +585,8 @@ PRODUTO MÍNIMO: ao menos 3 signposts registrados via tool_register_event.
     ],
     requiresHitlBefore:       false,
     requiresQualitativeAudit: false,
-    atsCodes: ["ATS9"],
+    atsCodes: ["ATS9", "ATS_KRATOS"],
+    maxSteps: 12,
   },
 ];
 

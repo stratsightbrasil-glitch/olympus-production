@@ -6,7 +6,7 @@
  */
 
 import { db, phaseOutputs, methodologyPhases, methodologies } from "@olympus/db";
-import { eq, asc }                                            from "drizzle-orm";
+import { eq, asc, and, ne, isNull, or }                        from "drizzle-orm";
 import type { PhaseConfig }                                    from "./phase-configs/grumbach";
 
 export interface PhaseContext {
@@ -52,11 +52,19 @@ export function buildPhaseSummary(
  * Retorna texto para injetar no system prompt de KLIO.
  */
 export async function loadPhaseContext(projectId: string): Promise<PhaseContext> {
-  const outputs = await db.query.phaseOutputs.findMany({
-    where:   eq(phaseOutputs.projectId, projectId),
-    columns: { phaseNum: true, phaseSlug: true, summary: true, athenaVerdict: true },
-    orderBy: [asc(phaseOutputs.phaseNum)],
-  });
+  // Excluir fases reprovadas (REQUER_REVISAO) do contexto herdado — fase 7 não pode
+  // receber cenários inválidos de fase 6 que não passou na auditoria ATHENA.
+  const outputs = await db
+    .select({ phaseNum: phaseOutputs.phaseNum, phaseSlug: phaseOutputs.phaseSlug, summary: phaseOutputs.summary, athenaVerdict: phaseOutputs.athenaVerdict })
+    .from(phaseOutputs)
+    .where(and(
+      eq(phaseOutputs.projectId, projectId),
+      or(
+        isNull(phaseOutputs.athenaVerdict),
+        ne(phaseOutputs.athenaVerdict, 'REQUER_REVISAO'),
+      ),
+    ))
+    .orderBy(asc(phaseOutputs.phaseNum));
 
   if (outputs.length === 0) {
     return { contextText: "", estimatedTokens: 0, phaseCount: 0 };

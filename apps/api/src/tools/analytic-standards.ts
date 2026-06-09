@@ -44,9 +44,9 @@ export const DECLARAR_JULGAMENTO_SCHEMA = {
       items: { type: "string" },
       description: "Indicadores que, se detectados, alterariam este julgamento (ICD 203 ATS 3)"
     },
-    premissaLinchpin: {
+    premissaAncora: {
       type: "string",
-      description: "Premissa cuja ausência colapsa o argumento (ICD 203 ATS 3)"
+      description: "Premissa-âncora: premissa cuja ausência colapsa o argumento (ICD 203 ATS 3)"
     },
     contextoAnalise: {
       type: "string",
@@ -124,27 +124,27 @@ NÃO usar para afirmações factuais simples.`,
       const muitoSimilar = args.julgamento?.toLowerCase()
         .includes(args.informacaoBase?.toLowerCase().slice(0, 30));
       const temMuitasPremissas = (args.premissas || []).length >= 3;
-      const avisoLinchpin = temMuitasPremissas && !args.premissaLinchpin
-        ? "⚠️ 3+ premissas sem premissa-linchpin identificada — qual colapsa o argumento se falsa? (ICD 203 ATS 3)"
+      const avisoAncora = temMuitasPremissas && !args.premissaAncora
+        ? "⚠️ 3+ premissas sem premissa-âncora identificada — qual colapsa o argumento se falsa? (ICD 203 ATS 3)"
         : null;
 
       const formatoICD203 =
         `**[INFORMAÇÃO]** ${args.informacaoBase}\n\n` +
         `**[PREMISSAS]**\n${(args.premissas || []).map((p: string, i: number) => `${i+1}. ${p}`).join('\n')}\n\n` +
         `**[JULGAMENTO]** (${args.grauProbabilidade} | ${args.nivelConfianca}): ${args.julgamento}` +
-        (args.premissaLinchpin ? `\n\n**[PREMISSA-LINCHPIN]** ${args.premissaLinchpin}` : '') +
+        (args.premissaAncora ? `\n\n**[PREMISSA-ÂNCORA]** ${args.premissaAncora}` : '') +
         (args.indicadoresDeAlteracao?.length ? `\n\n**[INDICADORES DE ALTERAÇÃO]** ${args.indicadoresDeAlteracao.join('; ')}` : '');
 
-      // Quando premissaLinchpin é declarada, persistir como project_event para que
-      // ATHENA encontre "premissa-linchpin" nos keyFindings (ATS3 check).
-      if (args.premissaLinchpin && projectId) {
+      // Quando premissaAncora é declarada, persistir como project_event para que
+      // ATHENA encontre "premissa-âncora" nos keyFindings (ATS3 check).
+      if (args.premissaAncora && projectId) {
         try {
           await db.insert(projectEvents).values({
             projectId,
-            name: `Premissa-Linchpin: ${String(args.premissaLinchpin).substring(0, 200)}`,
-            description: String(args.premissaLinchpin),
+            name: `Premissa-Âncora: ${String(args.premissaAncora).substring(0, 200)}`,
+            description: String(args.premissaAncora),
             type: 'uncertainty',
-            status: 'proposed',
+            status: 'approved',   // âncora entra direto como approved — ATHENA precisa encontrá-la via buildAnchorCtx
             sourceEvaluation: { factStatus: 'SUPOSICAO', reliability: 'C', credibility: '3' },
           });
         } catch { /* não bloquear execução se falhar */ }
@@ -158,7 +158,7 @@ NÃO usar para afirmações factuais simples.`,
         contexto:          args.contextoAnalise || 'não especificado',
         avisos: [
           muitoSimilar ? "⚠️ Julgamento parece repetir a informação base — verifique se há inferência analítica real." : null,
-          avisoLinchpin,
+          avisoAncora,
         ].filter(Boolean)
       });
     }

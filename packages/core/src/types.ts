@@ -28,6 +28,8 @@ export interface AgentContext {
    * Permite trocar modelos por todos os agentes de um tier sem alterar código ou seed.
    */
   llmTiers?: Record<string, string>;
+  /** Limite de passos para esta execução — sobrescreve o default do Agent. */
+  maxSteps?: number;
 }
 
 export interface Tool<T = any> {

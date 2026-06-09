@@ -132,30 +132,21 @@ chatRoutes.post('/stream/graph', async (c) => {
         // ser escrito), então lt(createdAt, firstOutput.createdAt) deletaria events
         // legítimos de phase 1, quebrando o Delphi e Impact Cross que dependem desses FPFs.
         //
-        // Estratégia correta:
-        //   - Se há phase_outputs: eventos 'approved' são intocáveis (o analista os aprovou).
-        //     Deletar apenas eventos 'proposed' criados há mais de 1 hora (contaminação antiga).
-        //   - Se não há phase_outputs: a análise nunca completou uma fase; limpar tudo.
-        const hasPhaseOutputs = await db.query.phaseOutputs.findFirst({
-          where:   eq(phaseOutputs.projectId, projectId),
-          columns: { id: true },
-        });
-        if (hasPhaseOutputs) {
-          // Deletar apenas proposed stale (> 1h): não tocar em approved (aprovados pelo analista)
-          const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
-          await db.delete(projectEvents).where(
-            and(
-              eq(projectEvents.projectId, projectId),
-              eq(projectEvents.status, 'proposed' as any),
-              lt(projectEvents.createdAt, oneHourAgo)
-            )
-          );
-          console.log(`[chat] Resume: proposed events > 1h removidos para ${projectId} (approved preservados)`);
-        } else {
-          // Sem phase_outputs: análise nunca completou uma fase — limpa tudo
-          await db.delete(projectEvents).where(eq(projectEvents.projectId, projectId));
-          console.log(`[chat] Resume sem phase_outputs: todos os events removidos para ${projectId}`);
-        }
+        // Em qualquer resume (isResuming=true), eventos approved são SEMPRE intocáveis.
+        // Motivo: no fluxo etapa, o resume pode chegar ANTES de ATHENA salvar o phase_output
+        // (ex: phase_complete interrupt dispara antes de ATHENA rodar → o analista confirma →
+        // resume chega → ainda não há phase_output). Deletar tudo nesse caso destruiria a
+        // premissa-âncora e os FPFs aprovados da fase anterior, reiniciando a análise do zero.
+        // Regra: sempre deletar apenas proposed > 1h (stale de runs anteriores falhados).
+        const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
+        await db.delete(projectEvents).where(
+          and(
+            eq(projectEvents.projectId, projectId),
+            eq(projectEvents.status, 'proposed' as any),
+            lt(projectEvents.createdAt, oneHourAgo)
+          )
+        );
+        console.log(`[chat] Resume: proposed events > 1h removidos para ${projectId} (approved preservados)`);
       }
 
       const [llmConfig, llmTiers] = await Promise.all([getLLMConfig(), getLLMTiers()]);

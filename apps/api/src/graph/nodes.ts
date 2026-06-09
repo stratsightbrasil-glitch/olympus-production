@@ -207,6 +207,7 @@ export async function phaseLoopNode(
     phases:             state.phases,
     agentMethodPrompts: {},            // prompts injetados via fullSystemPrompt
     connectivityMode:   state.connectivityMode,
+    maxSteps:           (phaseConfig as any).maxSteps as number | undefined,
     onStep,
     onToken,
   };
@@ -240,7 +241,8 @@ export async function phaseLoopNode(
   const isMinimalOutput = !rawOutput
     || rawOutput.trim() === ''
     || rawOutput.trim() === 'Análise concluída.'
-    || /^\*\*KLIO\*\*\s*·?\s*$/.test(rawOutput.trim());
+    || /^\*?\*?KLIO\*?\*?\s*·?\s*$/.test(rawOutput.trim())  // "KLIO ·", "**KLIO**", "**KLIO** ·"
+    || rawOutput.trim().length < 20;                         // qualquer output < 20 chars é placeholder
 
   const phaseOutput = isMinimalOutput
     ? `**KLIO** · Fase ${phaseConfig.phaseNum} — ${phaseConfig.label} concluída.\n\n`
@@ -282,33 +284,103 @@ export async function phaseLoopNode(
   // Em etapa/passos: roda após aprovação humana (eventos já filtrados pelo analista).
   // Em passagem: roda após auto-aprovação.
   onStep?.(`[ATHENA] Auditando fase ${phaseConfig.phaseNum}...`);
-  const approvedEvents = await db.query.projectEvents.findMany({
-    where: and(
-      eq(projectEvents.projectId, state.projectId),
-      eq(projectEvents.status, 'approved' as any),
-      gte(projectEvents.createdAt, phaseStartedAt),
-    ),
-    orderBy: [asc(projectEvents.createdAt)],
-    limit: 100,
-  });
-  const keyFindings: KeyFinding[] = approvedEvents.map(e => ({
-    claim:       e.name ?? "evento sem descrição",
-    description: e.description ?? undefined,
-    factStatus:  ((e.sourceEvaluation as any)?.factStatus ?? "INDICIO") as KeyFinding["factStatus"],
-    tadScore:    (e.sourceEvaluation as any)?.alphanumericScore as string | undefined,
-    source:      (e.sourceEvaluation as any)?.sourceType as string | undefined,
-  }));
-  const toolCallIds = approvedEvents.map(e => e.id);
 
-  const athenaVerdict = await athenaAuditPhase(
+  async function loadApprovedFindings() {
+    const evts = await db.query.projectEvents.findMany({
+      where: and(
+        eq(projectEvents.projectId, state.projectId),
+        eq(projectEvents.status, 'approved' as any),
+        gte(projectEvents.createdAt, phaseStartedAt),
+      ),
+      orderBy: [asc(projectEvents.createdAt)],
+      limit: 100,
+    });
+    return {
+      events: evts,
+      findings: evts.map(e => ({
+        claim:       e.name ?? "evento sem descrição",
+        description: e.description ?? undefined,
+        factStatus:  ((e.sourceEvaluation as any)?.factStatus ?? "INDICIO") as KeyFinding["factStatus"],
+        tadScore:    (e.sourceEvaluation as any)?.alphanumericScore as string | undefined,
+        source:      (e.sourceEvaluation as any)?.sourceType as string | undefined,
+      })) as KeyFinding[],
+    };
+  }
+
+  let { events: approvedEvents, findings: keyFindings } = await loadApprovedFindings();
+  let toolCallIds = approvedEvents.map(e => e.id);
+
+  let athenaVerdict = await athenaAuditPhase(
     keyFindings,
     phaseConfig.nodeSlug,
     state.projectId,
     phaseConfig.label,
+    phaseConfig.phaseSlug,
+    phaseStartedAt,
   );
   onStep?.(`[ATHENA] Veredicto: ${athenaVerdict.verdict} (LLM: ${athenaVerdict.usedLLM})`);
-  // ATHENA emite APÓS o interrupt — o analista vê o veredicto ao retomar.
-  onAthena?.({ verdict: athenaVerdict.verdict, phaseNum: phaseConfig.phaseNum, label: phaseConfig.label, usedLlm: athenaVerdict.usedLLM, checks: athenaVerdict.checks });
+
+  // ── Retry KLIO se ATHENA reprovação (REQUER_REVISAO) — máx 1 tentativa ────
+  // Se ATHENA reprova, KLIO recebe o feedback e tenta corrigir na mesma fase.
+  // Não aplica em vizMode='etapa'/'passos' (o analista decidiu aprovar — respeitamos).
+  // Aplica em vizMode='passagem' (autônomo) onde não há revisão humana.
+  if (athenaVerdict.verdict === 'REQUER_REVISAO' && state.vizMode === 'passagem') {
+    const failedChecks = athenaVerdict.checks.filter(c => !c.passed);
+    const feedbackMsg = failedChecks.map(c => `- [${c.atsCode}] ${c.finding}`).join('\n');
+    onStep?.(`[ATHENA→KLIO] REQUER_REVISAO — iniciando correção...`);
+
+    const correctionInput = `ATHENA reprovou esta fase com REQUER_REVISAO. Corrija os seguintes pontos:\n${feedbackMsg}\n\nUse as ferramentas disponíveis para corrigir os findings e registrar os artefatos faltantes. Ao concluir, confirme que os pontos foram endereçados.`;
+
+    const correctionAgent = new Agent(
+      "KLIO",
+      klioRow.role,
+      fullSystemPrompt,
+      tools,
+      klioRow.modelOverride ?? undefined,
+    );
+    const correctionCtx = { ...agentCtx };
+    await correctionAgent.run(correctionInput, correctionCtx, state.vizMode);
+    onStep?.(`[KLIO] Correção concluída — re-auditando...`);
+
+    // Auto-aprovar eventos propostos criados durante a correção (passagem mode)
+    const newProposed = await db.query.projectEvents.findMany({
+      where: and(
+        eq(projectEvents.projectId, state.projectId),
+        eq(projectEvents.status, 'proposed' as any),
+        gte(projectEvents.createdAt, phaseStartedAt),
+      ),
+      limit: 50,
+    });
+    if (newProposed.length > 0) {
+      await db.update(projectEvents)
+        .set({ status: 'approved' as any })
+        .where(inArray(projectEvents.id, newProposed.map(e => e.id)));
+    }
+
+    // Re-auditar com findings atualizados
+    ({ events: approvedEvents, findings: keyFindings } = await loadApprovedFindings());
+    toolCallIds = approvedEvents.map(e => e.id);
+    athenaVerdict = await athenaAuditPhase(keyFindings, phaseConfig.nodeSlug, state.projectId, phaseConfig.label, phaseConfig.phaseSlug, phaseStartedAt);
+    onStep?.(`[ATHENA] Veredicto pós-correção: ${athenaVerdict.verdict}`);
+  }
+
+  // Se ainda REQUER_REVISAO em etapa/passos: emitir interrupt especial para o analista decidir
+  if (athenaVerdict.verdict === 'REQUER_REVISAO' && (state.vizMode === 'etapa' || state.vizMode === 'passos')) {
+    onAthena?.({ verdict: athenaVerdict.verdict, phaseNum: phaseConfig.phaseNum, label: phaseConfig.label, usedLlm: athenaVerdict.usedLLM, checks: athenaVerdict.checks });
+    if (process.env.TEST_MODE !== 'true') {
+      const failedChecks = athenaVerdict.checks.filter(c => !c.passed);
+      interrupt({
+        interruptType: 'hitl_required',
+        agent:         'ATHENA',
+        phaseSlug:     phaseConfig.phaseSlug,
+        phaseNum:      phaseConfig.phaseNum,
+        message:       `ATHENA reprovação na Fase ${phaseConfig.phaseNum}: ${failedChecks.map(c => `[${c.atsCode}] ${c.finding}`).join(' · ')}\n\nPode continuar assim mesmo (clique ▶ Continuar) ou redirecionar KLIO com instruções de correção.`,
+      });
+    }
+  } else {
+    // APROVADO ou RESSALVAS: emitir normalmente
+    onAthena?.({ verdict: athenaVerdict.verdict, phaseNum: phaseConfig.phaseNum, label: phaseConfig.label, usedLlm: athenaVerdict.usedLLM, checks: athenaVerdict.checks });
+  }
 
   // ── Summary + persistência do phase_output ────────────────────────────────
   const summary = buildPhaseSummary(

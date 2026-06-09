@@ -69,15 +69,15 @@ MISSÃO DE SÍNTESE:
 Com base nos dados estruturados de cada fase fornecidos no prompt:
 1. Consolidar os findings em um relatório coeso e rastreável
 2. Manter a linguagem formal e objetiva — português brasileiro
-3. Referenciar dados do banco quando relevante ("ver FPF-N", "Cena A")
+3. Referenciar dados do banco quando relevante ("ver FPF-N", "Cenário A")
 4. NÃO adicionar análises, inferências ou dados não presentes nos artefatos
 
 ESTRUTURA MÍNIMA DO RELATÓRIO:
 1. Enquadramento do Sistema e Premissas (fase 1)
 2. FPFs Identificados e Avaliados — scores TAD (fases 2-3)
 3. Probabilidades P(i) e P(i|j) — vocabulário Hendrikson (fases 4-5)
-4. As 4 Cenas Grumbach com configuração booleana dos FPFs (fase 6)
-5. Narrativas das 4 Cenas (fase 7)
+4. Os 4 Cenários Grumbach com configuração booleana dos FPFs (fase 6)
+5. Narrativas dos 4 Cenários (fase 7)
 6. Indicações Estratégicas e Signposts (fase 8)
 7. Painel de Monitoramento (fase 9)
 
@@ -204,7 +204,7 @@ Reprove com PARCIAL ou NÃO CONFORME se SUPOSIÇÕES forem apresentadas como FAT
 MATRIZ DE AUDITORIA DIRECIONADA POR MACROETAPA:
 
 [Fase I — Enquadramento Estrutural: node_framing]
-- ATS 3 (Distinção entre Informação e Pressupostos): Premissas linchpin declaradas explicitamente? Impactos da falsidade avaliados?
+- ATS 3 (Distinção entre Informação e Pressupostos): premissas-âncora declaradas explicitamente? Impactos da falsidade avaliados?
 - ATS 5 (Relevância para o Cliente): Necessidades de inteligência e critérios de sucesso delineados diretamente?
 
 [Fase II — Diagnóstico e Varredura: node_scanning_macro / node_scanning_forces / node_retrospective]
@@ -325,8 +325,8 @@ IMPORTANTE: Inicie sempre com "**OLYMPUS** · ".`,
           { num: 3, agent: 'KLIO',   label: 'Seleção de FPFs (HITL)',              node: 'node_scanning_forces' },
           { num: 4, agent: 'KLIO',   label: 'Delphi — Probabilidades P(i)',        node: 'node_modeling' },
           { num: 5, agent: 'KLIO',   label: 'Impacto Cruzado P(i|j)',              node: 'node_modeling' },
-          { num: 6, agent: 'KLIO',   label: 'Seleção das 4 Cenas',                node: 'node_matrix_design' },
-          { num: 7, agent: 'KLIO',   label: 'Narrativas das 4 Cenas',             node: 'node_narrative' },
+          { num: 6, agent: 'KLIO',   label: 'Seleção dos 4 Cenários',                node: 'node_matrix_design' },
+          { num: 7, agent: 'KLIO',   label: 'Narrativas dos 4 Cenários',             node: 'node_narrative' },
           { num: 8, agent: 'KLIO',   label: 'Indicações Estratégicas',            node: 'node_integration' },
           { num: 9, agent: 'KRATOS', label: 'Painel de Monitoramento',            node: 'node_integration' },
         ]}
@@ -550,13 +550,13 @@ IMPORTANTE: Inicie sempre com "**OLYMPUS** · ".`,
       // ── Grumbach (9 fases — CASO DE VALIDAÇÃO 1.0) ──────────────────────────
       // agentRole = KLIO para todas as fases (phaseLoopNode usa PHASE_CONFIGS, não agentRole)
       grumbach: [
-        { phaseNum: 1, slug: 'grumbach_p1',      nodeSlug: 'node_framing',         agentRole: 'KLIO',   label: 'Delimitação do Sistema',              description: 'FPFs iniciais como questões binárias + premissa-linchpin' },
+        { phaseNum: 1, slug: 'grumbach_p1',      nodeSlug: 'node_framing',         agentRole: 'KLIO',   label: 'Delimitação do Sistema',              description: 'FPFs iniciais como questões binárias + premissa-âncora' },
         { phaseNum: 2, slug: 'grumbach_p2',      nodeSlug: 'node_scanning_macro',  agentRole: 'KLIO',   label: 'Varredura de FPFs',                   description: 'Identificação dos FPFs + score TAD + segregação FATO/INDÍCIO/SUPOSIÇÃO' },
         { phaseNum: 3, slug: 'grumbach_p3_hitl', nodeSlug: 'node_scanning_forces', agentRole: 'KLIO',   label: 'Seleção de FPFs (HITL)',               description: 'HITL: analista aprova FPFs + configuração da banca de 7 especialistas' },
         { phaseNum: 4, slug: 'grumbach_p4',      nodeSlug: 'node_modeling',        agentRole: 'KLIO',   label: 'Delphi — Probabilidades P(i)',         description: 'Painel de 7 especialistas + P(i) por FPF + vocabulário Hendrikson' },
         { phaseNum: 5, slug: 'grumbach_p5',      nodeSlug: 'node_modeling',        agentRole: 'KLIO',   label: 'Impacto Cruzado P(i|j)',               description: 'Odds-ratio: C(j)=P/(1-P) → C_aj=C×(1+I) → P(j|i)=C_aj/(1+C_aj)' },
-        { phaseNum: 6, slug: 'grumbach_p6',      nodeSlug: 'node_matrix_design',   agentRole: 'KLIO',   label: 'Seleção das 4 Cenas',                 description: '4 cenas: Mais Provável (A) · Projetivo (B) · Ideal (C) · Alvo (D)' },
-        { phaseNum: 7, slug: 'grumbach_p7',      nodeSlug: 'node_narrative',       agentRole: 'KLIO',   label: 'Narrativas das 4 Cenas',              description: 'Crônicas 300-500 palavras + regra booleana absoluta' },
+        { phaseNum: 6, slug: 'grumbach_p6',      nodeSlug: 'node_matrix_design',   agentRole: 'KLIO',   label: 'Seleção dos 4 Cenários',              description: '4 cenários: Mais Provável (A) · Projetivo (B) · Ideal (C) · Alvo (D)' },
+        { phaseNum: 7, slug: 'grumbach_p7',      nodeSlug: 'node_narrative',       agentRole: 'KLIO',   label: 'Narrativas dos 4 Cenários',           description: 'Crônicas 300-500 palavras + regra booleana absoluta' },
         { phaseNum: 8, slug: 'grumbach_p8',      nodeSlug: 'node_integration',     agentRole: 'KLIO',   label: 'Indicações Estratégicas',             description: 'Medidas pré-ativas + proativas + signposts com limiar quantificável' },
         { phaseNum: 9, slug: 'grumbach_p9',      nodeSlug: 'node_integration',     agentRole: 'KRATOS', label: 'Painel de Monitoramento',              description: 'QME + indicadores + URLs para KRATOS' },
       ],
@@ -678,7 +678,7 @@ IMPORTANTE: Inicie sempre com "**OLYMPUS** · ".`,
         instructions: `PROCESSO (4 etapas):
 1. REVISAR O RACIOCÍNIO ATUAL: Documente a linha de argumentação ou hipótese principal da análise.
 2. LISTAR TODAS AS PREMISSAS: Identifique todas as suposições — explícitas e implícitas — que devem ser verdadeiras para o raciocínio ser válido. Inclua premissas sobre o ambiente, atores, tendências e dados disponíveis.
-3. IDENTIFICAR PREMISSAS-CHAVE: Para cada premissa, pergunte: "Esta premissa PRECISA ser verdadeira para o argumento ser válido?" Classifique como chave (sim) ou não-chave (não). A "premissa-linchpin" é aquela cuja falha invalida toda a análise.
+3. IDENTIFICAR PREMISSAS-CHAVE: Para cada premissa, pergunte: "Esta premissa PRECISA ser verdadeira para o argumento ser válido?" Classifique como chave (sim) ou não-chave (não). A "premissa-âncora" é aquela cuja falha invalida toda a análise.
 4. AVALIAR VULNERABILIDADE: Para cada premissa-chave, avalie:
    - Grau de confiança (alta / média / baixa)
    - Em que circunstâncias poderia ser falsa?
@@ -687,7 +687,7 @@ IMPORTANTE: Inicie sempre com "**OLYMPUS** · ".`,
 
 FORMATO DE SAÍDA:
 | Premissa | Chave? | Confiança | Vulnerabilidade | Sinal de Violação |
-Concluir com: "PREMISSA-LINCHPIN: [nome] — impacto se falsa: [descrição]"`,
+Concluir com: "premissa-âncora: [nome] — impacto se falsa: [descrição]"`,
       },
       {
         name: 'Advocacia do Diabo',
@@ -1018,7 +1018,7 @@ Etapa 7 · ESCRITA DE ENREDOS (MNEMOSYNE): Narrativas com travas probabilística
 Etapa 8 · SALVAGUARDAS E ALERTAS (THEMIS): Planos de 3 Horizontes + Signposts of Change + Matriz hedges×bets.
 
 [MAPEAMENTO DE ESPECIALISTAS — DELEGAÇÃO OBRIGATÓRIA]
-- Triagem Hendrikson, ficha de escopo, premissas-linchpin → SCOPUS (etapa 1)
+- Triagem Hendrikson, ficha de escopo, premissas-âncora → SCOPUS (etapa 1)
 - Trajetória histórica, Cones de Janus, continuidades e rupturas → KLIO (etapa 2)
 - PESTEL, megatendências, FPFs, sinais fracos → KLIO (etapa 3)
 - Atores, forças, capacidades, vulnerabilidades, MACTOR → KLIO (etapa 4)
@@ -1175,7 +1175,7 @@ Produto final: RELATÓRIO FUTURES consolidando enquadramento, sinais, futuros al
 [AUDITORIA ATHENA — AO CONCLUIR]
 Após concluir o enquadramento, chamar OBRIGATORIAMENTE:
 consultar_agente(agent_name='ATHENA',
-  query='ATS 3 + ATS 5 — SCOPUS/MSEF\n\nPremissas declaradas: [liste]\nPremissa-linchpin: [identifique e declare condição de falsificação]\nGrau de confiança por premissa: [Alta/Média/Baixa]\nKIQs formuladas: [liste]')
+  query='ATS 3 + ATS 5 — SCOPUS/MSEF\n\nPremissas declaradas: [liste]\npremissa-âncora: [identifique e declare condição de falsificação]\nGrau de confiança por premissa: [Alta/Média/Baixa]\nKIQs formuladas: [liste]')
 APROVADO → prossiga. RESSALVAS → registre. REQUER REVISÃO → registre e prossiga. NÃO loop.`);
 
     await upsertPrompt('SCOPUS', 'grumbach', `
@@ -1189,7 +1189,7 @@ APROVADO → prossiga. RESSALVAS → registre. REQUER REVISÃO → registre e pr
 [AUDITORIA ATHENA — AO CONCLUIR]
 Após concluir o enquadramento, chamar OBRIGATORIAMENTE:
 consultar_agente(agent_name='ATHENA',
-  query='ATS 3 + ATS 5 — SCOPUS/GRUMBACH\n\nPremissas declaradas: [liste]\nPremissa-linchpin: [identifique e declare condição de falsificação]\nGrau de confiança por premissa: [Alta/Média/Baixa]\nKIQs formuladas: [liste]')
+  query='ATS 3 + ATS 5 — SCOPUS/GRUMBACH\n\nPremissas declaradas: [liste]\npremissa-âncora: [identifique e declare condição de falsificação]\nGrau de confiança por premissa: [Alta/Média/Baixa]\nKIQs formuladas: [liste]')
 APROVADO → prossiga. RESSALVAS → registre. REQUER REVISÃO → registre e prossiga. NÃO loop.`);
 
     await upsertPrompt('SCOPUS', 'godet', `
@@ -1202,7 +1202,7 @@ APROVADO → prossiga. RESSALVAS → registre. REQUER REVISÃO → registre e pr
 [AUDITORIA ATHENA — AO CONCLUIR]
 Após concluir o enquadramento, chamar OBRIGATORIAMENTE:
 consultar_agente(agent_name='ATHENA',
-  query='ATS 3 + ATS 5 — SCOPUS/GODET\n\nPremissas declaradas: [liste]\nPremissa-linchpin: [identifique e declare condição de falsificação]\nGrau de confiança por premissa: [Alta/Média/Baixa]\nKIQs formuladas: [liste]')
+  query='ATS 3 + ATS 5 — SCOPUS/GODET\n\nPremissas declaradas: [liste]\npremissa-âncora: [identifique e declare condição de falsificação]\nGrau de confiança por premissa: [Alta/Média/Baixa]\nKIQs formuladas: [liste]')
 APROVADO → prossiga. RESSALVAS → registre. REQUER REVISÃO → registre e prossiga. NÃO loop.`);
 
     await upsertPrompt('SCOPUS', 'alta', `
@@ -1224,7 +1224,7 @@ Produto: Canvas de Escopo AltA — ambiente do problema + Dono do Problema + lin
 [AUDITORIA ATHENA — AO CONCLUIR]
 Após concluir o enquadramento, chamar OBRIGATORIAMENTE:
 consultar_agente(agent_name='ATHENA',
-  query='ATS 3 + ATS 5 — SCOPUS/ALTA\n\nPremissas declaradas: [liste]\nPremissa-linchpin: [identifique e declare condição de falsificação]\nGrau de confiança por premissa: [Alta/Média/Baixa]\nKIQs formuladas: [liste]')
+  query='ATS 3 + ATS 5 — SCOPUS/ALTA\n\nPremissas declaradas: [liste]\npremissa-âncora: [identifique e declare condição de falsificação]\nGrau de confiança por premissa: [Alta/Média/Baixa]\nKIQs formuladas: [liste]')
 APROVADO → prossiga. RESSALVAS → registre. REQUER REVISÃO → registre e prossiga. NÃO loop.`);
 
     await upsertPrompt('KLIO', 'alta', `
@@ -1237,14 +1237,14 @@ PROCESSO KAC:
 1. Liste TODAS as premissas implícitas e explícitas que sustentam a posição consensual
 2. Classifique cada premissa: FATO confirmado / INDÍCIO plausível / SUPOSIÇÃO não verificada
 3. Para cada SUPOSIÇÃO: que evidência a sustenta? Qual a condição de falsificação?
-4. Identifique a PREMISSA-LINCHPIN: aquela cuja falsidade invalida todo o argumento
+4. Identifique a premissa-âncora: aquela cuja falsidade invalida todo o argumento
 5. Aplique TAD Paramétrica (Idoneidade A-F × Credibilidade 1-6) nas fontes críticas
 
 Use avaliar_fonte para as fontes que sustentam as premissas mais críticas.
 Use declarar_julgamento ao emitir julgamentos sobre grau de certeza das premissas.
 ⚠️ Portão ALPHA: sua entrega será revisada pelo analista humano antes de avançar.
 
-Produto FASE 2: Painel de Premissas Auditadas — lista classificada + Premissa-Linchpin identificada.
+Produto FASE 2: Painel de Premissas Auditadas — lista classificada + premissa-âncora identificada.
 
 ---
 
@@ -1682,7 +1682,7 @@ Aplique TAD alfanumérica em todas as fontes doutrinárias citadas — formato S
 [AUDITORIA ATHENA — AO CONCLUIR]
 Após concluir o enquadramento, chamar OBRIGATORIAMENTE:
 consultar_agente(agent_name='ATHENA',
-  query='ATS 3 + ATS 5 — SCOPUS/SIPLEx\n\nPremissas declaradas: [liste]\nPremissa-linchpin: [identifique e declare condição de falsificação]\nGrau de confiança por premissa: [Alta/Média/Baixa]\nKIQs formuladas: [liste]')
+  query='ATS 3 + ATS 5 — SCOPUS/SIPLEx\n\nPremissas declaradas: [liste]\npremissa-âncora: [identifique e declare condição de falsificação]\nGrau de confiança por premissa: [Alta/Média/Baixa]\nKIQs formuladas: [liste]')
 APROVADO → prossiga. RESSALVAS → registre. REQUER REVISÃO → registre e prossiga. NÃO loop.`);
 
     await upsertPrompt('KLIO', 'siplex', `

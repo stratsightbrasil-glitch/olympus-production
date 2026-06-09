@@ -58,7 +58,7 @@ railway run --service postgres psql $DATABASE_URL -c "CREATE EXTENSION IF NOT EX
 > **Nota:** O código já executa `CREATE EXTENSION IF NOT EXISTS vector` automaticamente
 > no startup da API. O passo acima é apenas para garantir permissões.
 
----
+---o
 
 ## Passo 3 — Criar o serviço API
 

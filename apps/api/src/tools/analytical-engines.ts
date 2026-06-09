@@ -1,6 +1,6 @@
 import { db } from "@olympus/db";
 import { projectEvents, projectScenarios, matrixDirectImpacts, techniqueExecutionOutputs } from "@olympus/db";
-import { eq, and } from "drizzle-orm";
+import { eq, and, ilike } from "drizzle-orm";
 
 export interface OlympusTool {
   name: string;
@@ -224,30 +224,64 @@ export const toolTadScoreCalculator: OlympusTool = {
   },
 };
 
-// ── 4. REGISTRO DA MATRIZ DE IMPACTO DIRETO (MICMAC INPUT) ───────────────────
+// ── 4. REGISTRO DA MATRIZ DE IMPACTO DIRETO (GRUMBACH) ───────────────────────
+// Schema Sprint 27 (Q3): aceita NOMES dos FPFs, não UUIDs.
+// Backend resolve IDs internamente via ilike — KLIO não precisa saber os UUIDs.
+// impactScore: coeficiente I Grumbach de -3 a +3 (odds-ratio)
+//   I=0: sem impacto | I=1: dobra a chance | I=2: triplica | negativo: reduz
 export const toolRegisterImpactRelation: OlympusTool = {
   name: "tool_register_impact_relation",
-  description: `Registra o impacto direto entre dois eventos aprovados na matriz N×N do MICMAC.
-Escala: 0=sem influência, 1=fraca, 2=moderada, 3=forte.
-Deve ser chamado para cada par de eventos após aprovação HITL.
-O pythia_node usará essa matriz para calcular M^k e posicionar variáveis no plano cartesiano.`,
+  description: `Registra o impacto de um FPF sobre outro na matriz de impactos cruzados.
+Use APÓS registrar todos os FPFs via tool_register_event.
+Parâmetros: fromEventName e toEventName são os NOMES dos FPFs (não UUIDs).
+impactScore: inteiro de -3 a +3 (0=sem impacto, 1=dobra chance, 2=triplica, negativos=reduz).
+Chamar para cada par relevante onde |impactScore| >= 1.`,
   parameters: {
     type: "object",
     properties: {
-      projectId: { type: "string" },
-      fromEventId: { type: "string", description: "UUID do evento que exerce influência" },
-      toEventId: { type: "string", description: "UUID do evento que recebe influência" },
-      impactScore: { type: "integer", minimum: 0, maximum: 3, description: "0=nulo, 1=fraco, 2=médio, 3=forte" },
+      projectId:     { type: "string" },
+      fromEventName: { type: "string", description: "Nome exato do FPF de origem (ex: 'Reshoring industrial BR')" },
+      toEventName:   { type: "string", description: "Nome exato do FPF de destino" },
+      impactScore:   { type: "integer", minimum: -3, maximum: 3, description: "Coeficiente I: -3 a +3 (inteiro)" },
+      direction:     { type: "string", enum: ["positive", "negative", "neutral"], description: "Direção do impacto" },
+      rationale:     { type: "string", description: "Justificativa do impacto (opcional)" },
     },
-    required: ["projectId", "fromEventId", "toEventId", "impactScore"],
+    required: ["projectId", "fromEventName", "toEventName", "impactScore", "direction"],
   },
   execute: async (args) => {
-    const { projectId, fromEventId, toEventId, impactScore } = args;
+    const { projectId, fromEventName, toEventName, impactScore, direction, rationale } = args;
     try {
+      const [fromEvent] = await db.select({ id: projectEvents.id, name: projectEvents.name })
+        .from(projectEvents)
+        .where(and(eq(projectEvents.projectId, projectId), ilike(projectEvents.name, `%${fromEventName}%`)))
+        .limit(1);
+
+      const [toEvent] = await db.select({ id: projectEvents.id, name: projectEvents.name })
+        .from(projectEvents)
+        .where(and(eq(projectEvents.projectId, projectId), ilike(projectEvents.name, `%${toEventName}%`)))
+        .limit(1);
+
+      if (!fromEvent || !toEvent) {
+        const available = await db.select({ name: projectEvents.name })
+          .from(projectEvents)
+          .where(and(eq(projectEvents.projectId, projectId), eq(projectEvents.status, 'approved' as any)))
+          .limit(20);
+        const names = available.map(e => e.name).join(', ');
+        return JSON.stringify({
+          error: `FPF não encontrado. fromEventName="${fromEventName}", toEventName="${toEventName}". ` +
+                 `FPFs disponíveis: [${names}]`,
+        });
+      }
+
       await db.insert(matrixDirectImpacts)
-        .values({ projectId, fromEventId, toEventId, impactScore })
+        .values({ projectId, fromEventId: fromEvent.id, toEventId: toEvent.id, impactScore })
         .onConflictDoNothing();
-      return JSON.stringify({ success: true, relation: `${fromEventId} →[${impactScore}]→ ${toEventId}` });
+
+      return JSON.stringify({
+        success: true,
+        relation: `${fromEvent.name} →[I=${impactScore}, ${direction}]→ ${toEvent.name}`,
+        rationale: rationale ?? '',
+      });
     } catch (err: any) {
       return JSON.stringify({ error: `Falha matriz: ${err.message}` });
     }
@@ -486,11 +520,11 @@ Chamado por PYTHIA (após criar a matriz) e MNEMOSYNE (ao redigir a narrativa).`
     type: "object",
     properties: {
       projectId: { type: "string" },
-      name:      { type: "string", description: "Nome do cenário (ex: Q1 — Crescimento Sustentado, Cenário Mais Provável)" },
+      name:      { type: "string", description: "Nome do cenário (ex: 'Cenário A — Mais Provável', 'Cenário D — Alvo')" },
       type:      {
         type: "string",
-        enum: ["inercial", "alternative", "target", "pessimist", "optimist"],
-        description: "Tipo: inercial=tendencial, alternative=quadrante alternativo, target=alvo/desejado, pessimist/optimist"
+        enum: ["most_probable", "trend", "ideal", "target", "inercial", "alternative", "pessimist", "optimist"],
+        description: "Tipo Grumbach: most_probable=Cenário A, trend=Cenário B (Projetivo), ideal=Cenário C, target=Cenário D (Alvo)"
       },
       probability: {
         type: "number",

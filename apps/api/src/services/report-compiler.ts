@@ -54,7 +54,7 @@ const METHODOLOGY_SECTIONS: Record<MethodologySlug, { title: string; content: st
   msef: [
     {
       title: "1. Enquadramento Estratégico (SCOPUS)",
-      content: "Definição clara do problema central, escopo, horizonte temporal (5-10-20 anos) e stakeholder principal. Premissas-linchpin declaradas e avaliadas. Key Intelligence Questions (KIQs) para o tomador de decisão.",
+      content: "Definição clara do problema central, escopo, horizonte temporal (5-10-20 anos) e stakeholder principal. Premissas-âncora declaradas e avaliadas. Key Intelligence Questions (KIQs) para o tomador de decisão.",
     },
     {
       title: "2. Varredura Macroambiental (KLIO — PESTEL)",

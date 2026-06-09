@@ -43,7 +43,7 @@ export function getAltATechniquesForSeed() {
       instructions: `PROCESSO (4 etapas):
 1. REVISAR O RACIOCÍNIO ATUAL: Documente a linha de argumentação ou hipótese principal da análise.
 2. LISTAR TODAS AS PREMISSAS: Identifique todas as suposições — explícitas e implícitas — que devem ser verdadeiras para o raciocínio ser válido. Inclua premissas sobre o ambiente, atores, tendências e dados disponíveis.
-3. IDENTIFICAR PREMISSAS-CHAVE: Para cada premissa, pergunte: "Esta premissa PRECISA ser verdadeira para o argumento ser válido?" Classifique como chave (sim) ou não-chave (não). A "premissa-linchpin" é aquela cuja falha invalida toda a análise.
+3. IDENTIFICAR PREMISSAS-CHAVE: Para cada premissa, pergunte: "Esta premissa PRECISA ser verdadeira para o argumento ser válido?" Classifique como chave (sim) ou não-chave (não). A "premissa-âncora" é aquela cuja falha invalida toda a análise.
 4. AVALIAR VULNERABILIDADE: Para cada premissa-chave, avalie:
    - Grau de confiança (alta / média / baixa)
    - Em que circunstâncias poderia ser falsa?

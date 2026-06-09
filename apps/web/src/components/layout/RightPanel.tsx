@@ -1,4 +1,7 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useAnalytics } from '../../hooks/useAnalytics';
+import { DelphiMatrix } from '../analytics/DelphiMatrix';
+import { ImpactMatrix } from '../analytics/ImpactMatrix';
 
 interface Indicator {
   name: string;
@@ -51,6 +54,9 @@ interface RightPanelProps {
   signalStats: SignalStats | null;
   onRefreshIndicators: () => void;
   onRefreshSignals: () => void;
+  projectId?: string;
+  token?: string | null;
+  currentPhaseNum?: number;
 }
 
 const STATUS_DOT: Record<string, string> = { vermelho: '🔴', amarelo: '🟡', verde: '🟢' };
@@ -67,10 +73,18 @@ const RADAR_STYLE: Record<string, string> = {
 };
 const CL_ICON: Record<string, string> = { confirmavel: '🟢', ambiguo: '🟡', ruido: '🔴' };
 
-type Tab = 'projeto' | 'sinais' | 'indicadores';
+type Tab = 'projeto' | 'sinais' | 'indicadores' | 'analise';
 
-export function RightPanel({ projeto, indicadores, weakSignals, signalStats, onRefreshIndicators, onRefreshSignals }: RightPanelProps) {
+export function RightPanel({ projeto, indicadores, weakSignals, signalStats, onRefreshIndicators, onRefreshSignals, projectId, token, currentPhaseNum }: RightPanelProps) {
   const [activeTab, setActiveTab] = useState<Tab>('projeto');
+  const analytics = useAnalytics(token ?? null);
+
+  // Buscar dados analíticos quando fase 4+ for concluída
+  useEffect(() => {
+    if (!projectId || !token) return;
+    if ((currentPhaseNum ?? 0) >= 4) analytics.fetchDelphi(projectId);
+    if ((currentPhaseNum ?? 0) >= 5) analytics.fetchImpacts(projectId);
+  }, [projectId, currentPhaseNum]);
 
   const hasContent = indicadores.length > 0 || weakSignals.length > 0 || projeto.nome;
   if (!hasContent) return null;
@@ -123,8 +137,11 @@ export function RightPanel({ projeto, indicadores, weakSignals, signalStats, onR
           Sinais{weakSignals.length > 0 ? ` (${weakSignals.filter(s => s.statusRadar !== 'arquivado').length})` : ''}
         </button>
         <button style={tabStyle('indicadores')} onClick={() => setActiveTab('indicadores')}>
-          Indicadores{indicadores.length > 0 ? ` (${indicadores.length})` : ''}
+          Ind.{indicadores.length > 0 ? ` (${indicadores.length})` : ''}
         </button>
+        {(currentPhaseNum ?? 0) >= 4 && (
+          <button style={tabStyle('analise')} onClick={() => setActiveTab('analise')}>Análise</button>
+        )}
       </div>
 
       {/* ── Tab content ─────────────────────────────────────────── */}
@@ -356,6 +373,50 @@ export function RightPanel({ projeto, indicadores, weakSignals, signalStats, onR
             )}
           </div>
         )}
+        {/* ── ANÁLISE tab ─────────────────────────────────────── */}
+        {activeTab === 'analise' && (
+          <div style={{ padding: 14 }}>
+
+            {/* Delphi P(i) */}
+            <div style={{ marginBottom: 16 }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                <div style={{ fontSize: 9, fontWeight: 700, color: '#1B3A2D', letterSpacing: '0.06em', textTransform: 'uppercase' }}>
+                  📊 Delphi P(i) — Fase 4
+                </div>
+                {projectId && (
+                  <button
+                    onClick={() => analytics.fetchDelphi(projectId)}
+                    style={{ fontSize: 12, color: 'var(--text-ter)', background: 'none', border: 'none', cursor: 'pointer' }}
+                  >↻</button>
+                )}
+              </div>
+              <DelphiMatrix results={analytics.delphiResults} />
+            </div>
+
+            {/* Impactos Cruzados */}
+            {(currentPhaseNum ?? 0) >= 5 && (
+              <div>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                  <div style={{ fontSize: 9, fontWeight: 700, color: '#1B3A2D', letterSpacing: '0.06em', textTransform: 'uppercase' }}>
+                    🔗 Impactos Cruzados — Fase 5
+                  </div>
+                  {projectId && (
+                    <button
+                      onClick={() => analytics.fetchImpacts(projectId)}
+                      style={{ fontSize: 12, color: 'var(--text-ter)', background: 'none', border: 'none', cursor: 'pointer' }}
+                    >↻</button>
+                  )}
+                </div>
+                <ImpactMatrix
+                  fpfs={analytics.impactData?.fpfs ?? []}
+                  impacts={analytics.impactData?.impacts ?? []}
+                />
+              </div>
+            )}
+
+          </div>
+        )}
+
       </div>
     </div>
   );

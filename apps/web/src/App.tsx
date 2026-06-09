@@ -572,6 +572,9 @@ function App() {
                 signalStats={projectData.signalStats}
                 onRefreshIndicators={() => projectData.carregarIndicadores(projectState.sessionId)}
                 onRefreshSignals={() => projectData.carregarSinais(projectState.sessionId)}
+                projectId={projectState.sessionId}
+                token={token}
+                currentPhaseNum={chat.currentPhaseNum}
               />
             </>
           )}

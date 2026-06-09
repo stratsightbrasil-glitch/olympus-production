@@ -7,8 +7,7 @@ docker system prune -a -f --volumes
 npm install
 
 # 3. Build e subida completa
-docker compose build --no-cache
-docker compose up -d && docker compose --profile ollama up -d
+docker compose build --no-cache && docker compose up -d
 
 # 4. Schema no banco (após -v que apagou os volumes)
 docker exec olympus_db psql -U postgres -d olympus -c "CREATE EXTENSION IF NOT EXISTS vector;"
@@ -25,7 +24,7 @@ docker compose logs -f api
 LIMPAR MAS MANTER PGDATA
 
 # 1. Parar containers
-docker compose down
+docker compose down --remove-orphans 
 
 # 2. Remover imagens antigas/dangling (NÃO toca volumes)
 docker image prune -a

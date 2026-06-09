@@ -225,7 +225,7 @@ const TOOL_JSON_SCHEMAS: Record<string, object> = {
       grauProbabilidade:      { type: "string", enum: ["remoto (01-05%)","altamente improvável (05-20%)","improvável (20-45%)","aproximadamente igual (45-55%)","provável (55-80%)","altamente provável (80-95%)","quase certo (95-99%)"] },
       nivelConfianca:         { type: "string", enum: ["alta confiança","confiança moderada","baixa confiança"] },
       indicadoresDeAlteracao: { type: "array", items: { type: "string" } },
-      premissaLinchpin:       { type: "string" },
+      premissaAncora:         { type: "string" },
       contextoAnalise:        { type: "string" },
     },
     required: ["informacaoBase","premissas","julgamento","grauProbabilidade","nivelConfianca"],
@@ -484,7 +484,10 @@ export class Agent {
       : 8000;
     // Orquestradores: 30 em TEST_MODE, 15 em produção.
     // Especialistas (KLIO): 5 em TEST_MODE, 12 em produção.
-    const maxSteps = isOrchestrator ? (isTestMode ? 30 : 15) : (isTestMode ? 5 : 12);
+    // Especialistas: 20 passos em produção (era 12 — insuficiente para fase 2 com 10-15 FPFs:
+    // cada FPF consome ~2 passos: tool_tad_score_calculator + tool_register_event).
+    const defaultSteps = isOrchestrator ? (isTestMode ? 30 : 15) : (isTestMode ? 5 : 30);
+    const maxSteps = context.maxSteps ?? defaultSteps;
 
     const hasTools = Object.keys(aiTools).length > 0;
 
